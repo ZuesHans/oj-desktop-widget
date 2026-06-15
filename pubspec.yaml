@@ -1,0 +1,29 @@
+name: oj_float
+description: Windows floating desktop widget for OJ solved-count tracking.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  http: ^1.2.2
+  html: ^0.15.4
+  path_provider: ^2.1.4
+  shared_preferences: ^2.3.2
+  window_manager: ^0.4.2
+  tray_manager: ^0.2.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/app_icon.ico
+    - assets/app_icon.png
