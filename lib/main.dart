@@ -918,8 +918,12 @@ class NowcoderProvider implements OjProvider {
 }
 
 class LocalStore {
+  LocalStore({Directory? supportDirectory}) : _supportDirectory = supportDirectory;
+
   static const _configKey = 'app_config_v1';
   static const _snapshotsFile = 'snapshots_v1.json';
+
+  final Directory? _supportDirectory;
 
   Future<AppConfig> loadConfig() async {
     final prefs = await SharedPreferences.getInstance();
@@ -927,7 +931,17 @@ class LocalStore {
     if (raw == null) {
       return AppConfig.defaults();
     }
-    return AppConfig.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    try {
+      final data = jsonDecode(raw);
+      if (data is! Map) {
+        debugPrint('Invalid app config JSON: expected an object.');
+        return AppConfig.defaults();
+      }
+      return AppConfig.fromJson(Map<String, dynamic>.from(data));
+    } catch (_) {
+      debugPrint('Failed to parse app config. Using defaults.');
+      return AppConfig.defaults();
+    }
   }
 
   Future<void> saveConfig(AppConfig config) async {
@@ -940,11 +954,37 @@ class LocalStore {
     if (!await file.exists()) {
       return [];
     }
-    final data = jsonDecode(await file.readAsString()) as List<dynamic>;
-    return data
-        .cast<Map<String, dynamic>>()
-        .map(SolvedSnapshot.fromJson)
-        .toList();
+    try {
+      final data = jsonDecode(await file.readAsString());
+      if (data is! List) {
+        debugPrint('Invalid snapshots JSON: expected a list.');
+        return [];
+      }
+      final snapshots = <SolvedSnapshot>[];
+      for (final item in data) {
+        try {
+          if (item is! Map) {
+            debugPrint('Skipping invalid snapshot: expected an object.');
+            continue;
+          }
+          final snapshot = SolvedSnapshot.tryFromJson(
+            Map<String, dynamic>.from(item),
+          );
+          if (snapshot == null) {
+            debugPrint('Skipping invalid snapshot entry.');
+            continue;
+          }
+          snapshots.add(snapshot);
+        } catch (_) {
+          debugPrint('Skipping invalid snapshot entry.');
+          continue;
+        }
+      }
+      return snapshots;
+    } catch (_) {
+      debugPrint('Failed to parse snapshots. Using an empty list.');
+      return [];
+    }
   }
 
   Future<void> saveSnapshots(List<SolvedSnapshot> snapshots) async {
@@ -961,7 +1001,7 @@ class LocalStore {
   }
 
   Future<File> _snapshotFile() async {
-    final directory = await getApplicationSupportDirectory();
+    final directory = _supportDirectory ?? await getApplicationSupportDirectory();
     return File('${directory.path}${Platform.pathSeparator}$_snapshotsFile');
   }
 }
@@ -999,16 +1039,35 @@ class AppConfig {
   factory AppConfig.fromJson(Map<String, dynamic> json) {
     final rawAccounts = json['accounts'];
     return AppConfig(
-      refreshIntervalMinutes: json['refreshIntervalMinutes'] as int? ?? 60,
+      refreshIntervalMinutes: _parseRefreshInterval(
+        json['refreshIntervalMinutes'],
+      ),
       accounts: {
         for (final meta in supportedOjs)
-          meta.id: rawAccounts is Map && rawAccounts[meta.id] is Map
-              ? OjAccountConfig.fromJson(
-                  Map<String, dynamic>.from(rawAccounts[meta.id] as Map),
-                )
-              : const OjAccountConfig(username: '', enabled: false),
+          meta.id: _parseAccountConfig(
+            rawAccounts is Map ? rawAccounts[meta.id] : null,
+          ),
       },
     );
+  }
+
+  static int _parseRefreshInterval(Object? value) {
+    if (value is! int || value < 15 || value > 1440) {
+      return 60;
+    }
+    return value;
+  }
+
+  static OjAccountConfig _parseAccountConfig(Object? value) {
+    if (value is! Map) {
+      return const OjAccountConfig(username: '', enabled: false);
+    }
+    try {
+      return OjAccountConfig.fromJson(Map<String, dynamic>.from(value));
+    } catch (_) {
+      debugPrint('Failed to parse OJ account config. Using defaults.');
+      return const OjAccountConfig(username: '', enabled: false);
+    }
   }
 
   final int refreshIntervalMinutes;
@@ -1027,8 +1086,8 @@ class OjAccountConfig {
 
   factory OjAccountConfig.fromJson(Map<String, dynamic> json) {
     return OjAccountConfig(
-      username: json['username'] as String? ?? '',
-      enabled: json['enabled'] as bool? ?? false,
+      username: json['username'] is String ? json['username'] as String : '',
+      enabled: json['enabled'] is bool ? json['enabled'] as bool : false,
     );
   }
 
@@ -1136,15 +1195,82 @@ class SolvedSnapshot {
   }
 
   factory SolvedSnapshot.fromJson(Map<String, dynamic> json) {
+    final snapshot = SolvedSnapshot.tryFromJson(json);
+    if (snapshot == null) {
+      throw const FormatException('Invalid solved snapshot JSON.');
+    }
+    return snapshot;
+  }
+
+  static SolvedSnapshot? tryFromJson(Map<String, dynamic> json) {
+    final date = json['date'];
+    final fetchedAt = json['fetchedAt'];
+    final ojId = json['ojId'];
+    final username = json['username'];
+    final status = json['status'];
+    final solvedCount = json['solvedCount'];
+    final error = json['error'];
+
+    if (date is! String || !_isValidDateKey(date)) {
+      return null;
+    }
+    if (fetchedAt is! String) {
+      return null;
+    }
+    final parsedFetchedAt = DateTime.tryParse(fetchedAt);
+    if (parsedFetchedAt == null) {
+      return null;
+    }
+    if (ojId is! String || ojId.isEmpty) {
+      return null;
+    }
+    if (status is! String) {
+      return null;
+    }
+    final parsedStatus = _parseFetchStatus(status);
+    if (parsedStatus == null) {
+      return null;
+    }
+    if (username != null && username is! String) {
+      return null;
+    }
+    if (solvedCount != null && solvedCount is! int) {
+      return null;
+    }
+    if (error != null && error is! String) {
+      return null;
+    }
+
     return SolvedSnapshot(
-      date: json['date'] as String,
-      fetchedAt: DateTime.parse(json['fetchedAt'] as String),
-      ojId: json['ojId'] as String,
-      username: json['username'] as String? ?? '',
-      status: FetchStatus.values.byName(json['status'] as String? ?? 'failure'),
-      solvedCount: json['solvedCount'] as int?,
-      error: json['error'] as String?,
+      date: date,
+      fetchedAt: parsedFetchedAt,
+      ojId: ojId,
+      username: username as String? ?? '',
+      status: parsedStatus,
+      solvedCount: solvedCount as int?,
+      error: error as String?,
     );
+  }
+
+  static FetchStatus? _parseFetchStatus(String value) {
+    for (final status in FetchStatus.values) {
+      if (status.name == value) {
+        return status;
+      }
+    }
+    return null;
+  }
+
+  static bool _isValidDateKey(String value) {
+    final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(value);
+    if (match == null) {
+      return false;
+    }
+    final year = int.parse(match.group(1)!);
+    final month = int.parse(match.group(2)!);
+    final day = int.parse(match.group(3)!);
+    final date = DateTime(year, month, day);
+    return date.year == year && date.month == month && date.day == day;
   }
 
   final String date;
