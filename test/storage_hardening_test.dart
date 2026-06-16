@@ -24,7 +24,8 @@ void main() {
 
       expect(config.refreshIntervalMinutes, 60);
       expect(config.accounts.length, supportedOjs.length);
-      expect(config.accounts.values.every((account) => !account.enabled), isTrue);
+      expect(
+          config.accounts.values.every((account) => !account.enabled), isTrue);
     });
 
     test('missing refreshIntervalMinutes falls back to 60', () {
@@ -56,6 +57,37 @@ void main() {
 
       expect(config.refreshIntervalMinutes, 60);
     });
+
+    test('old username field is read as a single username', () {
+      final config = AppConfig.fromJson({
+        'accounts': {
+          'codeforces': {'username': 'abc', 'enabled': true},
+        },
+      });
+
+      expect(config.accounts['codeforces']!.usernames, ['abc']);
+      expect(config.accounts['codeforces']!.enabled, isTrue);
+    });
+
+    test('new usernames field is read as multiple usernames', () {
+      final config = AppConfig.fromJson({
+        'accounts': {
+          'codeforces': {
+            'usernames': ['a', 'b'],
+            'enabled': true,
+          },
+        },
+      });
+
+      expect(config.accounts['codeforces']!.usernames, ['a', 'b']);
+      expect(config.accounts['codeforces']!.enabled, isTrue);
+    });
+
+    test('comma-separated usernames are normalized', () {
+      final usernames = OjAccountConfig.normalizeUsernames(['a, b,,a']);
+
+      expect(usernames, ['a', 'b']);
+    });
   });
 
   group('snapshot storage hardening', () {
@@ -65,7 +97,8 @@ void main() {
         await File('${directory.path}${Platform.pathSeparator}$_snapshotsFile')
             .writeAsString('{not-json');
 
-        final snapshots = await LocalStore(supportDirectory: directory).loadSnapshots();
+        final snapshots =
+            await LocalStore(supportDirectory: directory).loadSnapshots();
 
         expect(snapshots, isEmpty);
       } finally {
@@ -73,7 +106,8 @@ void main() {
       }
     });
 
-    test('damaged snapshot entry is skipped while valid entries are kept', () async {
+    test('damaged snapshot entry is skipped while valid entries are kept',
+        () async {
       final snapshots = await _loadSnapshotsFromJson([
         _validSnapshot(),
         {
@@ -111,9 +145,19 @@ void main() {
       expect(snapshots, hasLength(1));
       expect(snapshots.single.ojId, 'leetcode');
     });
+
+    test('snapshot missing username is kept with an empty username', () async {
+      final snapshot = _validSnapshot()..remove('username');
+
+      final snapshots = await _loadSnapshotsFromJson([snapshot]);
+
+      expect(snapshots, hasLength(1));
+      expect(snapshots.single.username, '');
+    });
   });
 
-  test('parse failure logs do not include raw sensitive JSON content', () async {
+  test('parse failure logs do not include raw sensitive JSON content',
+      () async {
     final logs = <String>[];
     final originalDebugPrint = debugPrint;
     debugPrint = (String? message, {int? wrapWidth}) {
@@ -147,7 +191,8 @@ void main() {
   });
 }
 
-Future<List<SolvedSnapshot>> _loadSnapshotsFromJson(List<Object?> entries) async {
+Future<List<SolvedSnapshot>> _loadSnapshotsFromJson(
+    List<Object?> entries) async {
   final directory = await Directory.systemTemp.createTemp('oj_float_test_');
   try {
     await File('${directory.path}${Platform.pathSeparator}$_snapshotsFile')

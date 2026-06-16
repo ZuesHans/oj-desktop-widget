@@ -49,4 +49,30 @@ void main() {
     expect(find.byTooltip('Refresh'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
+
+  testWidgets('dashboard shows a heatmap entry', (tester) async {
+    await tester.pumpWidget(buildTestApp());
+
+    await tester.tap(find.byKey(const ValueKey('open-dashboard-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Heatmap'), findsOneWidget);
+    expect(find.byKey(const ValueKey('heatmap-entry-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('export-data-button')), findsOneWidget);
+  });
+
+  testWidgets('heatmap entry opens the heatmap dialog', (tester) async {
+    await tester.pumpWidget(buildTestApp());
+
+    await tester.tap(find.byKey(const ValueKey('open-dashboard-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('heatmap-entry-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('heatmap-dialog')), findsOneWidget);
+    expect(
+        find.text(
+            'No snapshot data yet. Refresh after configuring accounts to build your heatmap.'),
+        findsOneWidget);
+  });
 }

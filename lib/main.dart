@@ -48,6 +48,21 @@ const _compactWindowSize = Size(220, 116);
 const _compactMinimumWindowSize = Size(200, 96);
 const _dashboardWindowSize = Size(360, 520);
 const _dashboardMinimumWindowSize = Size(320, 420);
+const _appSurfaceColor = Color(0xFFF6F7F4);
+const _cardColor = Color(0xFFFFFFFF);
+const _cardMutedColor = Color(0xFFF4F6F3);
+const _borderColor = Color(0xFFE1E4DE);
+const _textPrimaryColor = Color(0xFF17211D);
+const _textSecondaryColor = Color(0xFF64706A);
+const _accentColor = Color(0xFF2F6F4E);
+const _dangerColor = Color(0xFFB3261E);
+const _heatmapLevelColors = <Color>[
+  Color(0xFFEFF3EF),
+  Color(0xFF9BE9A8),
+  Color(0xFF40C463),
+  Color(0xFF30A14E),
+  Color(0xFF216E39),
+];
 
 enum AppDisplayMode { compact, dashboard }
 
@@ -238,7 +253,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
         }
 
         return Scaffold(
-          backgroundColor: const Color(0xFFF6F7F4),
+          backgroundColor: _appSurfaceColor,
           body: SafeArea(
             child: Column(
               children: [
@@ -256,12 +271,23 @@ class _OjFloatHomeState extends State<OjFloatHome>
                     children: [
                       _SummaryPanel(state: _controller.state),
                       const SizedBox(height: 12),
+                      _HeatmapEntryPanel(
+                        summary: HeatmapSummary.fromSnapshots(
+                          _controller.state.snapshots,
+                        ),
+                        onOpen: () => _openHeatmap(context),
+                        onExport: () => _exportData(context),
+                      ),
+                      const SizedBox(height: 12),
                       ...supportedOjs.map(
                         (meta) => _OjTile(
                           meta: meta,
                           config: _controller.state.config.accounts[meta.id],
-                          result: _controller.state.latest[meta.id],
+                          results:
+                              _controller.state.latest[meta.id] ?? const [],
                           today: _controller.todayDeltaFor(meta.id),
+                          accountToday:
+                              _controller.todayDeltaByAccountFor(meta.id),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -284,6 +310,41 @@ class _OjFloatHomeState extends State<OjFloatHome>
     );
     if (updated != null) {
       await _controller.saveConfig(updated);
+    }
+  }
+
+  Future<void> _openHeatmap(BuildContext context) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => HeatmapDialog(
+        summary: HeatmapSummary.fromSnapshots(_controller.state.snapshots),
+      ),
+    );
+  }
+
+  Future<void> _exportData(BuildContext context) async {
+    try {
+      final result = await exportOjData(
+        config: _controller.state.config,
+        snapshots: _controller.state.snapshots,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Exported portable backup JSON and daily summary CSV to ${result.directory.path}',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Export failed: ${normalizeError(error)}')),
+      );
     }
   }
 
@@ -330,10 +391,7 @@ class _CompactWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalSolved = state.latest.values.fold<int>(
-      0,
-      (sum, item) => sum + (item.solvedCount ?? 0),
-    );
+    final totalSolved = totalSolvedFromLatest(state.latest);
     final today = state.todaySummary.totalDelta;
 
     return GestureDetector(
@@ -556,12 +614,10 @@ class _SummaryPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalSolved = state.latest.values.fold<int>(
-      0,
-      (sum, item) => sum + (item.solvedCount ?? 0),
-    );
+    final totalSolved = totalSolvedFromLatest(state.latest);
     final today = state.todaySummary.totalDelta;
     final updatedAt = state.latest.values
+        .expand((items) => items)
         .where((item) => item.fetchedAt != null)
         .map((item) => item.fetchedAt!)
         .fold<DateTime?>(null, (latest, item) {
@@ -574,9 +630,9 @@ class _SummaryPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFFFF),
+        color: _cardColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE1E4DE)),
+        border: Border.all(color: _borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -595,7 +651,7 @@ class _SummaryPanel extends StatelessWidget {
                 child: Text(
                   updatedAt == null ? '尚未刷新' : '更新 ${formatTime(updatedAt)}',
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: Colors.grey.shade700),
+                  style: const TextStyle(color: _textSecondaryColor),
                 ),
               ),
             ],
@@ -606,36 +662,259 @@ class _SummaryPanel extends StatelessWidget {
   }
 }
 
+class _HeatmapEntryPanel extends StatelessWidget {
+  const _HeatmapEntryPanel({
+    required this.summary,
+    required this.onOpen,
+    required this.onExport,
+  });
+
+  final HeatmapSummary summary;
+  final VoidCallback onOpen;
+  final VoidCallback onExport;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _cardColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _borderColor),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.calendar_view_week, color: _accentColor),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Heatmap',
+                  style: TextStyle(
+                    color: _textPrimaryColor,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  'Current ${summary.currentStreak}d · Longest ${summary.longestStreak}d',
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      const TextStyle(color: _textSecondaryColor, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            key: const ValueKey('export-data-button'),
+            tooltip: 'Export data',
+            onPressed: onExport,
+            color: _accentColor,
+            icon: const Icon(Icons.download),
+          ),
+          FilledButton.tonalIcon(
+            key: const ValueKey('heatmap-entry-button'),
+            onPressed: onOpen,
+            icon: const Icon(Icons.grid_view, size: 18),
+            label: const Text('Open'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class HeatmapDialog extends StatelessWidget {
+  const HeatmapDialog({super.key, required this.summary});
+
+  final HeatmapSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      key: const ValueKey('heatmap-dialog'),
+      backgroundColor: _cardColor,
+      title: const Text(
+        'Heatmap',
+        style: TextStyle(color: _textPrimaryColor),
+      ),
+      content: SizedBox(
+        width: 300,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _HeatmapStat(
+                    label: 'Current streak',
+                    value: '${summary.currentStreak}d'),
+                _HeatmapStat(
+                    label: 'Longest streak',
+                    value: '${summary.longestStreak}d'),
+                _HeatmapStat(
+                    label: 'Active days', value: '${summary.activeDays}'),
+                _HeatmapStat(label: 'Total +', value: '${summary.totalDelta}'),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (summary.days.isEmpty)
+              const Text(
+                'No snapshot data yet. Refresh after configuring accounts to build your heatmap.',
+                style: TextStyle(color: _textSecondaryColor),
+              )
+            else
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: _heatmapWeeks(summary.days)
+                      .map((week) => _HeatmapWeek(days: week))
+                      .toList(),
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+}
+
+class _HeatmapStat extends StatelessWidget {
+  const _HeatmapStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: _cardMutedColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: const TextStyle(color: _textSecondaryColor, fontSize: 11)),
+          Text(
+            value,
+            style: const TextStyle(
+              color: _textPrimaryColor,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeatmapWeek extends StatelessWidget {
+  const _HeatmapWeek({required this.days});
+
+  final List<HeatmapDay> days;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Column(
+        children: days.map((day) => _HeatmapCell(day: day)).toList(),
+      ),
+    );
+  }
+}
+
+class _HeatmapCell extends StatelessWidget {
+  const _HeatmapCell({required this.day});
+
+  final HeatmapDay day;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: '${day.date}: +${day.delta}',
+      child: Container(
+        width: 12,
+        height: 12,
+        margin: const EdgeInsets.only(bottom: 4),
+        decoration: BoxDecoration(
+          color: _heatmapColor(day.level),
+          borderRadius: BorderRadius.circular(3),
+        ),
+      ),
+    );
+  }
+}
+
+List<List<HeatmapDay>> _heatmapWeeks(List<HeatmapDay> days) {
+  final weeks = <List<HeatmapDay>>[];
+  for (var index = 0; index < days.length; index += 7) {
+    final end = index + 7 > days.length ? days.length : index + 7;
+    weeks.add(days.sublist(index, end));
+  }
+  return weeks;
+}
+
+Color _heatmapColor(int level) {
+  return _heatmapLevelColors[level.clamp(0, _heatmapLevelColors.length - 1)];
+}
+
 class _OjTile extends StatelessWidget {
   const _OjTile({
     required this.meta,
     required this.config,
-    required this.result,
+    required this.results,
     required this.today,
+    required this.accountToday,
   });
 
   final OjMeta meta;
   final OjAccountConfig? config;
-  final FetchResult? result;
+  final List<FetchResult> results;
   final int today;
+  final Map<String, int> accountToday;
 
   @override
   Widget build(BuildContext context) {
     final enabled = config?.enabled ?? false;
-    final username = config?.username.trim() ?? '';
-    final solvedText = switch (result?.status) {
-      FetchStatus.success => '${result!.solvedCount}',
-      FetchStatus.failure => '失败',
-      _ => enabled && username.isNotEmpty ? '待刷新' : '未配置',
+    final usernames = config?.usernames ?? const <String>[];
+    final hasSuccess =
+        results.any((result) => result.status == FetchStatus.success);
+    final successfulSolved = totalSolvedFromResults(results);
+    final solvedText = hasSuccess
+        ? '$successfulSolved'
+        : results.any((result) => result.status == FetchStatus.failure)
+            ? 'Failed'
+            : enabled && usernames.isNotEmpty
+                ? 'Pending'
+                : 'Not set';
+    final shownUsernames = {
+      for (final result in results) result.username,
     };
-
+    final pendingUsernames =
+        usernames.where((username) => !shownUsernames.contains(username));
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE1E4DE)),
+        border: Border.all(color: _borderColor),
       ),
       child: Row(
         children: [
@@ -652,20 +931,26 @@ class _OjTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(meta.name,
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                    style: const TextStyle(
+                      color: _textPrimaryColor,
+                      fontWeight: FontWeight.w700,
+                    )),
                 Text(
-                  username.isEmpty ? meta.hint : username,
+                  usernames.isEmpty ? meta.hint : usernames.join(', '),
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+                  style:
+                      const TextStyle(color: _textSecondaryColor, fontSize: 12),
                 ),
-                if (result?.error != null)
-                  Text(
-                    result!.error!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style:
-                        const TextStyle(color: Color(0xFFB3261E), fontSize: 12),
+                const SizedBox(height: 6),
+                ...results.map(
+                  (result) => _AccountResultLine(
+                    result: result,
+                    today: accountToday[result.username] ?? 0,
                   ),
+                ),
+                ...pendingUsernames.map(
+                  (username) => _PendingAccountLine(username: username),
+                ),
               ],
             ),
           ),
@@ -673,12 +958,101 @@ class _OjTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(solvedText,
-                  style: const TextStyle(fontWeight: FontWeight.w800)),
+                  style: const TextStyle(
+                    color: _textPrimaryColor,
+                    fontWeight: FontWeight.w800,
+                  )),
               Text(
                 '今日 +$today',
-                style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+                style:
+                    const TextStyle(color: _textSecondaryColor, fontSize: 12),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountResultLine extends StatelessWidget {
+  const _AccountResultLine({required this.result, required this.today});
+
+  final FetchResult result;
+  final int today;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusText = switch (result.status) {
+      FetchStatus.success => '${result.solvedCount ?? 0} (+$today)',
+      FetchStatus.failure => 'Failed',
+      FetchStatus.idle => 'Pending',
+    };
+    final color = result.status == FetchStatus.failure
+        ? _dangerColor
+        : _textSecondaryColor;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  result.username,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      const TextStyle(color: _textSecondaryColor, fontSize: 12),
+                ),
+              ),
+              Text(
+                statusText,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          if (result.error != null)
+            Text(
+              result.error!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: _dangerColor, fontSize: 12),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingAccountLine extends StatelessWidget {
+  const _PendingAccountLine({required this.username});
+
+  final String username;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              username,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: _textSecondaryColor, fontSize: 12),
+            ),
+          ),
+          const Text(
+            'Pending',
+            style: TextStyle(color: _textSecondaryColor, fontSize: 12),
           ),
         ],
       ),
@@ -697,9 +1071,9 @@ class _DailyPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFFFF),
+        color: _cardColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE1E4DE)),
+        border: Border.all(color: _borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -717,7 +1091,7 @@ class _DailyPanel extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           if (summary.deltas.isEmpty)
-            Text('暂无今日快照', style: TextStyle(color: Colors.grey.shade700))
+            const Text('暂无今日快照', style: TextStyle(color: _textSecondaryColor))
           else
             ...supportedOjs.map((meta) {
               final delta = summary.deltas[meta.id];
@@ -750,10 +1124,16 @@ class _Pill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFFEAF2EF),
+        color: _cardMutedColor,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: _textPrimaryColor,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }
@@ -779,7 +1159,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     _controllers = {
       for (final meta in supportedOjs)
         meta.id: TextEditingController(
-          text: widget.config.accounts[meta.id]?.username ?? '',
+          text: widget.config.accounts[meta.id]?.usernames.join(', ') ?? '',
         ),
     };
     _enabled = {
@@ -862,7 +1242,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
             final accounts = {
               for (final meta in supportedOjs)
                 meta.id: OjAccountConfig(
-                  username: _controllers[meta.id]!.text.trim(),
+                  usernames: OjAccountConfig.normalizeUsernames(
+                    [_controllers[meta.id]!.text],
+                  ),
                   enabled: _enabled[meta.id] ?? false,
                 ),
             };
@@ -919,7 +1301,9 @@ class OjController extends ChangeNotifier {
       final results = await service.refresh(state.config);
       final snapshots = [
         ...state.snapshots,
-        ...results.values.map(SolvedSnapshot.fromResult),
+        ...results.values
+            .expand((items) => items)
+            .map(SolvedSnapshot.fromResult),
       ];
       await storage.saveSnapshots(snapshots);
       state = state.copyWith(latest: results, snapshots: snapshots);
@@ -931,6 +1315,9 @@ class OjController extends ChangeNotifier {
   }
 
   int todayDeltaFor(String ojId) => state.todaySummary.deltas[ojId] ?? 0;
+
+  Map<String, int> todayDeltaByAccountFor(String ojId) =>
+      state.todaySummary.accountDeltas[ojId] ?? const {};
 
   void _recomputeSummaries() {
     final today = dateKey(DateTime.now());
@@ -960,40 +1347,54 @@ class RefreshService {
   final http.Client client;
   final Map<String, OjProvider> providers;
 
-  Future<Map<String, FetchResult>> refresh(AppConfig config) async {
-    final entries = config.accounts.entries.where(
-      (entry) => entry.value.enabled && entry.value.username.trim().isNotEmpty,
-    );
-    final futures = entries.map((entry) async {
-      final provider = providers[entry.key]!;
-      try {
-        final profile = await provider
-            .fetchProfile(client, entry.value.username.trim())
-            .timeout(const Duration(seconds: 18));
-        return MapEntry(
-          entry.key,
-          FetchResult.success(
-            ojId: entry.key,
-            username: entry.value.username.trim(),
-            solvedCount: profile.solvedCount,
-            rating: profile.rating,
-            profileUrl: profile.profileUrl,
-            fetchedAt: DateTime.now(),
-          ),
-        );
-      } catch (error) {
-        return MapEntry(
-          entry.key,
-          FetchResult.failure(
-            ojId: entry.key,
-            username: entry.value.username.trim(),
-            error: normalizeError(error),
-            fetchedAt: DateTime.now(),
-          ),
-        );
+  Future<Map<String, List<FetchResult>>> refresh(AppConfig config) async {
+    final futures = <Future<MapEntry<String, FetchResult>>>[];
+    for (final entry in config.accounts.entries) {
+      if (!entry.value.enabled) {
+        continue;
       }
-    });
-    return Map.fromEntries(await Future.wait(futures));
+      for (final username in entry.value.usernames) {
+        futures.add(_refreshAccount(entry.key, username));
+      }
+    }
+    final results = <String, List<FetchResult>>{};
+    for (final entry in await Future.wait(futures)) {
+      results.putIfAbsent(entry.key, () => []).add(entry.value);
+    }
+    return results;
+  }
+
+  Future<MapEntry<String, FetchResult>> _refreshAccount(
+    String ojId,
+    String username,
+  ) async {
+    final provider = providers[ojId]!;
+    try {
+      final profile = await provider
+          .fetchProfile(client, username)
+          .timeout(const Duration(seconds: 18));
+      return MapEntry(
+        ojId,
+        FetchResult.success(
+          ojId: ojId,
+          username: username,
+          solvedCount: profile.solvedCount,
+          rating: profile.rating,
+          profileUrl: profile.profileUrl,
+          fetchedAt: DateTime.now(),
+        ),
+      );
+    } catch (error) {
+      return MapEntry(
+        ojId,
+        FetchResult.failure(
+          ojId: ojId,
+          username: username,
+          error: normalizeError(error),
+          fetchedAt: DateTime.now(),
+        ),
+      );
+    }
   }
 
   void dispose() => client.close();
@@ -1264,6 +1665,139 @@ class LocalStore {
   }
 }
 
+class ExportResult {
+  const ExportResult({
+    required this.directory,
+    required this.backupFile,
+    required this.dailySummaryFile,
+  });
+
+  final Directory directory;
+  final File backupFile;
+  final File dailySummaryFile;
+}
+
+Future<ExportResult> exportOjData({
+  required AppConfig config,
+  required List<SolvedSnapshot> snapshots,
+  DateTime? now,
+  Directory? directory,
+}) async {
+  final exportTime = now ?? DateTime.now();
+  final exportDirectory = directory ?? await exportDirectoryForOjData();
+  await exportDirectory.create(recursive: true);
+
+  final backupFile = File(
+    '${exportDirectory.path}${Platform.pathSeparator}'
+    '${buildExportFileName('oj_float_backup', 'json', exportTime)}',
+  );
+  final dailySummaryFile = File(
+    '${exportDirectory.path}${Platform.pathSeparator}'
+    '${buildExportFileName('oj_float_daily_summary', 'csv', exportTime)}',
+  );
+
+  await backupFile.writeAsString(
+    buildPortableBackupJson(
+      config: config,
+      snapshots: snapshots,
+      exportedAt: exportTime,
+    ),
+  );
+  await dailySummaryFile.writeAsString(buildDailySummaryCsv(snapshots));
+
+  return ExportResult(
+    directory: exportDirectory,
+    backupFile: backupFile,
+    dailySummaryFile: dailySummaryFile,
+  );
+}
+
+Future<Directory> exportDirectoryForOjData() async {
+  try {
+    final downloads = await getDownloadsDirectory();
+    if (downloads != null) {
+      return downloads;
+    }
+  } on MissingPluginException {
+    // Widget tests do not load the desktop path provider plugin.
+  }
+  final support = await getApplicationSupportDirectory();
+  return Directory('${support.path}${Platform.pathSeparator}exports');
+}
+
+String buildPortableBackupJson({
+  required AppConfig config,
+  required List<SolvedSnapshot> snapshots,
+  required DateTime exportedAt,
+}) {
+  return const JsonEncoder.withIndent('  ').convert(
+    {
+      'schemaVersion': 1,
+      'app': 'oj_float',
+      'exportType': 'portable_backup',
+      'exportedAt': exportedAt.toIso8601String(),
+      'config': buildPortableConfigJson(config),
+      'snapshots': snapshots.map((snapshot) => snapshot.toJson()).toList(),
+      'dailyStats': buildDailyStatsJson(snapshots),
+    },
+  );
+}
+
+Map<String, Object?> buildPortableConfigJson(AppConfig config) {
+  return {
+    'refreshIntervalMinutes': config.refreshIntervalMinutes,
+    'accounts': [
+      for (final meta in supportedOjs)
+        {
+          'ojId': meta.id,
+          'enabled': config.accounts[meta.id]?.enabled ?? false,
+          'usernames': config.accounts[meta.id]?.usernames ?? const <String>[],
+        },
+    ],
+  };
+}
+
+List<Map<String, Object?>> buildDailyStatsJson(List<SolvedSnapshot> snapshots) {
+  final dates = {
+    for (final snapshot in snapshots)
+      if (snapshot.status == FetchStatus.success) snapshot.date,
+  }.toList()
+    ..sort();
+  return [
+    for (final date in dates) _dailyStatJson(date, snapshots),
+  ];
+}
+
+Map<String, Object?> _dailyStatJson(
+  String date,
+  List<SolvedSnapshot> snapshots,
+) {
+  final totalDelta = DailySummary.fromSnapshots(date, snapshots).totalDelta;
+  return {
+    'date': date,
+    'totalDelta': totalDelta,
+    'active': totalDelta > 0,
+  };
+}
+
+String buildDailySummaryCsv(List<SolvedSnapshot> snapshots) {
+  final buffer = StringBuffer('date,totalDelta,active\n');
+  for (final stat in buildDailyStatsJson(snapshots)) {
+    buffer.writeln('${stat['date']},${stat['totalDelta']},${stat['active']}');
+  }
+  return buffer.toString();
+}
+
+String buildExportFileName(String prefix, String extension, DateTime time) {
+  final local = time.toLocal();
+  final timestamp = '${local.year.toString().padLeft(4, '0')}'
+      '${local.month.toString().padLeft(2, '0')}'
+      '${local.day.toString().padLeft(2, '0')}_'
+      '${local.hour.toString().padLeft(2, '0')}'
+      '${local.minute.toString().padLeft(2, '0')}';
+  return '${prefix}_$timestamp.$extension';
+}
+
 class OjMeta {
   const OjMeta({
     required this.id,
@@ -1289,7 +1823,7 @@ class AppConfig {
       refreshIntervalMinutes: 60,
       accounts: {
         for (final meta in supportedOjs)
-          meta.id: const OjAccountConfig(username: '', enabled: false),
+          meta.id: const OjAccountConfig(usernames: [], enabled: false),
       },
     );
   }
@@ -1318,13 +1852,13 @@ class AppConfig {
 
   static OjAccountConfig _parseAccountConfig(Object? value) {
     if (value is! Map) {
-      return const OjAccountConfig(username: '', enabled: false);
+      return const OjAccountConfig(usernames: [], enabled: false);
     }
     try {
       return OjAccountConfig.fromJson(Map<String, dynamic>.from(value));
     } catch (_) {
       debugPrint('Failed to parse OJ account config. Using defaults.');
-      return const OjAccountConfig(username: '', enabled: false);
+      return const OjAccountConfig(usernames: [], enabled: false);
     }
   }
 
@@ -1340,20 +1874,49 @@ class AppConfig {
 }
 
 class OjAccountConfig {
-  const OjAccountConfig({required this.username, required this.enabled});
+  const OjAccountConfig({required this.usernames, required this.enabled});
 
   factory OjAccountConfig.fromJson(Map<String, dynamic> json) {
+    final rawUsernames =
+        json.containsKey('usernames') ? json['usernames'] : json['username'];
     return OjAccountConfig(
-      username: json['username'] is String ? json['username'] as String : '',
+      usernames: _parseUsernames(rawUsernames),
       enabled: json['enabled'] is bool ? json['enabled'] as bool : false,
     );
   }
 
-  final String username;
+  static List<String> normalizeUsernames(Iterable<Object?> values) {
+    final seen = <String>{};
+    final normalized = <String>[];
+    for (final value in values) {
+      if (value is! String) {
+        continue;
+      }
+      for (final item in value.split(',')) {
+        final username = item.trim();
+        if (username.isNotEmpty && seen.add(username)) {
+          normalized.add(username);
+        }
+      }
+    }
+    return List.unmodifiable(normalized);
+  }
+
+  static List<String> _parseUsernames(Object? value) {
+    if (value is List) {
+      return normalizeUsernames(value);
+    }
+    if (value is String) {
+      return normalizeUsernames([value]);
+    }
+    return const [];
+  }
+
+  final List<String> usernames;
   final bool enabled;
 
   Map<String, dynamic> toJson() => {
-        'username': username,
+        'usernames': usernames,
         'enabled': enabled,
       };
 }
@@ -1554,39 +2117,187 @@ class DailySummary {
   const DailySummary({
     required this.date,
     required this.deltas,
+    required this.accountDeltas,
     required this.totalDelta,
   });
 
   factory DailySummary.empty(String date) {
-    return DailySummary(date: date, deltas: const {}, totalDelta: 0);
+    return DailySummary(
+      date: date,
+      deltas: const {},
+      accountDeltas: const {},
+      totalDelta: 0,
+    );
   }
 
   factory DailySummary.fromSnapshots(
       String date, List<SolvedSnapshot> snapshots) {
-    final byOj = <String, List<SolvedSnapshot>>{};
+    final byAccount = <String, List<SolvedSnapshot>>{};
     for (final snapshot in snapshots.where(
       (item) => item.date == date && item.status == FetchStatus.success,
     )) {
-      byOj.putIfAbsent(snapshot.ojId, () => []).add(snapshot);
+      byAccount
+          .putIfAbsent('${snapshot.ojId}\u0000${snapshot.username}', () => [])
+          .add(snapshot);
     }
     final deltas = <String, int>{};
-    for (final entry in byOj.entries) {
+    final accountDeltas = <String, Map<String, int>>{};
+    for (final entry in byAccount.entries) {
       final ordered = [...entry.value]
         ..sort((a, b) => a.fetchedAt.compareTo(b.fetchedAt));
+      final ojId = ordered.first.ojId;
+      final username = ordered.first.username;
       final first = ordered.first.solvedCount ?? 0;
       final last = ordered.last.solvedCount ?? 0;
-      deltas[entry.key] = (last - first).clamp(0, 1 << 31).toInt();
+      final delta = (last - first).clamp(0, 1 << 31).toInt();
+      accountDeltas.putIfAbsent(ojId, () => {})[username] = delta;
+      deltas[ojId] = (deltas[ojId] ?? 0) + delta;
     }
     return DailySummary(
       date: date,
       deltas: deltas,
+      accountDeltas: accountDeltas,
       totalDelta: deltas.values.fold(0, (sum, item) => sum + item),
     );
   }
 
   final String date;
   final Map<String, int> deltas;
+  final Map<String, Map<String, int>> accountDeltas;
   final int totalDelta;
+}
+
+class HeatmapDay {
+  const HeatmapDay({required this.date, required this.delta});
+
+  final String date;
+  final int delta;
+
+  bool get active => delta > 0;
+
+  int get level {
+    if (delta <= 0) {
+      return 0;
+    }
+    if (delta == 1) {
+      return 1;
+    }
+    if (delta <= 3) {
+      return 2;
+    }
+    if (delta <= 6) {
+      return 3;
+    }
+    return 4;
+  }
+}
+
+class HeatmapSummary {
+  const HeatmapSummary({
+    required this.days,
+    required this.currentStreak,
+    required this.longestStreak,
+    required this.activeDays,
+    required this.totalDelta,
+  });
+
+  factory HeatmapSummary.fromSnapshots(
+    List<SolvedSnapshot> snapshots, {
+    DateTime? today,
+    int weeks = 26,
+  }) {
+    if (snapshots.isEmpty) {
+      return const HeatmapSummary(
+        days: [],
+        currentStreak: 0,
+        longestStreak: 0,
+        activeDays: 0,
+        totalDelta: 0,
+      );
+    }
+
+    final normalizedToday = _startOfDay(today ?? DateTime.now());
+    final deltasByDate = _dailyDeltasByDate(snapshots);
+    final days = <HeatmapDay>[];
+    final visibleDayCount = weeks * 7;
+    final start = normalizedToday.subtract(Duration(days: visibleDayCount - 1));
+    for (var offset = 0; offset < visibleDayCount; offset += 1) {
+      final date = start.add(Duration(days: offset));
+      final key = dateKey(date);
+      days.add(HeatmapDay(date: key, delta: deltasByDate[key] ?? 0));
+    }
+
+    return HeatmapSummary(
+      days: List.unmodifiable(days),
+      currentStreak: _currentStreak(deltasByDate, normalizedToday),
+      longestStreak: _longestStreak(deltasByDate),
+      activeDays: days.where((day) => day.active).length,
+      totalDelta: days.fold(0, (sum, day) => sum + day.delta),
+    );
+  }
+
+  final List<HeatmapDay> days;
+  final int currentStreak;
+  final int longestStreak;
+  final int activeDays;
+  final int totalDelta;
+}
+
+Map<String, int> _dailyDeltasByDate(List<SolvedSnapshot> snapshots) {
+  final dates = {
+    for (final snapshot in snapshots) snapshot.date,
+  }.toList()
+    ..sort();
+  return {
+    for (final date in dates)
+      date: DailySummary.fromSnapshots(date, snapshots).totalDelta,
+  };
+}
+
+int _currentStreak(Map<String, int> deltasByDate, DateTime today) {
+  var count = 0;
+  var cursor = _startOfDay(today);
+  while ((deltasByDate[dateKey(cursor)] ?? 0) > 0) {
+    count += 1;
+    cursor = cursor.subtract(const Duration(days: 1));
+  }
+  return count;
+}
+
+int _longestStreak(Map<String, int> deltasByDate) {
+  if (deltasByDate.isEmpty) {
+    return 0;
+  }
+  final dates = deltasByDate.keys.map(_dateFromKey).toList()..sort();
+  var longest = 0;
+  var current = 0;
+  var cursor = dates.first;
+  final end = dates.last;
+  while (!cursor.isAfter(end)) {
+    if ((deltasByDate[dateKey(cursor)] ?? 0) > 0) {
+      current += 1;
+      if (current > longest) {
+        longest = current;
+      }
+    } else {
+      current = 0;
+    }
+    cursor = cursor.add(const Duration(days: 1));
+  }
+  return longest;
+}
+
+DateTime _dateFromKey(String value) {
+  return DateTime(
+    int.parse(value.substring(0, 4)),
+    int.parse(value.substring(5, 7)),
+    int.parse(value.substring(8, 10)),
+  );
+}
+
+DateTime _startOfDay(DateTime date) {
+  final local = date.toLocal();
+  return DateTime(local.year, local.month, local.day);
 }
 
 class OjState {
@@ -1608,13 +2319,13 @@ class OjState {
   }
 
   final AppConfig config;
-  final Map<String, FetchResult> latest;
+  final Map<String, List<FetchResult>> latest;
   final List<SolvedSnapshot> snapshots;
   final DailySummary todaySummary;
 
   OjState copyWith({
     AppConfig? config,
-    Map<String, FetchResult>? latest,
+    Map<String, List<FetchResult>>? latest,
     List<SolvedSnapshot>? snapshots,
     DailySummary? todaySummary,
   }) {
@@ -1659,6 +2370,19 @@ void ensureOk(http.Response response) {
   if (response.statusCode < 200 || response.statusCode >= 300) {
     throw FetchException('HTTP ${response.statusCode}');
   }
+}
+
+int totalSolvedFromLatest(Map<String, List<FetchResult>> latest) {
+  return latest.values.fold<int>(
+    0,
+    (sum, results) => sum + totalSolvedFromResults(results),
+  );
+}
+
+int totalSolvedFromResults(Iterable<FetchResult> results) {
+  return results
+      .where((result) => result.status == FetchStatus.success)
+      .fold<int>(0, (sum, result) => sum + (result.solvedCount ?? 0));
 }
 
 String normalizeError(Object error) {
