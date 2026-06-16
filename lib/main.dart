@@ -44,18 +44,26 @@ const supportedOjs = <OjMeta>[
   ),
 ];
 
+const _compactWindowSize = Size(220, 116);
+const _compactMinimumWindowSize = Size(200, 96);
+const _dashboardWindowSize = Size(360, 520);
+const _dashboardMinimumWindowSize = Size(320, 420);
+
+enum AppDisplayMode { compact, dashboard }
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
     const options = WindowOptions(
-      size: Size(360, 520),
-      minimumSize: Size(320, 420),
+      size: _compactWindowSize,
+      minimumSize: _compactMinimumWindowSize,
       center: true,
       title: 'OJ Float',
       titleBarStyle: TitleBarStyle.hidden,
       alwaysOnTop: true,
+      backgroundColor: Colors.transparent,
       skipTaskbar: false,
     );
     await windowManager.waitUntilReadyToShow(options, () async {
@@ -69,7 +77,14 @@ Future<void> main() async {
 }
 
 class OjFloatApp extends StatelessWidget {
-  const OjFloatApp({super.key});
+  const OjFloatApp({
+    super.key,
+    this.enablePlatformIntegration = true,
+    this.autoInitializeController = true,
+  });
+
+  final bool enablePlatformIntegration;
+  final bool autoInitializeController;
 
   @override
   Widget build(BuildContext context) {
@@ -82,15 +97,25 @@ class OjFloatApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF6F7F4),
+        scaffoldBackgroundColor: Colors.transparent,
       ),
-      home: const OjFloatHome(),
+      home: OjFloatHome(
+        enablePlatformIntegration: enablePlatformIntegration,
+        autoInitializeController: autoInitializeController,
+      ),
     );
   }
 }
 
 class OjFloatHome extends StatefulWidget {
-  const OjFloatHome({super.key});
+  const OjFloatHome({
+    super.key,
+    this.enablePlatformIntegration = true,
+    this.autoInitializeController = true,
+  });
+
+  final bool enablePlatformIntegration;
+  final bool autoInitializeController;
 
   @override
   State<OjFloatHome> createState() => _OjFloatHomeState();
@@ -99,6 +124,7 @@ class OjFloatHome extends StatefulWidget {
 class _OjFloatHomeState extends State<OjFloatHome>
     with TrayListener, WindowListener {
   late final OjController _controller;
+  AppDisplayMode _mode = AppDisplayMode.compact;
 
   @override
   void initState() {
@@ -116,10 +142,14 @@ class _OjFloatHomeState extends State<OjFloatHome>
         },
       ),
     );
-    trayManager.addListener(this);
-    windowManager.addListener(this);
-    unawaited(_setupTray());
-    unawaited(_controller.init());
+    if (widget.enablePlatformIntegration) {
+      trayManager.addListener(this);
+      windowManager.addListener(this);
+      unawaited(_setupTray());
+    }
+    if (widget.autoInitializeController) {
+      unawaited(_controller.init());
+    }
   }
 
   Future<void> _setupTray() async {
@@ -146,15 +176,18 @@ class _OjFloatHomeState extends State<OjFloatHome>
   Future<File> _extractTrayIcon() async {
     final bytes = await rootBundle.load('assets/app_icon.ico');
     final directory = await getTemporaryDirectory();
-    final iconFile = File('${directory.path}${Platform.pathSeparator}oj_float_app_icon.ico');
+    final iconFile =
+        File('${directory.path}${Platform.pathSeparator}oj_float_app_icon.ico');
     await iconFile.writeAsBytes(bytes.buffer.asUint8List(), flush: true);
     return iconFile;
   }
 
   @override
   void dispose() {
-    trayManager.removeListener(this);
-    windowManager.removeListener(this);
+    if (widget.enablePlatformIntegration) {
+      trayManager.removeListener(this);
+      windowManager.removeListener(this);
+    }
     _controller.dispose();
     super.dispose();
   }
@@ -192,14 +225,29 @@ class _OjFloatHomeState extends State<OjFloatHome>
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
+        if (_mode == AppDisplayMode.compact) {
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            body: _CompactWidget(
+              state: _controller.state,
+              refreshing: _controller.refreshing,
+              onRefresh: _controller.refreshing ? null : _controller.refresh,
+              onOpenDashboard: () => _setMode(AppDisplayMode.dashboard),
+            ),
+          );
+        }
+
         return Scaffold(
+          backgroundColor: const Color(0xFFF6F7F4),
           body: SafeArea(
             child: Column(
               children: [
                 _WindowHeader(
                   refreshing: _controller.refreshing,
-                  onRefresh: _controller.refreshing ? null : _controller.refresh,
+                  onRefresh:
+                      _controller.refreshing ? null : _controller.refresh,
                   onSettings: () => _openSettings(context),
+                  onCompact: () => _setMode(AppDisplayMode.compact),
                   onMinimize: () => windowManager.minimize(),
                 ),
                 Expanded(
@@ -238,6 +286,201 @@ class _OjFloatHomeState extends State<OjFloatHome>
       await _controller.saveConfig(updated);
     }
   }
+
+  void _setMode(AppDisplayMode mode) {
+    if (_mode == mode) {
+      return;
+    }
+    setState(() => _mode = mode);
+    if (widget.enablePlatformIntegration) {
+      unawaited(_syncWindowMode(mode));
+    }
+  }
+
+  Future<void> _syncWindowMode(AppDisplayMode mode) async {
+    try {
+      switch (mode) {
+        case AppDisplayMode.compact:
+          await windowManager.setMinimumSize(_compactMinimumWindowSize);
+          await windowManager.setSize(_compactWindowSize, animate: true);
+          break;
+        case AppDisplayMode.dashboard:
+          await windowManager.setMinimumSize(_dashboardMinimumWindowSize);
+          await windowManager.setSize(_dashboardWindowSize, animate: true);
+          break;
+      }
+    } on MissingPluginException {
+      // Widget tests do not load the desktop window plugin.
+    }
+  }
+}
+
+class _CompactWidget extends StatelessWidget {
+  const _CompactWidget({
+    required this.state,
+    required this.refreshing,
+    required this.onRefresh,
+    required this.onOpenDashboard,
+  });
+
+  final OjState state;
+  final bool refreshing;
+  final VoidCallback? onRefresh;
+  final VoidCallback onOpenDashboard;
+
+  @override
+  Widget build(BuildContext context) {
+    final totalSolved = state.latest.values.fold<int>(
+      0,
+      (sum, item) => sum + (item.solvedCount ?? 0),
+    );
+    final today = state.todaySummary.totalDelta;
+
+    return GestureDetector(
+      onPanStart: (_) => windowManager.startDragging(),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        color: Colors.transparent,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0xEAF9FBF8),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0x66FFFFFF)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x26000000),
+                blurRadius: 18,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _CompactStatLine(
+                        label: 'AC',
+                        value: '$totalSolved',
+                        isPrimary: true,
+                      ),
+                      const SizedBox(height: 6),
+                      _CompactStatLine(
+                        label: 'Today',
+                        value: '+$today',
+                        isPrimary: false,
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _CompactIconButton(
+                      key: const ValueKey('compact-refresh-button'),
+                      tooltip: 'Refresh',
+                      onPressed: onRefresh,
+                      child: refreshing
+                          ? const SizedBox.square(
+                              dimension: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.refresh, size: 18),
+                    ),
+                    const SizedBox(height: 4),
+                    _CompactIconButton(
+                      key: const ValueKey('open-dashboard-button'),
+                      tooltip: 'Open dashboard',
+                      onPressed: onOpenDashboard,
+                      child: const Icon(Icons.open_in_full, size: 18),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactStatLine extends StatelessWidget {
+  const _CompactStatLine({
+    required this.label,
+    required this.value,
+    required this.isPrimary,
+  });
+
+  final String label;
+  final String value;
+  final bool isPrimary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 46,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: const Color(0xFF42655C),
+              fontSize: isPrimary ? 12 : 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        Flexible(
+          child: Text(
+            value,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: const Color(0xFF10231E),
+              fontSize: isPrimary ? 30 : 18,
+              fontWeight: isPrimary ? FontWeight.w900 : FontWeight.w800,
+              height: 1,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CompactIconButton extends StatelessWidget {
+  const _CompactIconButton({
+    super.key,
+    required this.tooltip,
+    required this.onPressed,
+    required this.child,
+  });
+
+  final String tooltip;
+  final VoidCallback? onPressed;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: SizedBox.square(
+        dimension: 30,
+        child: IconButton(
+          padding: EdgeInsets.zero,
+          visualDensity: VisualDensity.compact,
+          color: const Color(0xFF365F55),
+          disabledColor: const Color(0x66365F55),
+          onPressed: onPressed,
+          icon: child,
+        ),
+      ),
+    );
+  }
 }
 
 class _WindowHeader extends StatelessWidget {
@@ -245,12 +488,14 @@ class _WindowHeader extends StatelessWidget {
     required this.refreshing,
     required this.onRefresh,
     required this.onSettings,
+    required this.onCompact,
     required this.onMinimize,
   });
 
   final bool refreshing;
   final VoidCallback? onRefresh;
   final VoidCallback onSettings;
+  final VoidCallback onCompact;
   final VoidCallback onMinimize;
 
   @override
@@ -285,6 +530,12 @@ class _WindowHeader extends StatelessWidget {
               tooltip: '设置',
               onPressed: onSettings,
               icon: const Icon(Icons.tune),
+            ),
+            IconButton(
+              key: const ValueKey('compact-mode-button'),
+              tooltip: 'Compact',
+              onPressed: onCompact,
+              icon: const Icon(Icons.close_fullscreen),
             ),
             IconButton(
               tooltip: '最小化',
@@ -400,7 +651,8 @@ class _OjTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(meta.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(meta.name,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
                 Text(
                   username.isEmpty ? meta.hint : username,
                   overflow: TextOverflow.ellipsis,
@@ -411,7 +663,8 @@ class _OjTile extends StatelessWidget {
                     result!.error!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Color(0xFFB3261E), fontSize: 12),
+                    style:
+                        const TextStyle(color: Color(0xFFB3261E), fontSize: 12),
                   ),
               ],
             ),
@@ -419,7 +672,8 @@ class _OjTile extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(solvedText, style: const TextStyle(fontWeight: FontWeight.w800)),
+              Text(solvedText,
+                  style: const TextStyle(fontWeight: FontWeight.w800)),
               Text(
                 '今日 +$today',
                 style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
@@ -615,7 +869,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
             Navigator.pop(
               context,
               AppConfig(
-                refreshIntervalMinutes: _intervalMinutes.clamp(15, 1440).toInt(),
+                refreshIntervalMinutes:
+                    _intervalMinutes.clamp(15, 1440).toInt(),
                 accounts: accounts,
               ),
             );
@@ -679,7 +934,8 @@ class OjController extends ChangeNotifier {
 
   void _recomputeSummaries() {
     final today = dateKey(DateTime.now());
-    state = state.copyWith(todaySummary: DailySummary.fromSnapshots(today, state.snapshots));
+    state = state.copyWith(
+        todaySummary: DailySummary.fromSnapshots(today, state.snapshots));
   }
 
   void _schedule() {
@@ -918,7 +1174,8 @@ class NowcoderProvider implements OjProvider {
 }
 
 class LocalStore {
-  LocalStore({Directory? supportDirectory}) : _supportDirectory = supportDirectory;
+  LocalStore({Directory? supportDirectory})
+      : _supportDirectory = supportDirectory;
 
   static const _configKey = 'app_config_v1';
   static const _snapshotsFile = 'snapshots_v1.json';
@@ -1001,7 +1258,8 @@ class LocalStore {
   }
 
   Future<File> _snapshotFile() async {
-    final directory = _supportDirectory ?? await getApplicationSupportDirectory();
+    final directory =
+        _supportDirectory ?? await getApplicationSupportDirectory();
     return File('${directory.path}${Platform.pathSeparator}$_snapshotsFile');
   }
 }
@@ -1303,7 +1561,8 @@ class DailySummary {
     return DailySummary(date: date, deltas: const {}, totalDelta: 0);
   }
 
-  factory DailySummary.fromSnapshots(String date, List<SolvedSnapshot> snapshots) {
+  factory DailySummary.fromSnapshots(
+      String date, List<SolvedSnapshot> snapshots) {
     final byOj = <String, List<SolvedSnapshot>>{};
     for (final snapshot in snapshots.where(
       (item) => item.date == date && item.status == FetchStatus.success,
@@ -1389,7 +1648,7 @@ Map<String, String> defaultHeaders({String? referer, String? contentType}) {
   return {
     'User-Agent':
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-        '(KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+            '(KHTML, like Gecko) Chrome/126.0 Safari/537.36',
     'Accept': 'application/json,text/html,application/xhtml+xml',
     if (referer != null) 'Referer': referer,
     if (contentType != null) 'Content-Type': contentType,
