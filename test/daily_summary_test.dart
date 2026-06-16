@@ -44,4 +44,48 @@ void main() {
     expect(summary.deltas['leetcode'], 0);
     expect(summary.totalDelta, 4);
   });
+
+  test('daily summary groups by OJ and username before platform total', () {
+    final snapshots = [
+      SolvedSnapshot(
+        date: '2026-06-15',
+        fetchedAt: DateTime.parse('2026-06-15T08:00:00'),
+        ojId: 'codeforces',
+        username: 'a',
+        status: FetchStatus.success,
+        solvedCount: 10,
+      ),
+      SolvedSnapshot(
+        date: '2026-06-15',
+        fetchedAt: DateTime.parse('2026-06-15T12:00:00'),
+        ojId: 'codeforces',
+        username: 'b',
+        status: FetchStatus.success,
+        solvedCount: 100,
+      ),
+      SolvedSnapshot(
+        date: '2026-06-15',
+        fetchedAt: DateTime.parse('2026-06-15T20:00:00'),
+        ojId: 'codeforces',
+        username: 'a',
+        status: FetchStatus.success,
+        solvedCount: 13,
+      ),
+      SolvedSnapshot(
+        date: '2026-06-15',
+        fetchedAt: DateTime.parse('2026-06-15T22:00:00'),
+        ojId: 'codeforces',
+        username: 'b',
+        status: FetchStatus.success,
+        solvedCount: 102,
+      ),
+    ];
+
+    final summary = DailySummary.fromSnapshots('2026-06-15', snapshots);
+
+    expect(summary.accountDeltas['codeforces']?['a'], 3);
+    expect(summary.accountDeltas['codeforces']?['b'], 2);
+    expect(summary.deltas['codeforces'], 5);
+    expect(summary.totalDelta, 5);
+  });
 }
