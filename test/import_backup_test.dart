@@ -105,7 +105,8 @@ void main() {
       );
       await controller.init();
 
-      final importFile = File('${directory.path}${Platform.pathSeparator}backup.json');
+      final importFile =
+          File('${directory.path}${Platform.pathSeparator}backup.json');
       await importFile.writeAsString(_backupJson(
         config: _portableConfig('new-user'),
         snapshots: [_snapshotJson('2026-06-16', 'new-user', 7)],
@@ -121,13 +122,59 @@ void main() {
       final loadedConfig = await store.loadConfig();
       final loadedSnapshots = await store.loadSnapshots();
 
-      expect(result.safetyBackupFile.path, contains('oj_float_pre_import_backup_'));
+      expect(result.safetyBackupFile.path,
+          contains('oj_float_pre_import_backup_'));
       expect(await result.safetyBackupFile.exists(), isTrue);
-      expect(await result.safetyBackupFile.readAsString(), contains('old-user'));
+      expect(
+          await result.safetyBackupFile.readAsString(), contains('old-user'));
       expect(loadedConfig.accounts['codeforces']!.usernames, ['new-user']);
       expect(loadedSnapshots, hasLength(1));
       expect(loadedSnapshots.single.username, 'new-user');
       expect(controller.state.todaySummary.totalDelta, 0);
+    } finally {
+      await directory.delete(recursive: true);
+    }
+  });
+
+  test('failed snapshot replace rolls back saved config and snapshots',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('oj_import_test_');
+    try {
+      final store = _FailingReplaceStore(supportDirectory: directory);
+      await store.saveConfig(_localConfig('old-user'));
+      await store.replaceSnapshots([
+        _snapshot('2026-06-15', 'old-user', 1),
+      ]);
+
+      final controller = OjController(
+        storage: store,
+        service: RefreshService(client: http.Client(), providers: const {}),
+        startupService: NoopStartupService(),
+      );
+      await controller.init();
+
+      final importFile =
+          File('${directory.path}${Platform.pathSeparator}backup.json');
+      await importFile.writeAsString(_backupJson(
+        config: _portableConfig('new-user'),
+        snapshots: [_snapshotJson('2026-06-16', 'new-user', 7)],
+      ));
+
+      store.failNextReplace = true;
+      await expectLater(
+        controller.importPortableBackup(
+          importFile,
+          safetyBackupDirectory: directory,
+        ),
+        throwsA(isA<FetchException>()),
+      );
+
+      final loadedConfig = await store.loadConfig();
+      final loadedSnapshots = await store.loadSnapshots();
+
+      expect(loadedConfig.accounts['codeforces']!.usernames, ['old-user']);
+      expect(loadedSnapshots, hasLength(1));
+      expect(loadedSnapshots.single.username, 'old-user');
     } finally {
       await directory.delete(recursive: true);
     }
@@ -197,4 +244,20 @@ SolvedSnapshot _snapshot(String date, String username, int solvedCount) {
     status: FetchStatus.success,
     solvedCount: solvedCount,
   );
+}
+
+class _FailingReplaceStore extends LocalStore {
+  _FailingReplaceStore({required Directory supportDirectory})
+      : super(supportDirectory: supportDirectory);
+
+  bool failNextReplace = false;
+
+  @override
+  Future<void> replaceSnapshots(List<SolvedSnapshot> snapshots) {
+    if (failNextReplace) {
+      failNextReplace = false;
+      throw const FileSystemException('replace snapshots failed');
+    }
+    return super.replaceSnapshots(snapshots);
+  }
 }

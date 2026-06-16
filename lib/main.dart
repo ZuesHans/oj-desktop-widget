@@ -323,7 +323,8 @@ class _OjFloatHomeState extends State<OjFloatHome>
         }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Start at login update failed: ${normalizeError(error)}'),
+            content:
+                Text('Start at login update failed: ${normalizeError(error)}'),
           ),
         );
       }
@@ -1390,7 +1391,11 @@ class OjController extends ChangeNotifier {
     notifyListeners();
     Object? startupError;
     try {
-      await startupService.setEnabled(config.launchAtStartup);
+      final startupUpdated =
+          await startupService.setEnabled(config.launchAtStartup);
+      if (!startupUpdated) {
+        startupError = FetchException('Start at login update failed.');
+      }
     } catch (error) {
       startupError = error;
     }
@@ -1405,6 +1410,8 @@ class OjController extends ChangeNotifier {
     Directory? safetyBackupDirectory,
   }) async {
     final imported = parsePortableBackupJson(await backupFile.readAsString());
+    final previousConfig = state.config;
+    final previousSnapshots = state.snapshots;
     final safetyBackup = await exportOjData(
       config: state.config,
       snapshots: state.snapshots,
@@ -1412,8 +1419,23 @@ class OjController extends ChangeNotifier {
       prefix: 'oj_float_pre_import_backup',
       writeDailySummary: false,
     );
-    await storage.saveConfig(imported.config);
-    await storage.replaceSnapshots(imported.snapshots);
+    try {
+      await storage.saveConfig(imported.config);
+      await storage.replaceSnapshots(imported.snapshots);
+    } catch (error) {
+      try {
+        await storage.saveConfig(previousConfig);
+        await storage.replaceSnapshots(previousSnapshots);
+      } catch (rollbackError) {
+        throw FetchException(
+          'Import failed and rollback failed: ${normalizeError(rollbackError)}',
+        );
+      }
+      throw FetchException(
+        'Import failed. Current config and snapshots were restored: '
+        '${normalizeError(error)}',
+      );
+    }
     state = state.copyWith(
       config: await storage.loadConfig(),
       snapshots: await storage.loadSnapshots(),
@@ -1423,7 +1445,11 @@ class OjController extends ChangeNotifier {
     _schedule();
     notifyListeners();
     try {
-      await startupService.setEnabled(state.config.launchAtStartup);
+      final startupSynced =
+          await startupService.setEnabled(state.config.launchAtStartup);
+      if (!startupSynced) {
+        throw FetchException('Start at login update failed.');
+      }
     } catch (_) {
       // Import restores local state even if the OS startup toggle cannot sync.
     }
@@ -1540,12 +1566,12 @@ class RefreshService {
 }
 
 abstract class StartupService {
-  Future<void> setEnabled(bool enabled);
+  Future<bool> setEnabled(bool enabled);
 }
 
 class NoopStartupService implements StartupService {
   @override
-  Future<void> setEnabled(bool enabled) async {}
+  Future<bool> setEnabled(bool enabled) async => true;
 }
 
 class LaunchAtStartupService implements StartupService {
@@ -1558,7 +1584,7 @@ class LaunchAtStartupService implements StartupService {
   }
 
   @override
-  Future<void> setEnabled(bool enabled) {
+  Future<bool> setEnabled(bool enabled) {
     return enabled ? launchAtStartup.enable() : launchAtStartup.disable();
   }
 }

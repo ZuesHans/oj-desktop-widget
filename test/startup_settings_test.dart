@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -33,7 +32,8 @@ void main() {
       ),
     );
 
-    expect(find.byKey(const ValueKey('launch-at-startup-switch')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('launch-at-startup-switch')), findsOneWidget);
     expect(find.text('Start at login'), findsOneWidget);
   });
 
@@ -50,12 +50,37 @@ void main() {
       enabled: false,
     );
 
-    await expectLater(controller.saveConfig(config), throwsA(isA<FetchException>()));
+    await expectLater(
+        controller.saveConfig(config), throwsA(isA<FetchException>()));
     final loaded = await LocalStore().loadConfig();
 
     expect(startupService.calls, [true]);
     expect(loaded.launchAtStartup, isTrue);
     expect(loaded.accounts['codeforces']!.usernames, ['saved-user']);
+  });
+
+  test('startup plugin false result is reported after saving config', () async {
+    final startupService = _FalseStartupService();
+    final controller = OjController(
+      storage: LocalStore(),
+      service: RefreshService(client: http.Client(), providers: const {}),
+      startupService: startupService,
+    );
+    final config = _config(
+      launchAtStartup: true,
+      username: 'saved-after-false',
+      enabled: false,
+    );
+
+    await expectLater(
+      controller.saveConfig(config),
+      throwsA(isA<FetchException>()),
+    );
+    final loaded = await LocalStore().loadConfig();
+
+    expect(startupService.calls, [true]);
+    expect(loaded.launchAtStartup, isTrue);
+    expect(loaded.accounts['codeforces']!.usernames, ['saved-after-false']);
   });
 }
 
@@ -80,8 +105,18 @@ class _FailingStartupService implements StartupService {
   final calls = <bool>[];
 
   @override
-  Future<void> setEnabled(bool enabled) {
+  Future<bool> setEnabled(bool enabled) {
     calls.add(enabled);
-    return Future<void>.error(const SocketException('startup denied'));
+    return Future<bool>.error(const SocketException('startup denied'));
+  }
+}
+
+class _FalseStartupService implements StartupService {
+  final calls = <bool>[];
+
+  @override
+  Future<bool> setEnabled(bool enabled) async {
+    calls.add(enabled);
+    return false;
   }
 }
