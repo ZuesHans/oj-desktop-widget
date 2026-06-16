@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:http/http.dart' as http;
+import 'package:launch_at_startup/launch_at_startup.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tray_manager/tray_manager.dart';
@@ -146,6 +148,9 @@ class _OjFloatHomeState extends State<OjFloatHome>
     super.initState();
     _controller = OjController(
       storage: LocalStore(),
+      startupService: widget.enablePlatformIntegration
+          ? LaunchAtStartupService()
+          : NoopStartupService(),
       service: RefreshService(
         client: http.Client(),
         providers: {
@@ -277,6 +282,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
                         ),
                         onOpen: () => _openHeatmap(context),
                         onExport: () => _exportData(context),
+                        onImport: () => _importData(context),
                       ),
                       const SizedBox(height: 12),
                       ...supportedOjs.map(
@@ -309,7 +315,18 @@ class _OjFloatHomeState extends State<OjFloatHome>
       builder: (_) => SettingsDialog(config: _controller.state.config),
     );
     if (updated != null) {
-      await _controller.saveConfig(updated);
+      try {
+        await _controller.saveConfig(updated);
+      } catch (error) {
+        if (!context.mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Start at login update failed: ${normalizeError(error)}'),
+          ),
+        );
+      }
     }
   }
 
@@ -344,6 +361,63 @@ class _OjFloatHomeState extends State<OjFloatHome>
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Export failed: ${normalizeError(error)}')),
+      );
+    }
+  }
+
+  Future<void> _importData(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Import Backup'),
+        content: const Text(
+          'Import will replace current local config and snapshots. '
+          'A safety backup will be created before import.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Import Backup'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      final selection = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+        allowMultiple: false,
+      );
+      final path = selection?.files.single.path;
+      if (path == null) {
+        return;
+      }
+      final result = await _controller.importPortableBackup(File(path));
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Import completed. Current config and snapshots were replaced '
+            'from backup. Safety backup: ${result.safetyBackupFile.path}',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Import failed: ${normalizeError(error)}')),
       );
     }
   }
@@ -667,11 +741,13 @@ class _HeatmapEntryPanel extends StatelessWidget {
     required this.summary,
     required this.onOpen,
     required this.onExport,
+    required this.onImport,
   });
 
   final HeatmapSummary summary;
   final VoidCallback onOpen;
   final VoidCallback onExport;
+  final VoidCallback onImport;
 
   @override
   Widget build(BuildContext context) {
@@ -709,10 +785,17 @@ class _HeatmapEntryPanel extends StatelessWidget {
           ),
           IconButton(
             key: const ValueKey('export-data-button'),
-            tooltip: 'Export data',
+            tooltip: 'Export Backup',
             onPressed: onExport,
             color: _accentColor,
             icon: const Icon(Icons.download),
+          ),
+          IconButton(
+            key: const ValueKey('import-backup-button'),
+            tooltip: 'Import Backup',
+            onPressed: onImport,
+            color: _accentColor,
+            icon: const Icon(Icons.upload_file),
           ),
           FilledButton.tonalIcon(
             key: const ValueKey('heatmap-entry-button'),
@@ -1151,6 +1234,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
   late int _intervalMinutes;
   late final Map<String, TextEditingController> _controllers;
   late final Map<String, bool> _enabled;
+  late bool _launchAtStartup;
 
   @override
   void initState() {
@@ -1166,6 +1250,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
       for (final meta in supportedOjs)
         meta.id: widget.config.accounts[meta.id]?.enabled ?? false,
     };
+    _launchAtStartup = widget.config.launchAtStartup;
   }
 
   @override
@@ -1201,6 +1286,15 @@ class _SettingsDialogState extends State<SettingsDialog> {
                     ),
                   ),
                 ],
+              ),
+              SwitchListTile(
+                key: const ValueKey('launch-at-startup-switch'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Start at login'),
+                value: _launchAtStartup,
+                onChanged: (value) {
+                  setState(() => _launchAtStartup = value);
+                },
               ),
               const SizedBox(height: 10),
               ...supportedOjs.map((meta) {
@@ -1254,6 +1348,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 refreshIntervalMinutes:
                     _intervalMinutes.clamp(15, 1440).toInt(),
                 accounts: accounts,
+                launchAtStartup: _launchAtStartup,
               ),
             );
           },
@@ -1265,10 +1360,15 @@ class _SettingsDialogState extends State<SettingsDialog> {
 }
 
 class OjController extends ChangeNotifier {
-  OjController({required this.storage, required this.service});
+  OjController({
+    required this.storage,
+    required this.service,
+    required this.startupService,
+  });
 
   final LocalStore storage;
   final RefreshService service;
+  final StartupService startupService;
   OjState state = OjState.initial();
   bool refreshing = false;
   Timer? _timer;
@@ -1288,7 +1388,46 @@ class OjController extends ChangeNotifier {
     state = state.copyWith(config: config);
     _schedule();
     notifyListeners();
+    Object? startupError;
+    try {
+      await startupService.setEnabled(config.launchAtStartup);
+    } catch (error) {
+      startupError = error;
+    }
     await refresh();
+    if (startupError != null) {
+      throw FetchException(normalizeError(startupError));
+    }
+  }
+
+  Future<ImportResult> importPortableBackup(
+    File backupFile, {
+    Directory? safetyBackupDirectory,
+  }) async {
+    final imported = parsePortableBackupJson(await backupFile.readAsString());
+    final safetyBackup = await exportOjData(
+      config: state.config,
+      snapshots: state.snapshots,
+      directory: safetyBackupDirectory,
+      prefix: 'oj_float_pre_import_backup',
+      writeDailySummary: false,
+    );
+    await storage.saveConfig(imported.config);
+    await storage.replaceSnapshots(imported.snapshots);
+    state = state.copyWith(
+      config: await storage.loadConfig(),
+      snapshots: await storage.loadSnapshots(),
+      latest: const {},
+    );
+    _recomputeSummaries();
+    _schedule();
+    notifyListeners();
+    try {
+      await startupService.setEnabled(state.config.launchAtStartup);
+    } catch (_) {
+      // Import restores local state even if the OS startup toggle cannot sync.
+    }
+    return ImportResult(safetyBackupFile: safetyBackup.backupFile);
   }
 
   Future<void> refresh() async {
@@ -1398,6 +1537,30 @@ class RefreshService {
   }
 
   void dispose() => client.close();
+}
+
+abstract class StartupService {
+  Future<void> setEnabled(bool enabled);
+}
+
+class NoopStartupService implements StartupService {
+  @override
+  Future<void> setEnabled(bool enabled) async {}
+}
+
+class LaunchAtStartupService implements StartupService {
+  LaunchAtStartupService() {
+    launchAtStartup.setup(
+      appName: 'OJ Float',
+      appPath: Platform.resolvedExecutable,
+      packageName: 'oj_float',
+    );
+  }
+
+  @override
+  Future<void> setEnabled(bool enabled) {
+    return enabled ? launchAtStartup.enable() : launchAtStartup.disable();
+  }
 }
 
 abstract class OjProvider {
@@ -1658,6 +1821,16 @@ class LocalStore {
     );
   }
 
+  Future<void> replaceSnapshots(List<SolvedSnapshot> snapshots) async {
+    final file = await _snapshotFile();
+    await file.parent.create(recursive: true);
+    await file.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(
+        snapshots.map((item) => item.toJson()).toList(),
+      ),
+    );
+  }
+
   Future<File> _snapshotFile() async {
     final directory =
         _supportDirectory ?? await getApplicationSupportDirectory();
@@ -1677,11 +1850,29 @@ class ExportResult {
   final File dailySummaryFile;
 }
 
+class ImportResult {
+  const ImportResult({required this.safetyBackupFile});
+
+  final File safetyBackupFile;
+}
+
+class ParsedPortableBackup {
+  const ParsedPortableBackup({
+    required this.config,
+    required this.snapshots,
+  });
+
+  final AppConfig config;
+  final List<SolvedSnapshot> snapshots;
+}
+
 Future<ExportResult> exportOjData({
   required AppConfig config,
   required List<SolvedSnapshot> snapshots,
   DateTime? now,
   Directory? directory,
+  String prefix = 'oj_float_backup',
+  bool writeDailySummary = true,
 }) async {
   final exportTime = now ?? DateTime.now();
   final exportDirectory = directory ?? await exportDirectoryForOjData();
@@ -1689,7 +1880,7 @@ Future<ExportResult> exportOjData({
 
   final backupFile = File(
     '${exportDirectory.path}${Platform.pathSeparator}'
-    '${buildExportFileName('oj_float_backup', 'json', exportTime)}',
+    '${buildExportFileName(prefix, 'json', exportTime)}',
   );
   final dailySummaryFile = File(
     '${exportDirectory.path}${Platform.pathSeparator}'
@@ -1703,7 +1894,9 @@ Future<ExportResult> exportOjData({
       exportedAt: exportTime,
     ),
   );
-  await dailySummaryFile.writeAsString(buildDailySummaryCsv(snapshots));
+  if (writeDailySummary) {
+    await dailySummaryFile.writeAsString(buildDailySummaryCsv(snapshots));
+  }
 
   return ExportResult(
     directory: exportDirectory,
@@ -1743,9 +1936,57 @@ String buildPortableBackupJson({
   );
 }
 
+ParsedPortableBackup parsePortableBackupJson(String jsonText) {
+  final decoded = jsonDecode(jsonText);
+  if (decoded is! Map) {
+    throw const FormatException('Backup JSON must be an object.');
+  }
+  final data = Map<String, dynamic>.from(decoded);
+  if (data['schemaVersion'] != 1) {
+    throw const FormatException('Unsupported backup schemaVersion.');
+  }
+  if (data['app'] != 'oj_float') {
+    throw const FormatException('Backup app does not match oj_float.');
+  }
+  if (data['exportType'] != 'portable_backup') {
+    throw const FormatException('Backup exportType is not portable_backup.');
+  }
+  final rawConfig = data['config'];
+  if (rawConfig is! Map) {
+    throw const FormatException('Backup config is missing or invalid.');
+  }
+  final rawSnapshots = data['snapshots'];
+  if (rawSnapshots is! List) {
+    throw const FormatException('Backup snapshots must be an array.');
+  }
+
+  final snapshots = <SolvedSnapshot>[];
+  for (final item in rawSnapshots) {
+    try {
+      if (item is! Map) {
+        continue;
+      }
+      final snapshot = SolvedSnapshot.tryFromJson(
+        Map<String, dynamic>.from(item),
+      );
+      if (snapshot != null) {
+        snapshots.add(snapshot);
+      }
+    } catch (_) {
+      continue;
+    }
+  }
+
+  return ParsedPortableBackup(
+    config: AppConfig.fromPortableJson(Map<String, dynamic>.from(rawConfig)),
+    snapshots: List.unmodifiable(snapshots),
+  );
+}
+
 Map<String, Object?> buildPortableConfigJson(AppConfig config) {
   return {
     'refreshIntervalMinutes': config.refreshIntervalMinutes,
+    'launchAtStartup': config.launchAtStartup,
     'accounts': [
       for (final meta in supportedOjs)
         {
@@ -1816,11 +2057,13 @@ class AppConfig {
   const AppConfig({
     required this.refreshIntervalMinutes,
     required this.accounts,
+    this.launchAtStartup = false,
   });
 
   factory AppConfig.defaults() {
     return AppConfig(
       refreshIntervalMinutes: 60,
+      launchAtStartup: false,
       accounts: {
         for (final meta in supportedOjs)
           meta.id: const OjAccountConfig(usernames: [], enabled: false),
@@ -1834,12 +2077,49 @@ class AppConfig {
       refreshIntervalMinutes: _parseRefreshInterval(
         json['refreshIntervalMinutes'],
       ),
+      launchAtStartup: json['launchAtStartup'] is bool
+          ? json['launchAtStartup'] as bool
+          : false,
       accounts: {
         for (final meta in supportedOjs)
           meta.id: _parseAccountConfig(
             rawAccounts is Map ? rawAccounts[meta.id] : null,
           ),
       },
+    );
+  }
+
+  factory AppConfig.fromPortableJson(Map<String, dynamic> json) {
+    final rawAccounts = json['accounts'];
+    if (rawAccounts is! List) {
+      throw const FormatException('Backup config.accounts must be an array.');
+    }
+    final accounts = {
+      for (final meta in supportedOjs)
+        meta.id: const OjAccountConfig(usernames: [], enabled: false),
+    };
+    for (final item in rawAccounts) {
+      if (item is! Map) {
+        throw const FormatException('Backup account entry must be an object.');
+      }
+      final accountJson = Map<String, dynamic>.from(item);
+      final ojId = accountJson['ojId'];
+      if (ojId is! String || ojId.isEmpty) {
+        throw const FormatException('Backup account ojId is invalid.');
+      }
+      if (!accounts.containsKey(ojId)) {
+        continue;
+      }
+      accounts[ojId] = OjAccountConfig.fromJson(accountJson);
+    }
+    return AppConfig(
+      refreshIntervalMinutes: _parseRefreshInterval(
+        json['refreshIntervalMinutes'],
+      ),
+      launchAtStartup: json['launchAtStartup'] is bool
+          ? json['launchAtStartup'] as bool
+          : false,
+      accounts: accounts,
     );
   }
 
@@ -1864,9 +2144,11 @@ class AppConfig {
 
   final int refreshIntervalMinutes;
   final Map<String, OjAccountConfig> accounts;
+  final bool launchAtStartup;
 
   Map<String, dynamic> toJson() => {
         'refreshIntervalMinutes': refreshIntervalMinutes,
+        'launchAtStartup': launchAtStartup,
         'accounts': {
           for (final entry in accounts.entries) entry.key: entry.value.toJson(),
         },
