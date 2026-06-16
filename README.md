@@ -29,3 +29,18 @@ flutter run -d windows
 - 牛客：建议填写数字用户 ID。
 
 数据只保存在本地应用目录，不会上传。
+
+## Cross-device backup and restore
+
+Use the portable backup JSON when moving OJ Float data to another device.
+
+1. On the old computer, open the dashboard and click **Export Backup**.
+2. Copy the generated `oj_float_backup_YYYYMMDD_HHMM.json` file to the new computer.
+3. Install or open OJ Float on the new computer.
+4. Click **Import Backup**.
+5. Select the copied backup JSON file.
+6. The app will replace the current local config and snapshots with the data from the backup.
+7. `dailyStats` and the heatmap are derived data. Restore uses `config` and `snapshots`, then recalculates daily stats, heatmap, and streaks.
+8. Before import, the app automatically creates a safety backup named `oj_float_pre_import_backup_YYYYMMDD_HHMM.json`.
+9. CSV exports are only for viewing or spreadsheet analysis. CSV files are not used for restore.
+10. Backups do not contain passwords, Cookie values, or Token values.

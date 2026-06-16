@@ -59,6 +59,7 @@ void main() {
     expect(find.text('Heatmap'), findsOneWidget);
     expect(find.byKey(const ValueKey('heatmap-entry-button')), findsOneWidget);
     expect(find.byKey(const ValueKey('export-data-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('import-backup-button')), findsOneWidget);
   });
 
   testWidgets('heatmap entry opens the heatmap dialog', (tester) async {
