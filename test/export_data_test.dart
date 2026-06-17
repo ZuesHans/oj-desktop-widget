@@ -20,6 +20,9 @@ void main() {
 
     final config = data['config'] as Map<String, dynamic>;
     expect(config['refreshIntervalMinutes'], 45);
+    expect(config['alwaysOnTop'], isFalse);
+    expect(config['showInTaskbar'], isFalse);
+    expect(config['closeToTray'], isFalse);
     final accounts = config['accounts'] as List<dynamic>;
     final codeforces = accounts.cast<Map<String, dynamic>>().firstWhere(
           (account) => account['ojId'] == 'codeforces',
@@ -144,6 +147,9 @@ void main() {
 AppConfig _config() {
   return AppConfig(
     refreshIntervalMinutes: 45,
+    alwaysOnTop: false,
+    showInTaskbar: false,
+    closeToTray: false,
     accounts: {
       for (final meta in supportedOjs)
         meta.id: meta.id == 'codeforces'

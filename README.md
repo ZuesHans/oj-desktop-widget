@@ -1,46 +1,130 @@
 # OJ Float
 
-Windows 桌面悬浮 OJ 做题统计插件。
+OJ Float 是一个 Windows 桌面悬浮 OJ 做题统计工具，用来集中查看多个 Online Judge 账号的通过题数变化。
+
+当前版本为测试版，主要用于小范围试用和反馈。
+
+## 下载测试版
+
+请在 GitHub Releases 中下载最新的 Windows 测试包：
+
+```text
+OJ-Float-v0.1.0-beta.1-windows-x64.zip
+```
+
+使用方式：
+
+1. 下载 zip 文件。
+2. 解压到任意文件夹。
+3. 运行解压后的 `oj_float.exe`。
+
+注意：不要只复制或单独运行 `oj_float.exe`。应用需要同目录下的 `data` 文件夹和运行库文件。
 
 ## 功能
 
-- 每 1 小时自动刷新一次各 OJ 通过题数，也可以手动刷新。
 - 支持 Codeforces、LeetCode、AtCoder、洛谷、牛客。
+- 每 1 小时自动刷新一次通过题数。
+- 支持手动刷新。
 - 单个 OJ 抓取失败不会影响其他 OJ。
-- 本地保存刷新快照，并按“当天最后快照 - 当天首次快照”生成每日总结。
-- Windows 上支持小型置顶悬浮窗和系统托盘。
-
-## 本地运行
-
-当前目录只包含应用源码。如果还没有 Flutter Windows 工程壳，请先安装 Flutter，并在本目录执行：
-
-```powershell
-flutter create --platforms=windows .
-flutter pub get
-flutter run -d windows
-```
+- 本地保存刷新快照。
+- 按“当天最后快照 - 当天首次快照”生成每日总结。
+- 支持热力图、连续记录和汇总查看。
+- 支持小型置顶悬浮窗。
+- 支持系统托盘菜单。
+- 支持开机启动设置。
+- 支持数据备份导出和导入。
 
 ## 使用说明
 
 首次打开后进入设置，填写各 OJ 的用户名或用户 ID。
 
-- Codeforces、LeetCode、AtCoder：填写公开用户名。
+- Codeforces：填写公开 handle。
+- LeetCode：填写公开 username。
+- AtCoder：填写公开 username。
 - 洛谷：建议填写数字 UID。
 - 牛客：建议填写数字用户 ID。
 
-数据只保存在本地应用目录，不会上传。
+保存后可以手动刷新，也可以等待应用自动刷新。
 
-## Cross-device backup and restore
+## 数据与隐私
 
-Use the portable backup JSON when moving OJ Float data to another device.
+- 数据只保存在本机应用目录。
+- 应用不会上传你的配置、统计数据或备份文件。
+- 备份文件不包含密码、Cookie 或 Token。
+- 抓取结果依赖各 OJ 的公开页面或公开接口。
+- 如果账号不存在、账号不可公开访问、网络异常或 OJ 页面结构变化，部分平台可能刷新失败。
 
-1. On the old computer, open the dashboard and click **Export Backup**.
-2. Copy the generated `oj_float_backup_YYYYMMDD_HHMM.json` file to the new computer.
-3. Install or open OJ Float on the new computer.
-4. Click **Import Backup**.
-5. Select the copied backup JSON file.
-6. The app will replace the current local config and snapshots with the data from the backup.
-7. `dailyStats` and the heatmap are derived data. Restore uses `config` and `snapshots`, then recalculates daily stats, heatmap, and streaks.
-8. Before import, the app automatically creates a safety backup named `oj_float_pre_import_backup_YYYYMMDD_HHMM.json`.
-9. CSV exports are only for viewing or spreadsheet analysis. CSV files are not used for restore.
-10. Backups do not contain passwords, Cookie values, or Token values.
+## 备份与迁移
+
+跨设备迁移时，请使用应用内的备份 JSON。
+
+1. 在旧电脑打开 OJ Float。
+2. 点击 **Export Backup** 导出备份。
+3. 将生成的 `oj_float_backup_YYYYMMDD_HHMM.json` 复制到新电脑。
+4. 在新电脑打开 OJ Float。
+5. 点击 **Import Backup**。
+6. 选择复制过来的备份 JSON。
+7. 应用会用备份中的配置和快照替换当前本地数据。
+
+导入前，应用会自动创建一份安全备份：
+
+```text
+oj_float_pre_import_backup_YYYYMMDD_HHMM.json
+```
+
+说明：
+
+- `dailyStats` 和热力图是派生数据。
+- 导入时会使用 `config` 和 `snapshots` 重新计算每日统计、热力图和连续记录。
+- CSV 导出只用于查看或表格分析，不能用于恢复。
+
+## 本地开发
+
+需要先安装 Flutter，并启用 Windows 桌面支持。
+
+```powershell
+flutter config --enable-windows-desktop
+flutter pub get
+flutter run -d windows
+```
+
+发布前建议执行：
+
+```powershell
+flutter pub get
+flutter analyze
+flutter test
+flutter build windows --release
+```
+
+Windows Release 构建产物位于：
+
+```text
+build\windows\x64\runner\Release
+```
+
+分发测试包时，请压缩整个 `Release` 文件夹。
+
+## 发布建议
+
+测试版建议通过 GitHub Release 发布，并标记为 Pre-release。
+
+推荐 tag：
+
+```text
+v0.1.0-beta.1
+```
+
+推荐文件名：
+
+```text
+OJ-Float-v0.1.0-beta.1-windows-x64.zip
+```
+
+## 版权与测试版说明
+
+Developer: zueshans
+
+Copyright © 2026 zueshans. All rights reserved.
+
+当前版本为测试版，仅供测试和反馈使用。未经开发者许可，不得重新分发、修改、售卖、发布或重新打包本软件。
