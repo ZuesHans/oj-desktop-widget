@@ -58,6 +58,7 @@ const _textPrimaryColor = Color(0xFF17211D);
 const _textSecondaryColor = Color(0xFF64706A);
 const _accentColor = Color(0xFF2F6F4E);
 const _dangerColor = Color(0xFFB3261E);
+final _heatmapDefaultStartDate = DateTime(2026, 6, 1);
 const _heatmapLevelColors = <Color>[
   Color(0xFFEFF3EF),
   Color(0xFF9BE9A8),
@@ -841,7 +842,7 @@ class _HeatmapEntryPanel extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Heatmap',
+                  '热力图',
                   style: TextStyle(
                     color: _textPrimaryColor,
                     fontWeight: FontWeight.w800,
@@ -875,7 +876,7 @@ class _HeatmapEntryPanel extends StatelessWidget {
             key: const ValueKey('heatmap-entry-button'),
             onPressed: onOpen,
             icon: const Icon(Icons.grid_view, size: 18),
-            label: const Text('Open'),
+            label: const Text('打开'),
           ),
         ],
       ),
@@ -883,22 +884,23 @@ class _HeatmapEntryPanel extends StatelessWidget {
   }
 }
 
-class HeatmapDialog extends StatelessWidget {
+class HeatmapDialog extends StatefulWidget {
   const HeatmapDialog({super.key, required this.summary});
 
   final HeatmapSummary summary;
 
   @override
+  State<HeatmapDialog> createState() => _HeatmapDialogState();
+}
+
+class _HeatmapDialogState extends State<HeatmapDialog> {
+  @override
   Widget build(BuildContext context) {
     return AlertDialog(
       key: const ValueKey('heatmap-dialog'),
-      backgroundColor: _cardColor,
-      title: const Text(
-        'Heatmap',
-        style: TextStyle(color: _textPrimaryColor),
-      ),
+      title: const Text('热力图'),
       content: SizedBox(
-        width: 300,
+        width: 280,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -908,41 +910,228 @@ class HeatmapDialog extends StatelessWidget {
               runSpacing: 8,
               children: [
                 _HeatmapStat(
-                    label: 'Current streak',
-                    value: '${summary.currentStreak}d'),
+                    label: '当前连续', value: '${widget.summary.currentStreak} 天'),
                 _HeatmapStat(
-                    label: 'Longest streak',
-                    value: '${summary.longestStreak}d'),
+                    label: '最长连续', value: '${widget.summary.longestStreak} 天'),
                 _HeatmapStat(
-                    label: 'Active days', value: '${summary.activeDays}'),
-                _HeatmapStat(label: 'Total +', value: '${summary.totalDelta}'),
+                    label: '活跃天数', value: '${widget.summary.activeDays}'),
+                _HeatmapStat(
+                    label: '累计新增', value: '+${widget.summary.totalDelta}'),
               ],
             ),
             const SizedBox(height: 16),
-            if (summary.days.isEmpty)
-              const Text(
-                'No snapshot data yet. Refresh after configuring accounts to build your heatmap.',
-                style: TextStyle(color: _textSecondaryColor),
-              )
-            else
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: _heatmapWeeks(summary.days)
-                      .map((week) => _HeatmapWeek(days: week))
-                      .toList(),
-                ),
-              ),
+            _HeatmapGrid(days: widget.summary.days),
           ],
         ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
+          child: const Text('关闭'),
         ),
       ],
+    );
+  }
+}
+
+class _HeatmapGrid extends StatefulWidget {
+  const _HeatmapGrid({required this.days});
+
+  final List<HeatmapDay> days;
+
+  @override
+  State<_HeatmapGrid> createState() => _HeatmapGridState();
+}
+
+class _HeatmapGridState extends State<_HeatmapGrid> {
+  static const _weeksPerPage = 12;
+  late int _page;
+
+  @override
+  void initState() {
+    super.initState();
+    _page = 0;
+  }
+
+  @override
+  void didUpdateWidget(covariant _HeatmapGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.days.length != widget.days.length) {
+      _page = _page.clamp(0, _lastPage).toInt();
+    }
+  }
+
+  int get _lastPage {
+    final weekCount = _heatmapWeeks(widget.days).length;
+    if (weekCount == 0) {
+      return 0;
+    }
+    return ((weekCount - 1) / _weeksPerPage).floor();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final weeks = _heatmapWeeks(widget.days);
+    final pageCount = _lastPage + 1;
+    final end =
+        (weeks.length - _page * _weeksPerPage).clamp(0, weeks.length).toInt();
+    final start = (end - _weeksPerPage).clamp(0, weeks.length).toInt();
+    final visibleWeeks = weeks.sublist(start, end);
+    final rangeText = visibleWeeks.isEmpty
+        ? ''
+        : '${_heatmapShortDate(visibleWeeks.first.first.date)} - '
+            '${_heatmapShortDate(visibleWeeks.last.last.date)}';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                rangeText,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _textSecondaryColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: '更早',
+              visualDensity: VisualDensity.compact,
+              onPressed:
+                  _page == _lastPage ? null : () => setState(() => _page += 1),
+              icon: const Icon(Icons.chevron_left, size: 20),
+            ),
+            Text(
+              '${pageCount - _page}/$pageCount',
+              style: const TextStyle(color: _textSecondaryColor, fontSize: 12),
+            ),
+            IconButton(
+              tooltip: '更新',
+              visualDensity: VisualDensity.compact,
+              onPressed: _page == 0 ? null : () => setState(() => _page -= 1),
+              icon: const Icon(Icons.chevron_right, size: 20),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 26, bottom: 6),
+              child: Row(
+                children: _heatmapMonthLabels(visibleWeeks)
+                    .map((label) => _HeatmapMonthCell(label: label))
+                    .toList(),
+              ),
+            ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _HeatmapWeekdayLabels(),
+                ...visibleWeeks.map((week) => _HeatmapWeek(days: week)),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _HeatmapMonthCell extends StatelessWidget {
+  const _HeatmapMonthCell({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 16,
+      height: 12,
+      child: Text(
+        label,
+        softWrap: false,
+        overflow: TextOverflow.clip,
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          fontSize: 10,
+        ),
+      ),
+    );
+  }
+}
+
+List<String> _heatmapMonthLabels(List<List<HeatmapDay>> weeks) {
+  DateTime? previousMonth;
+  return [
+    for (var index = 0; index < weeks.length; index += 1)
+      () {
+        final week = weeks[index];
+        final labelDate = _heatmapMonthLabelDate(week);
+        final shouldLabel = labelDate != null &&
+            (index == 0 ||
+                previousMonth == null ||
+                labelDate.year != previousMonth!.year ||
+                labelDate.month != previousMonth!.month);
+        if (labelDate != null) {
+          previousMonth = labelDate;
+        }
+        return shouldLabel ? _heatmapMonthName(labelDate) : '';
+      }(),
+  ];
+}
+
+DateTime? _heatmapMonthLabelDate(List<HeatmapDay> week) {
+  if (week.isEmpty) {
+    return null;
+  }
+  for (final day in week) {
+    final date = DateTime.parse(day.date);
+    if (date.day == 1) {
+      return date;
+    }
+  }
+  return DateTime.parse(week.first.date);
+}
+
+String _heatmapMonthName(DateTime date) {
+  return '${date.month}';
+}
+
+String _heatmapShortDate(String date) {
+  final parsed = DateTime.parse(date);
+  return '${parsed.month}/${parsed.day}';
+}
+
+class _HeatmapWeekdayLabels extends StatelessWidget {
+  const _HeatmapWeekdayLabels();
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = ['', '一', '', '三', '', '五', ''];
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Column(
+        children: [
+          for (final label in labels)
+            SizedBox(
+              width: 22,
+              height: 16,
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 9,
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -955,24 +1144,23 @@ class _HeatmapStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: _cardMutedColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _borderColor),
-      ),
+    return SizedBox(
+      width: 72,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: const TextStyle(color: _textSecondaryColor, fontSize: 11)),
+          Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 11,
+            ),
+          ),
           Text(
             value,
-            style: const TextStyle(
-              color: _textPrimaryColor,
-              fontWeight: FontWeight.w800,
-            ),
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -2880,25 +3068,23 @@ class HeatmapSummary {
   factory HeatmapSummary.fromSnapshots(
     List<SolvedSnapshot> snapshots, {
     DateTime? today,
-    int weeks = 26,
+    int? weeks,
+    DateTime? startDate,
   }) {
-    if (snapshots.isEmpty) {
-      return const HeatmapSummary(
-        days: [],
-        currentStreak: 0,
-        longestStreak: 0,
-        activeDays: 0,
-        totalDelta: 0,
-      );
-    }
-
     final normalizedToday = _startOfDay(today ?? DateTime.now());
     final deltasByDate = _dailyDeltasByDate(snapshots);
     final days = <HeatmapDay>[];
-    final visibleDayCount = weeks * 7;
-    final start = normalizedToday.subtract(Duration(days: visibleDayCount - 1));
-    for (var offset = 0; offset < visibleDayCount; offset += 1) {
-      final date = start.add(Duration(days: offset));
+    final start = weeks == null
+        ? _startOfWeek(startDate ?? _heatmapDefaultStartDate)
+        : _startOfWeek(
+            normalizedToday.subtract(
+              Duration(days: (weeks.clamp(1, 104).toInt() - 1) * 7),
+            ),
+          );
+    final end = _endOfWeek(normalizedToday);
+    for (var date = start;
+        !date.isAfter(end);
+        date = date.add(const Duration(days: 1))) {
       final key = dateKey(date);
       days.add(HeatmapDay(date: key, delta: deltasByDate[key] ?? 0));
     }
@@ -2928,6 +3114,15 @@ Map<String, int> _dailyDeltasByDate(List<SolvedSnapshot> snapshots) {
     for (final date in dates)
       date: DailySummary.fromSnapshots(date, snapshots).totalDelta,
   };
+}
+
+DateTime _startOfWeek(DateTime date) {
+  final normalized = _startOfDay(date);
+  return normalized.subtract(Duration(days: normalized.weekday % 7));
+}
+
+DateTime _endOfWeek(DateTime date) {
+  return _startOfWeek(date).add(const Duration(days: 6));
 }
 
 int _currentStreak(Map<String, int> deltasByDate, DateTime today) {
