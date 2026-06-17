@@ -46,8 +46,8 @@ const supportedOjs = <OjMeta>[
   ),
 ];
 
-const _compactWindowSize = Size(220, 116);
-const _compactMinimumWindowSize = Size(200, 96);
+const _compactWindowSize = Size(220, 148);
+const _compactMinimumWindowSize = Size(200, 132);
 const _dashboardWindowSize = Size(360, 520);
 const _dashboardMinimumWindowSize = Size(320, 420);
 const _appSurfaceColor = Color(0xFFF6F7F4);
@@ -73,15 +73,16 @@ Future<void> main() async {
 
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
-    const options = WindowOptions(
+    final initialConfig = await LocalStore().loadConfig();
+    final options = WindowOptions(
       size: _compactWindowSize,
       minimumSize: _compactMinimumWindowSize,
       center: true,
       title: 'OJ Float',
       titleBarStyle: TitleBarStyle.hidden,
-      alwaysOnTop: true,
+      alwaysOnTop: initialConfig.alwaysOnTop,
       backgroundColor: Colors.transparent,
-      skipTaskbar: false,
+      skipTaskbar: !initialConfig.showInTaskbar,
     );
     await windowManager.waitUntilReadyToShow(options, () async {
       await windowManager.setPreventClose(true);
@@ -168,7 +169,11 @@ class _OjFloatHomeState extends State<OjFloatHome>
       unawaited(_setupTray());
     }
     if (widget.autoInitializeController) {
-      unawaited(_controller.init());
+      unawaited(_controller.init().then((_) async {
+        if (widget.enablePlatformIntegration) {
+          await _applyWindowPreferences(_controller.state.config);
+        }
+      }));
     }
   }
 
@@ -181,13 +186,20 @@ class _OjFloatHomeState extends State<OjFloatHome>
       await trayManager.setIcon(iconFile.path);
     }
     await trayManager.setToolTip('OJ Float');
+    await _setupTrayMenu();
+  }
+
+  Future<void> _setupTrayMenu() async {
     await trayManager.setContextMenu(
       Menu(
         items: [
-          MenuItem(key: 'show', label: '显示'),
+          MenuItem(key: 'show', label: '显示窗口'),
+          MenuItem(key: 'hide', label: '隐藏窗口'),
+          MenuItem(key: 'toggle_on_top', label: '窗口置顶/取消置顶'),
           MenuItem.separator(),
           MenuItem(key: 'refresh', label: '立即刷新'),
-          MenuItem(key: 'exit', label: '退出'),
+          MenuItem.separator(),
+          MenuItem(key: 'exit', label: '退出程序'),
         ],
       ),
     );
@@ -225,19 +237,33 @@ class _OjFloatHomeState extends State<OjFloatHome>
         await windowManager.show();
         await windowManager.focus();
         break;
+      case 'hide':
+        await windowManager.hide();
+        break;
+      case 'toggle_on_top':
+        final nextConfig = _controller.state.config.copyWith(
+          alwaysOnTop: !_controller.state.config.alwaysOnTop,
+        );
+        await _controller.saveConfig(nextConfig);
+        await _applyWindowPreferences(nextConfig);
+        await _setupTrayMenu();
+        break;
       case 'refresh':
         await _controller.refresh();
         break;
       case 'exit':
-        await windowManager.setPreventClose(false);
-        await windowManager.destroy();
+        await _exitApp();
         break;
     }
   }
 
   @override
   void onWindowClose() async {
-    await windowManager.minimize();
+    if (_controller.state.config.closeToTray) {
+      await windowManager.hide();
+      return;
+    }
+    await _exitApp();
   }
 
   @override
@@ -253,6 +279,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
               refreshing: _controller.refreshing,
               onRefresh: _controller.refreshing ? null : _controller.refresh,
               onOpenDashboard: () => _setMode(AppDisplayMode.dashboard),
+              onExit: _exitApp,
             ),
           );
         }
@@ -269,6 +296,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
                   onSettings: () => _openSettings(context),
                   onCompact: () => _setMode(AppDisplayMode.compact),
                   onMinimize: () => windowManager.minimize(),
+                  onExit: _exitApp,
                 ),
                 Expanded(
                   child: ListView(
@@ -315,16 +343,25 @@ class _OjFloatHomeState extends State<OjFloatHome>
       builder: (_) => SettingsDialog(config: _controller.state.config),
     );
     if (updated != null) {
+      Object? saveError;
       try {
         await _controller.saveConfig(updated);
       } catch (error) {
+        saveError = error;
+      }
+      if (widget.enablePlatformIntegration) {
+        await _applyWindowPreferences(updated);
+        await _setupTrayMenu();
+      }
+      if (saveError != null) {
         if (!context.mounted) {
           return;
         }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content:
-                Text('Start at login update failed: ${normalizeError(error)}'),
+            content: Text(
+              'Start at login update failed: ${normalizeError(saveError)}',
+            ),
           ),
         );
       }
@@ -449,6 +486,25 @@ class _OjFloatHomeState extends State<OjFloatHome>
       // Widget tests do not load the desktop window plugin.
     }
   }
+
+  Future<void> _applyWindowPreferences(AppConfig config) async {
+    try {
+      await windowManager.setAlwaysOnTop(config.alwaysOnTop);
+      await windowManager.setSkipTaskbar(!config.showInTaskbar);
+    } on MissingPluginException {
+      // Widget tests do not load the desktop window plugin.
+    }
+  }
+
+  Future<void> _exitApp() async {
+    try {
+      await windowManager.setPreventClose(false);
+      await trayManager.destroy();
+      await windowManager.destroy();
+    } on MissingPluginException {
+      // Widget tests do not load the desktop window or tray plugins.
+    }
+  }
 }
 
 class _CompactWidget extends StatelessWidget {
@@ -457,12 +513,14 @@ class _CompactWidget extends StatelessWidget {
     required this.refreshing,
     required this.onRefresh,
     required this.onOpenDashboard,
+    required this.onExit,
   });
 
   final OjState state;
   final bool refreshing;
   final VoidCallback? onRefresh;
   final VoidCallback onOpenDashboard;
+  final VoidCallback onExit;
 
   @override
   Widget build(BuildContext context) {
@@ -530,6 +588,13 @@ class _CompactWidget extends StatelessWidget {
                       tooltip: 'Open dashboard',
                       onPressed: onOpenDashboard,
                       child: const Icon(Icons.open_in_full, size: 18),
+                    ),
+                    const SizedBox(height: 4),
+                    _CompactIconButton(
+                      key: const ValueKey('compact-exit-button'),
+                      tooltip: '退出程序',
+                      onPressed: onExit,
+                      child: const Icon(Icons.power_settings_new, size: 18),
                     ),
                   ],
                 ),
@@ -623,6 +688,7 @@ class _WindowHeader extends StatelessWidget {
     required this.onSettings,
     required this.onCompact,
     required this.onMinimize,
+    required this.onExit,
   });
 
   final bool refreshing;
@@ -630,6 +696,7 @@ class _WindowHeader extends StatelessWidget {
   final VoidCallback onSettings;
   final VoidCallback onCompact;
   final VoidCallback onMinimize;
+  final VoidCallback onExit;
 
   @override
   Widget build(BuildContext context) {
@@ -674,6 +741,12 @@ class _WindowHeader extends StatelessWidget {
               tooltip: '最小化',
               onPressed: onMinimize,
               icon: const Icon(Icons.remove),
+            ),
+            IconButton(
+              key: const ValueKey('dashboard-exit-button'),
+              tooltip: '退出程序',
+              onPressed: onExit,
+              icon: const Icon(Icons.power_settings_new),
             ),
           ],
         ),
@@ -1236,6 +1309,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
   late final Map<String, TextEditingController> _controllers;
   late final Map<String, bool> _enabled;
   late bool _launchAtStartup;
+  late bool _alwaysOnTop;
+  late bool _showInTaskbar;
+  late bool _closeToTray;
 
   @override
   void initState() {
@@ -1252,6 +1328,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
         meta.id: widget.config.accounts[meta.id]?.enabled ?? false,
     };
     _launchAtStartup = widget.config.launchAtStartup;
+    _alwaysOnTop = widget.config.alwaysOnTop;
+    _showInTaskbar = widget.config.showInTaskbar;
+    _closeToTray = widget.config.closeToTray;
   }
 
   @override
@@ -1295,6 +1374,33 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 value: _launchAtStartup,
                 onChanged: (value) {
                   setState(() => _launchAtStartup = value);
+                },
+              ),
+              SwitchListTile(
+                key: const ValueKey('always-on-top-switch'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('窗口置顶'),
+                value: _alwaysOnTop,
+                onChanged: (value) {
+                  setState(() => _alwaysOnTop = value);
+                },
+              ),
+              SwitchListTile(
+                key: const ValueKey('show-in-taskbar-switch'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('在任务栏显示'),
+                value: _showInTaskbar,
+                onChanged: (value) {
+                  setState(() => _showInTaskbar = value);
+                },
+              ),
+              SwitchListTile(
+                key: const ValueKey('close-to-tray-switch'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('关闭时最小化到托盘'),
+                value: _closeToTray,
+                onChanged: (value) {
+                  setState(() => _closeToTray = value);
                 },
               ),
               const SizedBox(height: 10),
@@ -1350,6 +1456,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
                     _intervalMinutes.clamp(15, 1440).toInt(),
                 accounts: accounts,
                 launchAtStartup: _launchAtStartup,
+                alwaysOnTop: _alwaysOnTop,
+                showInTaskbar: _showInTaskbar,
+                closeToTray: _closeToTray,
               ),
             );
           },
@@ -1596,33 +1705,182 @@ abstract class OjProvider {
 class CodeforcesProvider implements OjProvider {
   @override
   Future<OjProfile> fetchProfile(http.Client client, String username) async {
-    final uri = Uri.https('codeforces.com', '/api/user.status', {
-      'handle': username,
+    final handle = normalizeCodeforcesHandle(username);
+    final info = await readJson(
+      client,
+      Uri.https('codeforces.com', '/api/user.info', {'handles': handle}),
+    );
+    if (info['status'] != 'OK') {
+      throw FetchException(info['comment']?.toString() ?? 'Codeforces 返回异常');
+    }
+    final result = info['result'];
+    if (result is! List || result.isEmpty) {
+      throw FetchException('Codeforces 用户不存在');
+    }
+    final user = result.first;
+    final rating = user is Map && user['rating'] is num
+        ? (user['rating'] as num).toInt()
+        : null;
+
+    final profileUrl = 'https://codeforces.com/profile/$handle';
+    try {
+      final response = await client
+          .get(
+            Uri.parse(profileUrl),
+            headers: defaultHeaders(referer: 'https://codeforces.com/'),
+          )
+          .timeout(const Duration(seconds: 18));
+      ensureOk(response);
+      final solvedCount = parseCodeforcesProfileSolvedCount(response.body);
+      if (solvedCount != null) {
+        return OjProfile(
+          solvedCount: solvedCount,
+          profileUrl: profileUrl,
+          rating: rating,
+        );
+      }
+    } catch (_) {
+      // Codeforces profile HTML can change; fall back to API submissions.
+    }
+
+    try {
+      final solvedCount =
+          await fetchCodeforcesSolvedCountFromSubmissions(client, handle);
+      return OjProfile(
+        solvedCount: solvedCount,
+        profileUrl: profileUrl,
+        rating: rating,
+      );
+    } catch (error) {
+      throw FetchException(
+        'Codeforces 主页数字解析失败，submission fallback 也失败：'
+        '${normalizeError(error)}',
+      );
+    }
+  }
+}
+
+String normalizeCodeforcesHandle(String input) {
+  final value = input.trim();
+  if (value.isEmpty) {
+    throw FetchException('Codeforces 请填写 handle 或完整主页链接');
+  }
+
+  Uri? uri = Uri.tryParse(value);
+  if (uri == null || !uri.hasScheme) {
+    uri = Uri.tryParse('https://$value');
+  }
+
+  if (uri != null &&
+      uri.host.toLowerCase().replaceFirst('www.', '') == 'codeforces.com') {
+    final segments = uri.pathSegments;
+    if (segments.length >= 2 && segments.first == 'profile') {
+      final handle = Uri.decodeComponent(segments[1]).trim();
+      if (handle.isNotEmpty) {
+        return handle;
+      }
+    }
+    throw FetchException('Codeforces 请填写 handle 或完整主页链接');
+  }
+
+  if (value.contains('/') || value.contains('?') || value.contains('#')) {
+    throw FetchException('Codeforces 请填写 handle 或完整主页链接');
+  }
+  return value;
+}
+
+int? parseCodeforcesProfileSolvedCount(String html) {
+  final document = html_parser.parse(html);
+  final bodyText = document.body?.text ?? document.documentElement?.text ?? '';
+  final candidates = <String>[
+    bodyText,
+    html.replaceAll(RegExp(r'<[^>]+>'), ' '),
+    html,
+  ];
+  final patterns = <RegExp>[
+    RegExp(
+      r'\bproblems?\s+solved\b[^\d]{0,120}([0-9][0-9,]*)',
+      caseSensitive: false,
+    ),
+    RegExp(
+      r'\bsolved\s+problems?\b[^\d]{0,120}([0-9][0-9,]*)',
+      caseSensitive: false,
+    ),
+    RegExp(
+      r'\bproblem\s+solved\b[^\d]{0,120}([0-9][0-9,]*)',
+      caseSensitive: false,
+    ),
+  ];
+
+  for (final candidate in candidates) {
+    final normalized = candidate.replaceAll(RegExp(r'\s+'), ' ');
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(normalized);
+      if (match != null) {
+        return int.tryParse(match.group(1)!.replaceAll(',', ''));
+      }
+    }
+  }
+  return null;
+}
+
+String? codeforcesProblemKey(Map problem) {
+  final contestId = problem['contestId'];
+  final index = problem['index'];
+  if (contestId != null && index != null) {
+    return 'contest:$contestId/$index';
+  }
+
+  final problemsetName = problem['problemsetName'];
+  if (problemsetName != null && index != null) {
+    return 'problemset:$problemsetName/$index';
+  }
+
+  final name = problem['name'];
+  if (name != null) {
+    return 'name:$name';
+  }
+
+  return null;
+}
+
+int countCodeforcesSolvedSubmissions(List<dynamic> submissions) {
+  final solved = <String>{};
+  for (final item in submissions) {
+    if (item is! Map || item['verdict'] != 'OK') {
+      continue;
+    }
+    final problem = item['problem'];
+    if (problem is Map) {
+      final key = codeforcesProblemKey(problem);
+      if (key != null) {
+        solved.add(key);
+      }
+    }
+  }
+  return solved.length;
+}
+
+Future<int> fetchCodeforcesSolvedCountFromSubmissions(
+  http.Client client,
+  String handle,
+) async {
+  final data = await readJson(
+    client,
+    Uri.https('codeforces.com', '/api/user.status', {
+      'handle': handle,
       'from': '1',
       'count': '100000',
-    });
-    final data = await readJson(client, uri);
-    if (data['status'] != 'OK') {
-      throw FetchException(data['comment']?.toString() ?? 'Codeforces 返回异常');
-    }
-    final solved = <String>{};
-    for (final item in data['result'] as List<dynamic>) {
-      if (item is! Map || item['verdict'] != 'OK') {
-        continue;
-      }
-      final problem = item['problem'];
-      if (problem is Map) {
-        final contestId = problem['contestId'];
-        final index = problem['index'];
-        final name = problem['name'];
-        solved.add('$contestId/$index/$name');
-      }
-    }
-    return OjProfile(
-      solvedCount: solved.length,
-      profileUrl: 'https://codeforces.com/profile/$username',
-    );
+    }),
+  );
+  if (data['status'] != 'OK') {
+    throw FetchException(data['comment']?.toString() ?? 'Codeforces 返回异常');
   }
+  final result = data['result'];
+  if (result is! List) {
+    throw FetchException('Codeforces 返回格式变化');
+  }
+  return countCodeforcesSolvedSubmissions(result);
 }
 
 class LeetCodeProvider implements OjProvider {
@@ -1726,41 +1984,65 @@ class LuoguProvider implements OjProvider {
 class NowcoderProvider implements OjProvider {
   @override
   Future<OjProfile> fetchProfile(http.Client client, String username) async {
-    if (int.tryParse(username) == null) {
-      throw FetchException('牛客第一版请填写数字用户 ID');
-    }
-    final uri = Uri.https('www.nowcoder.com', '/users/$username');
+    final userId = normalizeNowcoderUserId(username);
+    final uri = Uri.https('www.nowcoder.com', '/users/$userId');
     final response = await client.get(uri, headers: defaultHeaders()).timeout(
           const Duration(seconds: 18),
         );
     ensureOk(response);
     final body = response.body;
-    final patterns = [
-      RegExp(r'"acceptedCount"\s*:\s*(\d+)'),
-      RegExp(r'"acCount"\s*:\s*(\d+)'),
-      RegExp(r'通过题目[^0-9]{0,80}(\d+)'),
-      RegExp(r'已通过[^0-9]{0,80}(\d+)'),
-    ];
-    for (final pattern in patterns) {
-      final match = pattern.firstMatch(body);
-      if (match != null) {
-        return OjProfile(
-          solvedCount: int.parse(match.group(1)!),
-          profileUrl: uri.toString(),
-        );
-      }
-    }
-    final document = html_parser.parse(body);
-    final text = document.body?.text ?? '';
-    final textMatch = RegExp(r'(?:通过题目|已通过)\s*(\d+)').firstMatch(text);
-    if (textMatch != null) {
-      return OjProfile(
-        solvedCount: int.parse(textMatch.group(1)!),
-        profileUrl: uri.toString(),
-      );
-    }
-    throw FetchException('牛客页面未找到通过题数');
+    return OjProfile(
+      solvedCount: parseNowcoderSolvedCount(body),
+      profileUrl: uri.toString(),
+    );
   }
+}
+
+String normalizeNowcoderUserId(String value) {
+  final input = value.trim();
+  if (RegExp(r'^\d+$').hasMatch(input)) {
+    return input;
+  }
+  final uri = Uri.tryParse(input);
+  if (uri != null &&
+      uri.host.toLowerCase().endsWith('nowcoder.com') &&
+      uri.pathSegments.length >= 2 &&
+      uri.pathSegments[0] == 'users' &&
+      RegExp(r'^\d+$').hasMatch(uri.pathSegments[1])) {
+    return uri.pathSegments[1];
+  }
+  throw FetchException(
+      '牛客用户请输入数字用户 ID，或完整主页链接 https://www.nowcoder.com/users/数字ID');
+}
+
+int parseNowcoderSolvedCount(String body) {
+  const jsonFields = [
+    'acceptedCount',
+    'acceptCount',
+    'acCount',
+    'solvedCount',
+    'passedProblemCount',
+  ];
+  for (final field in jsonFields) {
+    final match = RegExp('"$field"\\s*:\\s*(\\d+)').firstMatch(body);
+    if (match != null) {
+      return int.parse(match.group(1)!);
+    }
+  }
+
+  final labelPattern = RegExp(r'(?:通过题目|已通过|AC题数)[^0-9]{0,80}(\d+)');
+  final rawTextMatch = labelPattern.firstMatch(body);
+  if (rawTextMatch != null) {
+    return int.parse(rawTextMatch.group(1)!);
+  }
+
+  final document = html_parser.parse(body);
+  final text = document.body?.text ?? '';
+  final textMatch = labelPattern.firstMatch(text);
+  if (textMatch != null) {
+    return int.parse(textMatch.group(1)!);
+  }
+  throw FetchException('牛客页面未找到通过题目数，请确认主页可公开访问或页面结构未变更');
 }
 
 class LocalStore {
@@ -2013,6 +2295,9 @@ Map<String, Object?> buildPortableConfigJson(AppConfig config) {
   return {
     'refreshIntervalMinutes': config.refreshIntervalMinutes,
     'launchAtStartup': config.launchAtStartup,
+    'alwaysOnTop': config.alwaysOnTop,
+    'showInTaskbar': config.showInTaskbar,
+    'closeToTray': config.closeToTray,
     'accounts': [
       for (final meta in supportedOjs)
         {
@@ -2084,12 +2369,18 @@ class AppConfig {
     required this.refreshIntervalMinutes,
     required this.accounts,
     this.launchAtStartup = false,
+    this.alwaysOnTop = true,
+    this.showInTaskbar = true,
+    this.closeToTray = true,
   });
 
   factory AppConfig.defaults() {
     return AppConfig(
       refreshIntervalMinutes: 60,
       launchAtStartup: false,
+      alwaysOnTop: true,
+      showInTaskbar: true,
+      closeToTray: true,
       accounts: {
         for (final meta in supportedOjs)
           meta.id: const OjAccountConfig(usernames: [], enabled: false),
@@ -2106,6 +2397,12 @@ class AppConfig {
       launchAtStartup: json['launchAtStartup'] is bool
           ? json['launchAtStartup'] as bool
           : false,
+      alwaysOnTop:
+          json['alwaysOnTop'] is bool ? json['alwaysOnTop'] as bool : true,
+      showInTaskbar:
+          json['showInTaskbar'] is bool ? json['showInTaskbar'] as bool : true,
+      closeToTray:
+          json['closeToTray'] is bool ? json['closeToTray'] as bool : true,
       accounts: {
         for (final meta in supportedOjs)
           meta.id: _parseAccountConfig(
@@ -2145,6 +2442,12 @@ class AppConfig {
       launchAtStartup: json['launchAtStartup'] is bool
           ? json['launchAtStartup'] as bool
           : false,
+      alwaysOnTop:
+          json['alwaysOnTop'] is bool ? json['alwaysOnTop'] as bool : true,
+      showInTaskbar:
+          json['showInTaskbar'] is bool ? json['showInTaskbar'] as bool : true,
+      closeToTray:
+          json['closeToTray'] is bool ? json['closeToTray'] as bool : true,
       accounts: accounts,
     );
   }
@@ -2171,10 +2474,35 @@ class AppConfig {
   final int refreshIntervalMinutes;
   final Map<String, OjAccountConfig> accounts;
   final bool launchAtStartup;
+  final bool alwaysOnTop;
+  final bool showInTaskbar;
+  final bool closeToTray;
+
+  AppConfig copyWith({
+    int? refreshIntervalMinutes,
+    Map<String, OjAccountConfig>? accounts,
+    bool? launchAtStartup,
+    bool? alwaysOnTop,
+    bool? showInTaskbar,
+    bool? closeToTray,
+  }) {
+    return AppConfig(
+      refreshIntervalMinutes:
+          refreshIntervalMinutes ?? this.refreshIntervalMinutes,
+      accounts: accounts ?? this.accounts,
+      launchAtStartup: launchAtStartup ?? this.launchAtStartup,
+      alwaysOnTop: alwaysOnTop ?? this.alwaysOnTop,
+      showInTaskbar: showInTaskbar ?? this.showInTaskbar,
+      closeToTray: closeToTray ?? this.closeToTray,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'refreshIntervalMinutes': refreshIntervalMinutes,
         'launchAtStartup': launchAtStartup,
+        'alwaysOnTop': alwaysOnTop,
+        'showInTaskbar': showInTaskbar,
+        'closeToTray': closeToTray,
         'accounts': {
           for (final entry in accounts.entries) entry.key: entry.value.toJson(),
         },
