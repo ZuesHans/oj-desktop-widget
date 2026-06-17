@@ -1,17 +1,57 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:oj_float/main.dart';
 
 void main() {
-  test('empty snapshots produce empty heatmap and zero streaks', () {
+  test('empty snapshots start from the June 2026 release month by default', () {
     final summary = HeatmapSummary.fromSnapshots(
       const [],
       today: DateTime.parse('2026-06-16T10:00:00'),
-      weeks: 1,
     );
 
-    expect(summary.days, isEmpty);
+    expect(summary.days.first.date, '2026-05-31');
+    expect(summary.days.last.date, '2026-06-20');
+    expect(summary.days, hasLength(3 * 7));
     expect(summary.currentStreak, 0);
     expect(summary.longestStreak, 0);
+    expect(summary.activeDays, 0);
+    expect(summary.totalDelta, 0);
+  });
+
+  test('heatmap weeks are aligned Sunday to Saturday and include today', () {
+    final summary = HeatmapSummary.fromSnapshots(
+      const [],
+      today: DateTime.parse('2026-06-16T10:00:00'),
+      weeks: 2,
+    );
+
+    expect(summary.days.map((day) => day.date), [
+      '2026-06-07',
+      '2026-06-08',
+      '2026-06-09',
+      '2026-06-10',
+      '2026-06-11',
+      '2026-06-12',
+      '2026-06-13',
+      '2026-06-14',
+      '2026-06-15',
+      '2026-06-16',
+      '2026-06-17',
+      '2026-06-18',
+      '2026-06-19',
+      '2026-06-20',
+    ]);
+  });
+
+  test('default heatmap range expands as today moves past release month', () {
+    final summary = HeatmapSummary.fromSnapshots(
+      const [],
+      today: DateTime.parse('2026-07-15T10:00:00'),
+    );
+
+    expect(summary.days.first.date, '2026-05-31');
+    expect(summary.days.last.date, '2026-07-18');
+    expect(summary.days, hasLength(7 * 7));
   });
 
   test('day with positive delta is active', () {
@@ -97,6 +137,25 @@ void main() {
     expect(const HeatmapDay(date: '2026-06-16', delta: 3).level, 2);
     expect(const HeatmapDay(date: '2026-06-16', delta: 6).level, 3);
     expect(const HeatmapDay(date: '2026-06-16', delta: 7).level, 4);
+  });
+
+  testWidgets('heatmap dialog defaults to the latest paged range',
+      (tester) async {
+    final summary = HeatmapSummary.fromSnapshots(
+      const [],
+      today: DateTime.parse('2026-06-16T10:00:00'),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HeatmapDialog(summary: summary),
+      ),
+    );
+
+    expect(find.text('热力图'), findsOneWidget);
+    expect(find.text('5/31 - 6/20'), findsOneWidget);
+    expect(find.byTooltip('更早'), findsOneWidget);
+    expect(find.byTooltip('更新'), findsOneWidget);
   });
 }
 
