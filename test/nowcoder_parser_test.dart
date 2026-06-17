@@ -16,14 +16,48 @@ void main() {
       );
     });
 
-    test('rejects invalid input with clear message', () {
+    test('accepts username for OJ Hunt lookup', () {
+      expect(normalizeNowcoderUserId(' alice '), 'alice');
+    });
+
+    test('rejects empty input with clear message', () {
       expect(
-        () => normalizeNowcoderUserId('alice'),
+        () => normalizeNowcoderUserId('   '),
         throwsA(
           isA<FetchException>().having(
             (error) => error.message,
             'message',
-            contains('数字用户 ID'),
+            contains('数字用户 ID、用户名'),
+          ),
+        ),
+      );
+    });
+  });
+
+  group('parseNowcoderOjhuntSolvedCount', () {
+    test('reads data.solved from OJ Hunt response', () {
+      expect(
+        parseNowcoderOjhuntSolvedCount({
+          'data': {'solved': 42},
+        }),
+        42,
+      );
+      expect(
+        parseNowcoderOjhuntSolvedCount({
+          'data': {'solved': '43'},
+        }),
+        43,
+      );
+    });
+
+    test('throws a clear error when OJ Hunt solved count is missing', () {
+      expect(
+        () => parseNowcoderOjhuntSolvedCount({'data': {}}),
+        throwsA(
+          isA<FetchException>().having(
+            (error) => error.message,
+            'message',
+            contains('data.solved'),
           ),
         ),
       );
@@ -59,12 +93,15 @@ void main() {
     });
   });
 
-  test('provider fetches normalized full profile URL without real network',
-      () async {
+  test('provider fetches OJ Hunt first without real network', () async {
     late Uri requestedUri;
     final client = MockClient((request) async {
       requestedUri = request.url;
-      return http.Response('{"acceptedCount":42}', 200);
+      return http.Response(
+        '{"data":{"solved":42}}',
+        200,
+        headers: {'content-type': 'application/json'},
+      );
     });
 
     final profile = await NowcoderProvider().fetchProfile(
@@ -72,8 +109,48 @@ void main() {
       'https://www.nowcoder.com/users/2468',
     );
 
-    expect(requestedUri.path, '/users/2468');
+    expect(requestedUri.host, 'ojhunt.com');
+    expect(requestedUri.path, '/api/crawlers/nowcoder/2468');
     expect(profile.solvedCount, 42);
     expect(profile.profileUrl, 'https://www.nowcoder.com/users/2468');
+  });
+
+  test('provider falls back to profile parsing when OJ Hunt fails', () async {
+    final requestedUris = <Uri>[];
+    final client = MockClient((request) async {
+      requestedUris.add(request.url);
+      if (request.url.host == 'ojhunt.com') {
+        return http.Response('temporary failure', 500);
+      }
+      return http.Response('{"acceptedCount":44}', 200);
+    });
+
+    final profile = await NowcoderProvider().fetchProfile(client, '13579');
+
+    expect(requestedUris.map((uri) => uri.host), [
+      'ojhunt.com',
+      'www.nowcoder.com',
+    ]);
+    expect(profile.solvedCount, 44);
+  });
+
+  test('provider reports both OJ Hunt and profile failures', () async {
+    final client = MockClient((request) async {
+      if (request.url.host == 'ojhunt.com') {
+        return http.Response('temporary failure', 500);
+      }
+      return http.Response('<html>empty</html>', 200);
+    });
+
+    await expectLater(
+      NowcoderProvider().fetchProfile(client, '13579'),
+      throwsA(
+        isA<FetchException>().having(
+          (error) => error.message,
+          'message',
+          allOf(contains('OJ Hunt'), contains('主页解析失败')),
+        ),
+      ),
+    );
   });
 }
