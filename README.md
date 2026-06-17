@@ -2,14 +2,14 @@
 
 OJ Float 是一个 Windows 桌面悬浮 OJ 做题统计工具，用来集中查看多个 Online Judge 账号的通过题数变化。
 
-当前版本为测试版，主要用于小范围试用和反馈。
+当前版本为测试版
 
 ## 下载测试版
 
 请在 GitHub Releases 中下载最新的 Windows 测试包：
 
 ```text
-OJ-Float-v0.1.0-beta.1-windows-x64.zip
+OJ-Float-v0.1.1-beta.2-windows-x64.zip
 ```
 
 使用方式：
@@ -23,7 +23,7 @@ OJ-Float-v0.1.0-beta.1-windows-x64.zip
 ## 功能
 
 - 支持 Codeforces、LeetCode、AtCoder、洛谷、牛客。
-- 每 1 小时自动刷新一次通过题数。
+- 每 1 小时自动刷新一次通过题数可自定义刷新时间
 - 支持手动刷新。
 - 单个 OJ 抓取失败不会影响其他 OJ。
 - 本地保存刷新快照。
@@ -78,6 +78,16 @@ oj_float_pre_import_backup_YYYYMMDD_HHMM.json
 - 导入时会使用 `config` 和 `snapshots` 重新计算每日统计、热力图和连续记录。
 - CSV 导出只用于查看或表格分析，不能用于恢复。
 
+## 预计更新
+
+- 更多oj平台的支持:如马蹄，蓝桥
+- 可能加入深色模式
+- 加入折线热力图
+- 加入计划表
+- 加入网络赛提醒，rating折线图
+- ui优化
+
+
 ## 本地开发
 
 需要先安装 Flutter，并启用 Windows 桌面支持。
@@ -105,21 +115,9 @@ build\windows\x64\runner\Release
 
 分发测试包时，请压缩整个 `Release` 文件夹。
 
-## 发布建议
+## 关于这个
 
-测试版建议通过 GitHub Release 发布，并标记为 Pre-release。
-
-推荐 tag：
-
-```text
-v0.1.0-beta.1
-```
-
-推荐文件名：
-
-```text
-OJ-Float-v0.1.0-beta.1-windows-x64.zip
-```
+整个项目几乎是vibecoding出来的结果，但是feat 和 修改都是自己全程盯着做的。
 
 ## 版权与测试版说明
 
