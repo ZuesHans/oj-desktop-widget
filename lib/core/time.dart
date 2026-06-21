@@ -1,5 +1,3 @@
-part of '../main.dart';
-
 String dateKey(DateTime date) {
   final local = date.toLocal();
   return '${local.year.toString().padLeft(4, '0')}-'

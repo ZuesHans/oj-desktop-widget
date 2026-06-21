@@ -1,4 +1,8 @@
-part of '../../main.dart';
+import 'package:flutter/material.dart';
+
+import '../../services/heatmap_service.dart';
+import '../app_theme.dart';
+import 'heatmap_formatters.dart';
 
 class HeatmapDialog extends StatefulWidget {
   const HeatmapDialog({super.key, required this.summary});
@@ -25,18 +29,18 @@ class _HeatmapDialogState extends State<HeatmapDialog> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _HeatmapStat(
+                HeatmapStat(
                     label: '当前连续', value: '${widget.summary.currentStreak} 天'),
-                _HeatmapStat(
+                HeatmapStat(
                     label: '最长连续', value: '${widget.summary.longestStreak} 天'),
-                _HeatmapStat(
+                HeatmapStat(
                     label: '活跃天数', value: '${widget.summary.activeDays}'),
-                _HeatmapStat(
+                HeatmapStat(
                     label: '累计新增', value: '+${widget.summary.totalDelta}'),
               ],
             ),
             const SizedBox(height: 16),
-            _HeatmapGrid(days: widget.summary.days),
+            HeatmapGrid(days: widget.summary.days),
           ],
         ),
       ),
@@ -50,16 +54,16 @@ class _HeatmapDialogState extends State<HeatmapDialog> {
   }
 }
 
-class _HeatmapGrid extends StatefulWidget {
-  const _HeatmapGrid({required this.days});
+class HeatmapGrid extends StatefulWidget {
+  const HeatmapGrid({super.key, required this.days});
 
   final List<HeatmapDay> days;
 
   @override
-  State<_HeatmapGrid> createState() => _HeatmapGridState();
+  State<HeatmapGrid> createState() => HeatmapGridState();
 }
 
-class _HeatmapGridState extends State<_HeatmapGrid> {
+class HeatmapGridState extends State<HeatmapGrid> {
   static const _weeksPerPage = 12;
   late int _page;
 
@@ -70,7 +74,7 @@ class _HeatmapGridState extends State<_HeatmapGrid> {
   }
 
   @override
-  void didUpdateWidget(covariant _HeatmapGrid oldWidget) {
+  void didUpdateWidget(covariant HeatmapGrid oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.days.length != widget.days.length) {
       _page = _page.clamp(0, _lastPage).toInt();
@@ -78,7 +82,7 @@ class _HeatmapGridState extends State<_HeatmapGrid> {
   }
 
   int get _lastPage {
-    final weekCount = _heatmapWeeks(widget.days).length;
+    final weekCount = heatmapWeeks(widget.days).length;
     if (weekCount == 0) {
       return 0;
     }
@@ -87,7 +91,7 @@ class _HeatmapGridState extends State<_HeatmapGrid> {
 
   @override
   Widget build(BuildContext context) {
-    final weeks = _heatmapWeeks(widget.days);
+    final weeks = heatmapWeeks(widget.days);
     final pageCount = _lastPage + 1;
     final end =
         (weeks.length - _page * _weeksPerPage).clamp(0, weeks.length).toInt();
@@ -95,8 +99,8 @@ class _HeatmapGridState extends State<_HeatmapGrid> {
     final visibleWeeks = weeks.sublist(start, end);
     final rangeText = visibleWeeks.isEmpty
         ? ''
-        : '${_heatmapShortDate(visibleWeeks.first.first.date)} - '
-            '${_heatmapShortDate(visibleWeeks.last.last.date)}';
+        : '${heatmapShortDate(visibleWeeks.first.first.date)} - '
+            '${heatmapShortDate(visibleWeeks.last.last.date)}';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,7 +112,7 @@ class _HeatmapGridState extends State<_HeatmapGrid> {
                 rangeText,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  color: _textSecondaryColor,
+                  color: textSecondaryColor,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -123,7 +127,7 @@ class _HeatmapGridState extends State<_HeatmapGrid> {
             ),
             Text(
               '${pageCount - _page}/$pageCount',
-              style: const TextStyle(color: _textSecondaryColor, fontSize: 12),
+              style: const TextStyle(color: textSecondaryColor, fontSize: 12),
             ),
             IconButton(
               tooltip: '更新',
@@ -148,8 +152,8 @@ class _HeatmapGridState extends State<_HeatmapGrid> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const _HeatmapWeekdayLabels(),
-                ...visibleWeeks.map((week) => _HeatmapWeek(days: week)),
+                const HeatmapWeekdayLabels(),
+                ...visibleWeeks.map((week) => HeatmapWeek(days: week)),
               ],
             ),
           ],
@@ -197,7 +201,7 @@ List<String> _heatmapMonthLabels(List<List<HeatmapDay>> weeks) {
         if (labelDate != null) {
           previousMonth = labelDate;
         }
-        return shouldLabel ? _heatmapMonthName(labelDate) : '';
+        return shouldLabel ? heatmapMonthName(labelDate) : '';
       }(),
   ];
 }

@@ -1,4 +1,9 @@
-part of '../main.dart';
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
+import 'errors.dart';
 
 Future<Map<String, dynamic>> readJson(
   http.Client client,

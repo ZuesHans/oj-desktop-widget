@@ -1,4 +1,5 @@
-part of '../main.dart';
+import '../core/time.dart';
+import 'fetch_result.dart';
 
 class SolvedSnapshot {
   const SolvedSnapshot({

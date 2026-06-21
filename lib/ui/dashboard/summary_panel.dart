@@ -1,7 +1,13 @@
-part of '../../main.dart';
+import 'package:flutter/material.dart';
 
-class _SummaryPanel extends StatelessWidget {
-  const _SummaryPanel({required this.state});
+import '../../core/solved_totals.dart';
+import '../../core/time.dart';
+import '../../models/oj_state.dart';
+import '../app_theme.dart';
+import '../shared/pill.dart';
+
+class SummaryPanel extends StatelessWidget {
+  const SummaryPanel({super.key, required this.state});
 
   final OjState state;
 
@@ -23,9 +29,9 @@ class _SummaryPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: _cardColor,
+        color: cardColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -38,13 +44,13 @@ class _SummaryPanel extends StatelessWidget {
           ),
           Row(
             children: [
-              _Pill(label: '今日 +$today'),
+              Pill(label: '今日 +$today'),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   updatedAt == null ? '尚未刷新' : '更新 ${formatTime(updatedAt)}',
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _textSecondaryColor),
+                  style: const TextStyle(color: textSecondaryColor),
                 ),
               ),
             ],

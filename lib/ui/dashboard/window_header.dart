@@ -1,7 +1,9 @@
-part of '../../main.dart';
+import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 
-class _WindowHeader extends StatelessWidget {
-  const _WindowHeader({
+class WindowHeader extends StatelessWidget {
+  const WindowHeader({
+    super.key,
     required this.refreshing,
     required this.onRefresh,
     required this.onSettings,

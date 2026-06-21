@@ -1,4 +1,22 @@
-part of '../main.dart';
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+
+import '../core/errors.dart';
+import '../core/solved_totals.dart';
+import '../core/time.dart';
+import '../models/app_config.dart';
+import '../models/oj_state.dart';
+import '../models/problem_record.dart';
+import '../models/solved_snapshot.dart';
+import '../platform/startup_service.dart';
+import 'backup_service.dart';
+import 'daily_summary_service.dart';
+import 'local_store.dart';
+import 'problem_book_service.dart';
+import 'refresh_service.dart';
 
 class OjController extends ChangeNotifier {
   OjController({

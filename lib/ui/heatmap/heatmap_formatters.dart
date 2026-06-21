@@ -1,16 +1,19 @@
-part of '../../main.dart';
+import 'package:flutter/material.dart';
 
-String _heatmapMonthName(DateTime date) {
+import '../../services/heatmap_service.dart';
+import '../app_theme.dart';
+
+String heatmapMonthName(DateTime date) {
   return '${date.month}';
 }
 
-String _heatmapShortDate(String date) {
+String heatmapShortDate(String date) {
   final parsed = DateTime.parse(date);
   return '${parsed.month}/${parsed.day}';
 }
 
-class _HeatmapWeekdayLabels extends StatelessWidget {
-  const _HeatmapWeekdayLabels();
+class HeatmapWeekdayLabels extends StatelessWidget {
+  const HeatmapWeekdayLabels({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -37,8 +40,8 @@ class _HeatmapWeekdayLabels extends StatelessWidget {
   }
 }
 
-class _HeatmapStat extends StatelessWidget {
-  const _HeatmapStat({required this.label, required this.value});
+class HeatmapStat extends StatelessWidget {
+  const HeatmapStat({super.key, required this.label, required this.value});
 
   final String label;
   final String value;
@@ -69,8 +72,8 @@ class _HeatmapStat extends StatelessWidget {
   }
 }
 
-class _HeatmapWeek extends StatelessWidget {
-  const _HeatmapWeek({required this.days});
+class HeatmapWeek extends StatelessWidget {
+  const HeatmapWeek({super.key, required this.days});
 
   final List<HeatmapDay> days;
 
@@ -107,7 +110,7 @@ class _HeatmapCell extends StatelessWidget {
   }
 }
 
-List<List<HeatmapDay>> _heatmapWeeks(List<HeatmapDay> days) {
+List<List<HeatmapDay>> heatmapWeeks(List<HeatmapDay> days) {
   final weeks = <List<HeatmapDay>>[];
   for (var index = 0; index < days.length; index += 7) {
     final end = index + 7 > days.length ? days.length : index + 7;
@@ -117,5 +120,5 @@ List<List<HeatmapDay>> _heatmapWeeks(List<HeatmapDay> days) {
 }
 
 Color _heatmapColor(int level) {
-  return _heatmapLevelColors[level.clamp(0, _heatmapLevelColors.length - 1)];
+  return heatmapLevelColors[level.clamp(0, heatmapLevelColors.length - 1)];
 }

@@ -1,7 +1,12 @@
-part of '../../main.dart';
+import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 
-class _CompactWidget extends StatelessWidget {
-  const _CompactWidget({
+import '../../core/solved_totals.dart';
+import '../../models/oj_state.dart';
+
+class CompactWidget extends StatelessWidget {
+  const CompactWidget({
+    super.key,
     required this.state,
     required this.refreshing,
     required this.onRefresh,

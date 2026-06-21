@@ -1,4 +1,6 @@
-part of '../main.dart';
+import 'dart:io';
+
+import 'package:launch_at_startup/launch_at_startup.dart';
 
 abstract class StartupService {
   Future<bool> setEnabled(bool enabled);

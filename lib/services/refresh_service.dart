@@ -1,4 +1,11 @@
-part of '../main.dart';
+import 'dart:async';
+
+import 'package:http/http.dart' as http;
+
+import '../core/solved_totals.dart';
+import '../models/app_config.dart';
+import '../models/fetch_result.dart';
+import '../providers/oj_provider.dart';
 
 class RefreshService {
   RefreshService({required this.client, required this.providers});

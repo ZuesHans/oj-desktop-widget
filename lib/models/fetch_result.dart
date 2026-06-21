@@ -1,5 +1,3 @@
-part of '../main.dart';
-
 class OjProfile {
   const OjProfile({
     required this.solvedCount,

@@ -1,7 +1,11 @@
-part of '../../main.dart';
+import 'package:flutter/material.dart';
 
-class _HeatmapEntryPanel extends StatelessWidget {
-  const _HeatmapEntryPanel({
+import '../../services/heatmap_service.dart';
+import '../app_theme.dart';
+
+class HeatmapEntryPanel extends StatelessWidget {
+  const HeatmapEntryPanel({
+    super.key,
     required this.summary,
     required this.onOpen,
     required this.onExport,
@@ -18,13 +22,13 @@ class _HeatmapEntryPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _cardColor,
+        color: cardColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: borderColor),
       ),
       child: Row(
         children: [
-          const Icon(Icons.calendar_view_week, color: _accentColor),
+          const Icon(Icons.calendar_view_week, color: accentColor),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -33,7 +37,7 @@ class _HeatmapEntryPanel extends StatelessWidget {
                 const Text(
                   '热力图',
                   style: TextStyle(
-                    color: _textPrimaryColor,
+                    color: textPrimaryColor,
                     fontWeight: FontWeight.w800,
                     fontSize: 16,
                   ),
@@ -42,7 +46,7 @@ class _HeatmapEntryPanel extends StatelessWidget {
                   'Current ${summary.currentStreak}d · Longest ${summary.longestStreak}d',
                   overflow: TextOverflow.ellipsis,
                   style:
-                      const TextStyle(color: _textSecondaryColor, fontSize: 12),
+                      const TextStyle(color: textSecondaryColor, fontSize: 12),
                 ),
               ],
             ),
@@ -51,14 +55,14 @@ class _HeatmapEntryPanel extends StatelessWidget {
             key: const ValueKey('export-data-button'),
             tooltip: 'Export Backup',
             onPressed: onExport,
-            color: _accentColor,
+            color: accentColor,
             icon: const Icon(Icons.download),
           ),
           IconButton(
             key: const ValueKey('import-backup-button'),
             tooltip: 'Import Backup',
             onPressed: onImport,
-            color: _accentColor,
+            color: accentColor,
             icon: const Icon(Icons.upload_file),
           ),
           FilledButton.tonalIcon(

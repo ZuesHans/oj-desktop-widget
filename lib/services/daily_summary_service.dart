@@ -1,4 +1,5 @@
-part of '../main.dart';
+import '../models/fetch_result.dart';
+import '../models/solved_snapshot.dart';
 
 class DailySummary {
   const DailySummary({

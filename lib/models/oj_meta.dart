@@ -1,5 +1,3 @@
-part of '../main.dart';
-
 class OjMeta {
   const OjMeta({
     required this.id,

@@ -1,4 +1,11 @@
-part of '../main.dart';
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
+import '../core/errors.dart';
+import '../core/http_client.dart';
+import '../models/fetch_result.dart';
+import 'oj_provider.dart';
 
 class LeetCodeProvider implements OjProvider {
   @override

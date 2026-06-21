@@ -1,4 +1,43 @@
-part of '../../main.dart';
+import 'dart:async';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:tray_manager/tray_manager.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:window_manager/window_manager.dart';
+
+import '../../app/app_display_mode.dart';
+import '../../core/errors.dart';
+import '../../core/oj_catalog.dart';
+import '../../core/solved_totals.dart';
+import '../../models/app_config.dart';
+import '../../models/problem_record.dart';
+import '../../platform/startup_service.dart';
+import '../../providers/atcoder_provider.dart';
+import '../../providers/codeforces_provider.dart';
+import '../../providers/leetcode_provider.dart';
+import '../../providers/luogu_provider.dart';
+import '../../providers/nowcoder_provider.dart';
+import '../../services/backup_service.dart';
+import '../../services/heatmap_service.dart';
+import '../../services/local_store.dart';
+import '../../services/oj_controller.dart';
+import '../../services/refresh_service.dart';
+import '../app_theme.dart';
+import '../compact/compact_widget.dart';
+import '../heatmap/heatmap_entry_panel.dart';
+import '../heatmap/heatmap_page.dart';
+import '../problems/problems_entry_panel.dart';
+import '../problems/problems_page.dart';
+import '../settings/settings_dialog.dart';
+import 'daily_panel.dart';
+import 'oj_tile.dart';
+import 'summary_panel.dart';
+import 'window_header.dart';
 
 class OjFloatHome extends StatefulWidget {
   const OjFloatHome({
@@ -149,7 +188,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
         if (_mode == AppDisplayMode.compact) {
           return Scaffold(
             backgroundColor: Colors.transparent,
-            body: _CompactWidget(
+            body: CompactWidget(
               state: _controller.state,
               refreshing: _controller.refreshing,
               onRefresh: _controller.refreshing ? null : _controller.refresh,
@@ -161,11 +200,11 @@ class _OjFloatHomeState extends State<OjFloatHome>
 
         if (_mode == AppDisplayMode.heatmap) {
           return Scaffold(
-            backgroundColor: _appSurfaceColor,
+            backgroundColor: appSurfaceColor,
             body: SafeArea(
               child: Column(
                 children: [
-                  _WindowHeader(
+                  WindowHeader(
                     refreshing: _controller.refreshing,
                     onRefresh:
                         _controller.refreshing ? null : _controller.refresh,
@@ -192,11 +231,11 @@ class _OjFloatHomeState extends State<OjFloatHome>
 
         if (_mode == AppDisplayMode.problems) {
           return Scaffold(
-            backgroundColor: _appSurfaceColor,
+            backgroundColor: appSurfaceColor,
             body: SafeArea(
               child: Column(
                 children: [
-                  _WindowHeader(
+                  WindowHeader(
                     refreshing: _controller.refreshing,
                     onRefresh:
                         _controller.refreshing ? null : _controller.refresh,
@@ -223,11 +262,11 @@ class _OjFloatHomeState extends State<OjFloatHome>
         }
 
         return Scaffold(
-          backgroundColor: _appSurfaceColor,
+          backgroundColor: appSurfaceColor,
           body: SafeArea(
             child: Column(
               children: [
-                _WindowHeader(
+                WindowHeader(
                   refreshing: _controller.refreshing,
                   onRefresh:
                       _controller.refreshing ? null : _controller.refresh,
@@ -240,9 +279,9 @@ class _OjFloatHomeState extends State<OjFloatHome>
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
                     children: [
-                      _SummaryPanel(state: _controller.state),
+                      SummaryPanel(state: _controller.state),
                       const SizedBox(height: 12),
-                      _HeatmapEntryPanel(
+                      HeatmapEntryPanel(
                         summary: HeatmapSummary.fromSnapshots(
                           _controller.state.snapshots,
                         ),
@@ -251,13 +290,13 @@ class _OjFloatHomeState extends State<OjFloatHome>
                         onImport: () => _importData(context),
                       ),
                       const SizedBox(height: 12),
-                      _ProblemsEntryPanel(
+                      ProblemsEntryPanel(
                         problems: _controller.state.problems,
                         onOpen: () => _setMode(AppDisplayMode.problems),
                       ),
                       const SizedBox(height: 12),
                       ...supportedOjs.map(
-                        (meta) => _OjTile(
+                        (meta) => OjTile(
                           meta: meta,
                           config: _controller.state.config.accounts[meta.id],
                           results:
@@ -268,7 +307,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
                         ),
                       ),
                       const SizedBox(height: 12),
-                      _DailyPanel(state: _controller.state),
+                      DailyPanel(state: _controller.state),
                     ],
                   ),
                 ),
@@ -424,22 +463,22 @@ class _OjFloatHomeState extends State<OjFloatHome>
       switch (mode) {
         case AppDisplayMode.compact:
           await windowManager.setResizable(false);
-          await windowManager.setMinimumSize(_compactMinimumWindowSize);
-          await windowManager.setSize(_compactWindowSize, animate: true);
+          await windowManager.setMinimumSize(compactMinimumWindowSize);
+          await windowManager.setSize(compactWindowSize, animate: true);
           break;
         case AppDisplayMode.dashboard:
           await windowManager.setResizable(true);
-          await windowManager.setMinimumSize(_dashboardMinimumWindowSize);
-          await windowManager.setSize(_dashboardWindowSize, animate: true);
+          await windowManager.setMinimumSize(dashboardMinimumWindowSize);
+          await windowManager.setSize(dashboardWindowSize, animate: true);
           break;
         case AppDisplayMode.heatmap:
           await windowManager.setResizable(true);
-          await windowManager.setMinimumSize(_heatmapMinimumWindowSize);
-          await windowManager.setSize(_heatmapWindowSize, animate: true);
+          await windowManager.setMinimumSize(heatmapMinimumWindowSize);
+          await windowManager.setSize(heatmapWindowSize, animate: true);
           break;
         case AppDisplayMode.problems:
           await windowManager.setResizable(true);
-          await windowManager.setMinimumSize(_heatmapMinimumWindowSize);
+          await windowManager.setMinimumSize(heatmapMinimumWindowSize);
           await windowManager.setSize(const Size(760, 620), animate: true);
           break;
       }

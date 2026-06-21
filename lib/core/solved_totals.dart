@@ -1,4 +1,8 @@
-part of '../main.dart';
+import 'dart:async';
+import 'dart:io';
+
+import '../models/fetch_result.dart';
+import 'errors.dart';
 
 int totalSolvedFromLatest(Map<String, List<FetchResult>> latest) {
   return latest.values.fold<int>(

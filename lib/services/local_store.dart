@@ -1,4 +1,13 @@
-part of '../main.dart';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../models/app_config.dart';
+import '../models/problem_record.dart';
+import '../models/solved_snapshot.dart';
 
 class LocalStore {
   LocalStore({Directory? supportDirectory})

@@ -1,4 +1,9 @@
-part of '../main.dart';
+import '../core/time.dart';
+import '../services/daily_summary_service.dart';
+import 'app_config.dart';
+import 'fetch_result.dart';
+import 'problem_record.dart';
+import 'solved_snapshot.dart';
 
 class OjState {
   const OjState({

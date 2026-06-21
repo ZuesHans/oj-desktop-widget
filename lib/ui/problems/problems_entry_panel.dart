@@ -1,7 +1,11 @@
-part of '../../main.dart';
+import 'package:flutter/material.dart';
 
-class _ProblemsEntryPanel extends StatelessWidget {
-  const _ProblemsEntryPanel({
+import '../../models/problem_record.dart';
+import '../app_theme.dart';
+
+class ProblemsEntryPanel extends StatelessWidget {
+  const ProblemsEntryPanel({
+    super.key,
     required this.problems,
     required this.onOpen,
   });
@@ -21,13 +25,13 @@ class _ProblemsEntryPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _cardColor,
+        color: cardColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: borderColor),
       ),
       child: Row(
         children: [
-          const Icon(Icons.assignment_outlined, color: _accentColor),
+          const Icon(Icons.assignment_outlined, color: accentColor),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -36,7 +40,7 @@ class _ProblemsEntryPanel extends StatelessWidget {
                 const Text(
                   '补题 / 错题本',
                   style: TextStyle(
-                    color: _textPrimaryColor,
+                    color: textPrimaryColor,
                     fontWeight: FontWeight.w800,
                     fontSize: 16,
                   ),
@@ -45,7 +49,7 @@ class _ProblemsEntryPanel extends StatelessWidget {
                   '待处理 $todo · 已 AC $accepted · 共 ${problems.length}',
                   overflow: TextOverflow.ellipsis,
                   style:
-                      const TextStyle(color: _textSecondaryColor, fontSize: 12),
+                      const TextStyle(color: textSecondaryColor, fontSize: 12),
                 ),
               ],
             ),

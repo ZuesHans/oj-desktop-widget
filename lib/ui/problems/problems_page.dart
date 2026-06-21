@@ -1,4 +1,11 @@
-part of '../../main.dart';
+import 'package:flutter/material.dart';
+
+import '../../core/solved_totals.dart';
+import '../../models/problem_record.dart';
+import '../../services/problem_book_service.dart';
+import '../app_theme.dart';
+import '../shared/pill.dart';
+import 'problem_editor.dart';
 
 class ProblemsPage extends StatefulWidget {
   const ProblemsPage({
@@ -48,10 +55,10 @@ class _ProblemsPageState extends State<ProblemsPage> {
         .where((problem) => problem.status != ProblemStatus.AC)
         .length;
     return Scaffold(
-      backgroundColor: _appSurfaceColor,
+      backgroundColor: appSurfaceColor,
       body: Container(
         key: const ValueKey('problems-page'),
-        color: _appSurfaceColor,
+        color: appSurfaceColor,
         child: Column(
           children: [
             Padding(
@@ -72,7 +79,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
                           TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
                     ),
                   ),
-                  _Pill(label: '待处理 $pending'),
+                  Pill(label: '待处理 $pending'),
                   const SizedBox(width: 8),
                   FilledButton.icon(
                     key: const ValueKey('add-problem-button'),
@@ -162,7 +169,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
                   ? const Center(
                       child: Text(
                         '还没有题目，先添加一个链接或手动录入。',
-                        style: TextStyle(color: _textSecondaryColor),
+                        style: TextStyle(color: textSecondaryColor),
                       ),
                     )
                   : ListView.separated(
@@ -276,9 +283,9 @@ class _ProblemListItem extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _cardColor,
+        color: cardColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -292,7 +299,7 @@ class _ProblemListItem extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: _textPrimaryColor,
+                    color: textPrimaryColor,
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                   ),
@@ -304,14 +311,14 @@ class _ProblemListItem extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             '${problemPlatformLabel(problem.platform)} · ${problem.date}',
-            style: const TextStyle(color: _textSecondaryColor, fontSize: 12),
+            style: const TextStyle(color: textSecondaryColor, fontSize: 12),
           ),
           const SizedBox(height: 4),
           Text(
             problem.url,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: _textSecondaryColor, fontSize: 12),
+            style: const TextStyle(color: textSecondaryColor, fontSize: 12),
           ),
           if (problem.tags.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -319,7 +326,7 @@ class _ProblemListItem extends StatelessWidget {
               spacing: 6,
               runSpacing: 6,
               children: [
-                for (final tag in problem.tags) _Pill(label: tag),
+                for (final tag in problem.tags) Pill(label: tag),
               ],
             ),
           ],
@@ -329,7 +336,7 @@ class _ProblemListItem extends StatelessWidget {
               problem.analysis.isNotEmpty ? problem.analysis : problem.note,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _textPrimaryColor),
+              style: const TextStyle(color: textPrimaryColor),
             ),
           ],
           const SizedBox(height: 10),
@@ -375,7 +382,7 @@ class _ProblemStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = status == ProblemStatus.AC ? _accentColor : _dangerColor;
+    final color = status == ProblemStatus.AC ? accentColor : dangerColor;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(

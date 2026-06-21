@@ -1,7 +1,9 @@
-part of '../../main.dart';
+import 'package:flutter/material.dart';
 
-class _Pill extends StatelessWidget {
-  const _Pill({required this.label});
+import '../app_theme.dart';
+
+class Pill extends StatelessWidget {
+  const Pill({super.key, required this.label});
 
   final String label;
 
@@ -10,13 +12,13 @@ class _Pill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: _cardMutedColor,
+        color: cardMutedColor,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
         style: const TextStyle(
-          color: _textPrimaryColor,
+          color: textPrimaryColor,
           fontWeight: FontWeight.w700,
         ),
       ),

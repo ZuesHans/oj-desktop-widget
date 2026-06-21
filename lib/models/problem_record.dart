@@ -1,6 +1,8 @@
 // ignore_for_file: constant_identifier_names
 
-part of '../main.dart';
+import 'dart:convert';
+
+import '../core/time.dart';
 
 enum ProblemStatus { AC, WA, TLE, RE, REVIEW, TODO }
 

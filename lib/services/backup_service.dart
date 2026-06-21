@@ -1,4 +1,15 @@
-part of '../main.dart';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+
+import '../core/oj_catalog.dart';
+import '../models/app_config.dart';
+import '../models/fetch_result.dart';
+import '../models/problem_record.dart';
+import '../models/solved_snapshot.dart';
+import 'daily_summary_service.dart';
 
 class ExportResult {
   const ExportResult({

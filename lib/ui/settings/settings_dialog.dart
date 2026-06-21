@@ -1,4 +1,7 @@
-part of '../../main.dart';
+import 'package:flutter/material.dart';
+
+import '../../core/oj_catalog.dart';
+import '../../models/app_config.dart';
 
 class SettingsDialog extends StatefulWidget {
   const SettingsDialog({super.key, required this.config});

@@ -1,4 +1,9 @@
-part of '../../main.dart';
+import 'package:flutter/material.dart';
+
+import '../../services/heatmap_service.dart';
+import '../app_theme.dart';
+import 'heatmap_dialog.dart';
+import 'heatmap_formatters.dart';
 
 class HeatmapPage extends StatelessWidget {
   const HeatmapPage({
@@ -34,7 +39,7 @@ class HeatmapPage extends StatelessWidget {
                 '热力图',
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: _textPrimaryColor,
+                  color: textPrimaryColor,
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
                 ),
@@ -44,14 +49,14 @@ class HeatmapPage extends StatelessWidget {
               key: const ValueKey('heatmap-export-data-button'),
               tooltip: 'Export Backup',
               onPressed: onExport,
-              color: _accentColor,
+              color: accentColor,
               icon: const Icon(Icons.download),
             ),
             IconButton(
               key: const ValueKey('heatmap-import-backup-button'),
               tooltip: 'Import Backup',
               onPressed: onImport,
-              color: _accentColor,
+              color: accentColor,
               icon: const Icon(Icons.upload_file),
             ),
           ],
@@ -61,21 +66,21 @@ class HeatmapPage extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            _HeatmapStat(label: '当前连续', value: '${summary.currentStreak} 天'),
-            _HeatmapStat(label: '最长连续', value: '${summary.longestStreak} 天'),
-            _HeatmapStat(label: '活跃天数', value: '${summary.activeDays}'),
-            _HeatmapStat(label: '累计新增', value: '+${summary.totalDelta}'),
+            HeatmapStat(label: '当前连续', value: '${summary.currentStreak} 天'),
+            HeatmapStat(label: '最长连续', value: '${summary.longestStreak} 天'),
+            HeatmapStat(label: '活跃天数', value: '${summary.activeDays}'),
+            HeatmapStat(label: '累计新增', value: '+${summary.totalDelta}'),
           ],
         ),
         const SizedBox(height: 18),
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: _cardColor,
+            color: cardColor,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: _borderColor),
+            border: Border.all(color: borderColor),
           ),
-          child: _HeatmapGrid(days: summary.days),
+          child: HeatmapGrid(days: summary.days),
         ),
       ],
     );

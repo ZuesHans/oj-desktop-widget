@@ -1,4 +1,10 @@
-part of '../../main.dart';
+import 'package:flutter/material.dart';
+
+import '../../core/solved_totals.dart';
+import '../../core/time.dart';
+import '../../models/problem_record.dart';
+import '../../services/problem_book_service.dart';
+import '../app_theme.dart';
 
 class ProblemEditorDialog extends StatefulWidget {
   const ProblemEditorDialog({
@@ -101,7 +107,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       _parseMessage!,
-                      style: const TextStyle(color: _textSecondaryColor),
+                      style: const TextStyle(color: textSecondaryColor),
                     ),
                   ),
                 ],

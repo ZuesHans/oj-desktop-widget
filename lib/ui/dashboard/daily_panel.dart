@@ -1,7 +1,12 @@
-part of '../../main.dart';
+import 'package:flutter/material.dart';
 
-class _DailyPanel extends StatelessWidget {
-  const _DailyPanel({required this.state});
+import '../../core/oj_catalog.dart';
+import '../../models/oj_state.dart';
+import '../app_theme.dart';
+import '../shared/pill.dart';
+
+class DailyPanel extends StatelessWidget {
+  const DailyPanel({super.key, required this.state});
 
   final OjState state;
 
@@ -11,9 +16,9 @@ class _DailyPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _cardColor,
+        color: cardColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -26,12 +31,12 @@ class _DailyPanel extends StatelessWidget {
                   style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                 ),
               ),
-              _Pill(label: summary.date),
+              Pill(label: summary.date),
             ],
           ),
           const SizedBox(height: 10),
           if (summary.deltas.isEmpty)
-            const Text('暂无今日快照', style: TextStyle(color: _textSecondaryColor))
+            const Text('暂无今日快照', style: TextStyle(color: textSecondaryColor))
           else
             ...supportedOjs.map((meta) {
               final delta = summary.deltas[meta.id];

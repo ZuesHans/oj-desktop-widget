@@ -1,4 +1,7 @@
-part of '../main.dart';
+import '../core/time.dart';
+import '../models/solved_snapshot.dart';
+import '../ui/app_theme.dart';
+import 'daily_summary_service.dart';
 
 class HeatmapDay {
   const HeatmapDay({required this.date, required this.delta});
@@ -44,7 +47,7 @@ class HeatmapSummary {
     final deltasByDate = _dailyDeltasByDate(snapshots);
     final days = <HeatmapDay>[];
     final start = weeks == null
-        ? _startOfWeek(startDate ?? _heatmapDefaultStartDate)
+        ? _startOfWeek(startDate ?? heatmapDefaultStartDate)
         : _startOfWeek(
             normalizedToday.subtract(
               Duration(days: (weeks.clamp(1, 104).toInt() - 1) * 7),

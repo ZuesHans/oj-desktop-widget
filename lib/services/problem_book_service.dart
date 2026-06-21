@@ -1,4 +1,11 @@
-part of '../main.dart';
+import 'dart:convert';
+
+import 'package:html/parser.dart' as html_parser;
+import 'package:http/http.dart' as http;
+
+import '../core/errors.dart';
+import '../core/http_client.dart';
+import '../models/problem_record.dart';
 
 class ParsedProblemLink {
   const ParsedProblemLink({

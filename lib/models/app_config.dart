@@ -1,4 +1,6 @@
-part of '../main.dart';
+import 'package:flutter/foundation.dart';
+
+import '../core/oj_catalog.dart';
 
 class AppConfig {
   const AppConfig({

@@ -1,7 +1,14 @@
-part of '../../main.dart';
+import 'package:flutter/material.dart';
 
-class _OjTile extends StatelessWidget {
-  const _OjTile({
+import '../../core/solved_totals.dart';
+import '../../models/app_config.dart';
+import '../../models/fetch_result.dart';
+import '../../models/oj_meta.dart';
+import '../app_theme.dart';
+
+class OjTile extends StatelessWidget {
+  const OjTile({
+    super.key,
     required this.meta,
     required this.config,
     required this.results,
@@ -38,9 +45,9 @@ class _OjTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: _cardColor,
+        color: cardColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: borderColor),
       ),
       child: Row(
         children: [
@@ -58,14 +65,14 @@ class _OjTile extends StatelessWidget {
               children: [
                 Text(meta.name,
                     style: const TextStyle(
-                      color: _textPrimaryColor,
+                      color: textPrimaryColor,
                       fontWeight: FontWeight.w700,
                     )),
                 Text(
                   usernames.isEmpty ? meta.hint : usernames.join(', '),
                   overflow: TextOverflow.ellipsis,
                   style:
-                      const TextStyle(color: _textSecondaryColor, fontSize: 12),
+                      const TextStyle(color: textSecondaryColor, fontSize: 12),
                 ),
                 const SizedBox(height: 6),
                 ...results.map(
@@ -85,13 +92,12 @@ class _OjTile extends StatelessWidget {
             children: [
               Text(solvedText,
                   style: const TextStyle(
-                    color: _textPrimaryColor,
+                    color: textPrimaryColor,
                     fontWeight: FontWeight.w800,
                   )),
               Text(
                 '今日 +$today',
-                style:
-                    const TextStyle(color: _textSecondaryColor, fontSize: 12),
+                style: const TextStyle(color: textSecondaryColor, fontSize: 12),
               ),
             ],
           ),
@@ -114,9 +120,8 @@ class _AccountResultLine extends StatelessWidget {
       FetchStatus.failure => 'Failed',
       FetchStatus.idle => 'Pending',
     };
-    final color = result.status == FetchStatus.failure
-        ? _dangerColor
-        : _textSecondaryColor;
+    final color =
+        result.status == FetchStatus.failure ? dangerColor : textSecondaryColor;
 
     return Padding(
       padding: const EdgeInsets.only(top: 3),
@@ -131,7 +136,7 @@ class _AccountResultLine extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style:
-                      const TextStyle(color: _textSecondaryColor, fontSize: 12),
+                      const TextStyle(color: textSecondaryColor, fontSize: 12),
                 ),
               ),
               Text(
@@ -149,7 +154,7 @@ class _AccountResultLine extends StatelessWidget {
               result.error!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _dangerColor, fontSize: 12),
+              style: const TextStyle(color: dangerColor, fontSize: 12),
             ),
         ],
       ),
@@ -173,12 +178,12 @@ class _PendingAccountLine extends StatelessWidget {
               username,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _textSecondaryColor, fontSize: 12),
+              style: const TextStyle(color: textSecondaryColor, fontSize: 12),
             ),
           ),
           const Text(
             'Pending',
-            style: TextStyle(color: _textSecondaryColor, fontSize: 12),
+            style: TextStyle(color: textSecondaryColor, fontSize: 12),
           ),
         ],
       ),

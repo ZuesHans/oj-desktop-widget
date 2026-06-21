@@ -1,4 +1,6 @@
-part of '../main.dart';
+import 'package:flutter/material.dart';
+
+import '../ui/dashboard/oj_float_home.dart';
 
 class OjFloatApp extends StatelessWidget {
   const OjFloatApp({

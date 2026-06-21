@@ -1,5 +1,3 @@
-part of '../main.dart';
-
 class FetchException implements Exception {
   FetchException(this.message);
 
