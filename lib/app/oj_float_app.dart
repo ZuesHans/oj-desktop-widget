@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../ui/app_theme.dart';
 import '../ui/dashboard/oj_float_home.dart';
 
 class OjFloatApp extends StatelessWidget {
@@ -17,14 +18,7 @@ class OjFloatApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'OJ Float',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2F7D6D),
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-        scaffoldBackgroundColor: Colors.transparent,
-      ),
+      theme: buildAppTheme(),
       home: OjFloatHome(
         enablePlatformIntegration: enablePlatformIntegration,
         autoInitializeController: autoInitializeController,

@@ -71,6 +71,30 @@ void main() {
     });
   });
 
+  group('parseCodeforcesOjhuntSolvedCount', () {
+    test('reads data.solved', () {
+      expect(
+        parseCodeforcesOjhuntSolvedCount({
+          'crawler': 'codeforces',
+          'username': 'tourist',
+          'error': false,
+          'data': {'solved': 3015},
+        }),
+        3015,
+      );
+    });
+
+    test('rejects error responses', () {
+      expect(
+        () => parseCodeforcesOjhuntSolvedCount({
+          'error': true,
+          'message': 'not found',
+        }),
+        throwsA(isA<FetchException>()),
+      );
+    });
+  });
+
   group('codeforcesProblemKey', () {
     test('uses contest id and index first', () {
       expect(
@@ -135,17 +159,60 @@ void main() {
     });
   });
 
-  test('provider prefers official user.status solved count', () async {
-    final requestedPaths = <String>[];
+  test('provider prefers ojhunt solved count like oj_helper', () async {
+    final requestedHostsAndPaths = <String>[];
     final client = MockClient((request) async {
-      requestedPaths.add(request.url.path);
-      if (request.url.path == '/api/user.info') {
+      requestedHostsAndPaths.add('${request.url.host}${request.url.path}');
+      if (request.url.host == 'codeforces.com' &&
+          request.url.path == '/api/user.info') {
         return http.Response(
           '{"status":"OK","result":[{"handle":"tourist","rating":3900}]}',
           200,
         );
       }
-      if (request.url.path == '/api/user.status') {
+      if (request.url.host == 'ojhunt.com' &&
+          request.url.path == '/api/crawlers/codeforces/tourist') {
+        return http.Response(
+          jsonEncode({
+            'crawler': 'codeforces',
+            'username': 'tourist',
+            'error': false,
+            'data': {'solved': 670},
+          }),
+          200,
+        );
+      }
+      return http.Response('unexpected', 500);
+    });
+
+    final profile = await CodeforcesProvider().fetchProfile(client, 'tourist');
+
+    expect(requestedHostsAndPaths, [
+      'codeforces.com/api/user.info',
+      'ojhunt.com/api/crawlers/codeforces/tourist',
+    ]);
+    expect(profile.solvedCount, 670);
+    expect(profile.rating, 3900);
+  });
+
+  test('provider falls back to official user.status when ojhunt fails',
+      () async {
+    final requestedHostsAndPaths = <String>[];
+    final client = MockClient((request) async {
+      requestedHostsAndPaths.add('${request.url.host}${request.url.path}');
+      if (request.url.host == 'codeforces.com' &&
+          request.url.path == '/api/user.info') {
+        return http.Response(
+          '{"status":"OK","result":[{"handle":"tourist","rating":3900}]}',
+          200,
+        );
+      }
+      if (request.url.host == 'ojhunt.com' &&
+          request.url.path == '/api/crawlers/codeforces/tourist') {
+        return http.Response('temporary failure', 503);
+      }
+      if (request.url.host == 'codeforces.com' &&
+          request.url.path == '/api/user.status') {
         return http.Response(
           jsonEncode({
             'status': 'OK',
@@ -172,7 +239,11 @@ void main() {
 
     final profile = await CodeforcesProvider().fetchProfile(client, 'tourist');
 
-    expect(requestedPaths, ['/api/user.info', '/api/user.status']);
+    expect(requestedHostsAndPaths, [
+      'codeforces.com/api/user.info',
+      'ojhunt.com/api/crawlers/codeforces/tourist',
+      'codeforces.com/api/user.status',
+    ]);
     expect(profile.solvedCount, 1);
     expect(profile.rating, 3900);
   });

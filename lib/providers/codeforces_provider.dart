@@ -28,6 +28,21 @@ class CodeforcesProvider implements OjProvider {
 
     final profileUrl = 'https://codeforces.com/profile/$handle';
     try {
+      final solvedCount = await fetchCodeforcesSolvedCountFromOjhunt(
+        client,
+        handle,
+      );
+      return OjProfile(
+        solvedCount: solvedCount,
+        profileUrl: profileUrl,
+        rating: rating,
+      );
+    } catch (_) {
+      // Match oj_helper's primary Codeforces solved-count source. Keep the
+      // official submissions API below as a fallback when ojhunt is unavailable.
+    }
+
+    try {
       final solvedCount =
           await fetchCodeforcesSolvedCountFromSubmissions(client, handle);
       return OjProfile(
@@ -36,8 +51,7 @@ class CodeforcesProvider implements OjProvider {
         rating: rating,
       );
     } catch (_) {
-      // The official submissions API is the most stable solved-count source.
-      // If it is temporarily unavailable, fall back to the public profile HTML.
+      // Fall back to the public profile HTML as a last resort.
     }
 
     try {
@@ -128,6 +142,17 @@ int? parseCodeforcesProfileSolvedCount(String html) {
   return null;
 }
 
+int parseCodeforcesOjhuntSolvedCount(Map<String, dynamic> data) {
+  if (data['error'] == true) {
+    throw FetchException(data['message']?.toString() ?? 'Codeforces 返回异常');
+  }
+  final payload = data['data'];
+  if (payload is Map && payload['solved'] is num) {
+    return (payload['solved'] as num).toInt();
+  }
+  throw FetchException('Codeforces 返回格式变化');
+}
+
 String? codeforcesProblemKey(Map problem) {
   final contestId = problem['contestId'];
   final index = problem['index'];
@@ -163,6 +188,17 @@ int countCodeforcesSolvedSubmissions(List<dynamic> submissions) {
     }
   }
   return solved.length;
+}
+
+Future<int> fetchCodeforcesSolvedCountFromOjhunt(
+  http.Client client,
+  String handle,
+) async {
+  final data = await readJson(
+    client,
+    Uri.https('ojhunt.com', '/api/crawlers/codeforces/$handle'),
+  );
+  return parseCodeforcesOjhuntSolvedCount(data);
 }
 
 Future<int> fetchCodeforcesSolvedCountFromSubmissions(
