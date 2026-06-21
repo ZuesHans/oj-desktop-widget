@@ -56,13 +56,13 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('open-dashboard-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Heatmap'), findsOneWidget);
+    expect(find.text('热力图'), findsOneWidget);
     expect(find.byKey(const ValueKey('heatmap-entry-button')), findsOneWidget);
     expect(find.byKey(const ValueKey('export-data-button')), findsOneWidget);
     expect(find.byKey(const ValueKey('import-backup-button')), findsOneWidget);
   });
 
-  testWidgets('heatmap entry opens the heatmap dialog', (tester) async {
+  testWidgets('heatmap entry opens the heatmap page', (tester) async {
     await tester.pumpWidget(buildTestApp());
 
     await tester.tap(find.byKey(const ValueKey('open-dashboard-button')));
@@ -70,10 +70,148 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('heatmap-entry-button')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('heatmap-dialog')), findsOneWidget);
-    expect(
-        find.text(
-            'No snapshot data yet. Refresh after configuring accounts to build your heatmap.'),
-        findsOneWidget);
+    expect(find.byKey(const ValueKey('heatmap-page')), findsOneWidget);
+    expect(find.byKey(const ValueKey('heatmap-back-button')), findsOneWidget);
+    expect(find.text('当前连续'), findsOneWidget);
+    expect(find.byTooltip('更早'), findsOneWidget);
+    expect(find.byTooltip('更新'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('heatmap-back-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('heatmap-page')), findsNothing);
+    expect(find.byKey(const ValueKey('heatmap-entry-button')), findsOneWidget);
+  });
+
+  testWidgets('dashboard opens problems page', (tester) async {
+    await tester.pumpWidget(buildTestApp());
+
+    await tester.tap(find.byKey(const ValueKey('open-dashboard-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('problems-entry-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('problems-page')), findsOneWidget);
+    expect(find.byKey(const ValueKey('add-problem-button')), findsOneWidget);
+  });
+
+  testWidgets('problems page manual form saves', (tester) async {
+    final saved = <ProblemRecord>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProblemsPage(
+          problems: const [],
+          onBack: () {},
+          onParseLink: (_) async => const ParsedProblemLink(
+            title: 'CF 1799A',
+            url: 'https://codeforces.com/problemset/problem/1799/A',
+            platform: ProblemPlatform.cf,
+          ),
+          onSave: (problem) async => saved.add(problem),
+          onDelete: (_) async {},
+          onMarkAccepted: (_) async {},
+          onOpenProblem: (_) async {},
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('add-problem-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('problem-url-field')),
+      'https://codeforces.com/problemset/problem/1799/A',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('problem-title-field')),
+      'CF 1799A',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('problem-tags-field')),
+      '贪心, 构造',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('problem-note-field')),
+      '赛后补题',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('problem-analysis-field')),
+      '注意边界',
+    );
+    await tester.tap(find.byKey(const ValueKey('save-problem-button')));
+    await tester.pumpAndSettle();
+
+    expect(saved, hasLength(1));
+    expect(saved.single.title, 'CF 1799A');
+    expect(saved.single.tags, hasLength(2));
+    expect(saved.single.analysis, isNotEmpty);
+  });
+
+  testWidgets('problems page can mark an item as AC', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProblemsPage(
+          problems: [
+            ProblemRecord.create(
+              id: 'p1',
+              title: 'Todo Problem',
+              url: 'https://www.luogu.com.cn/problem/P1001',
+              platform: ProblemPlatform.lg,
+              status: ProblemStatus.TODO,
+              now: DateTime.parse('2026-06-21T12:00:00'),
+            ),
+          ],
+          onBack: () {},
+          onParseLink: (_) async => const ParsedProblemLink(
+            title: 'Todo Problem',
+            url: 'https://www.luogu.com.cn/problem/P1001',
+            platform: ProblemPlatform.lg,
+          ),
+          onSave: (_) async {},
+          onDelete: (_) async {},
+          onMarkAccepted: (_) async {},
+          onOpenProblem: (_) async {},
+        ),
+      ),
+    );
+
+    expect(find.text('TODO'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('mark-ac-problem-p1')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('已标记 AC'), findsOneWidget);
+  });
+
+  testWidgets('problems page opens problem URL', (tester) async {
+    final opened = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProblemsPage(
+          problems: [
+            ProblemRecord.create(
+              id: 'p1',
+              title: 'Todo Problem',
+              url: 'https://www.luogu.com.cn/problem/P1001',
+              platform: ProblemPlatform.lg,
+              status: ProblemStatus.TODO,
+              now: DateTime.parse('2026-06-21T12:00:00'),
+            ),
+          ],
+          onBack: () {},
+          onParseLink: (_) async => const ParsedProblemLink(
+            title: 'Todo Problem',
+            url: 'https://www.luogu.com.cn/problem/P1001',
+            platform: ProblemPlatform.lg,
+          ),
+          onSave: (_) async {},
+          onDelete: (_) async {},
+          onMarkAccepted: (_) async {},
+          onOpenProblem: (problem) async => opened.add(problem.url),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('open-problem-p1')));
+    await tester.pumpAndSettle();
+
+    expect(opened, ['https://www.luogu.com.cn/problem/P1001']);
   });
 }

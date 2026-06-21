@@ -7,18 +7,18 @@ $ErrorActionPreference = "Continue"
 $candidates = @(
   @{
     Name = "Flutter China"
-    Pub = "https://pub.flutter-io.cn"
-    Storage = "https://storage.flutter-io.cn"
+    Pub = "https://pub.flutter-io.cn/api/packages/collection"
+    Storage = "https://storage.flutter-io.cn/flutter_infra_release/releases/releases_windows.json"
   },
   @{
     Name = "TUNA"
-    Pub = "https://mirrors.tuna.tsinghua.edu.cn/dart-pub"
-    Storage = "https://mirrors.tuna.tsinghua.edu.cn/flutter"
+    Pub = "https://mirrors.tuna.tsinghua.edu.cn/dart-pub/api/packages/collection"
+    Storage = "https://mirrors.tuna.tsinghua.edu.cn/flutter/flutter_infra_release/releases/releases_windows.json"
   },
   @{
     Name = "Official"
-    Pub = "https://pub.dev"
-    Storage = "https://storage.googleapis.com"
+    Pub = "https://pub.dev/api/packages/collection"
+    Storage = "https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json"
   }
 )
 
@@ -31,8 +31,8 @@ foreach ($candidate in $candidates) {
   Write-Host ""
   Write-Host "==> Testing $($candidate.Name)" -ForegroundColor Cyan
   foreach ($target in @(
-    @{ Label = "pub"; Url = "$($candidate.Pub)/api/packages/collection" },
-    @{ Label = "storage"; Url = "$($candidate.Storage)/flutter_infra_release/releases/releases_windows.json" }
+    @{ Label = "pub"; Url = $candidate.Pub },
+    @{ Label = "storage"; Url = $candidate.Storage }
   )) {
     $watch = [System.Diagnostics.Stopwatch]::StartNew()
     try {

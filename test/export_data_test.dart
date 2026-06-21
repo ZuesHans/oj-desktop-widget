@@ -9,6 +9,7 @@ void main() {
     final jsonText = buildPortableBackupJson(
       config: _config(),
       snapshots: [_snapshot('2026-06-16', 'alice', 42)],
+      problems: [_problem()],
       exportedAt: DateTime.parse('2026-06-18T21:30:00'),
     );
 
@@ -29,6 +30,9 @@ void main() {
         );
     expect(codeforces['enabled'], isTrue);
     expect(codeforces['usernames'], ['alice', 'bob']);
+    final problems = data['problems'] as List<dynamic>;
+    expect(problems, hasLength(1));
+    expect((problems.single as Map<String, dynamic>)['tags'], '["贪心","构造"]');
   });
 
   test('portable backup JSON keeps multiple raw snapshots including failure',
@@ -120,6 +124,7 @@ void main() {
           _snapshot('2026-06-16', 'alice', 10, hour: 8),
           _snapshot('2026-06-16', 'alice', 13, hour: 20),
         ],
+        problems: [_problem()],
         now: DateTime.parse('2026-06-18T21:30:00'),
         directory: directory,
       );
@@ -142,6 +147,19 @@ void main() {
       await directory.delete(recursive: true);
     }
   });
+}
+
+ProblemRecord _problem() {
+  return ProblemRecord.create(
+    id: 'lxyz123abc',
+    title: 'CF 1799A',
+    url: 'https://codeforces.com/problemset/problem/1799/A',
+    platform: ProblemPlatform.cf,
+    status: ProblemStatus.AC,
+    tags: const ['贪心', '构造'],
+    date: '2026-06-21',
+    now: DateTime.parse('2026-06-21T12:00:00'),
+  );
 }
 
 AppConfig _config() {

@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:oj_float/main.dart';
 
 void main() {
@@ -129,5 +133,47 @@ void main() {
         3,
       );
     });
+  });
+
+  test('provider prefers official user.status solved count', () async {
+    final requestedPaths = <String>[];
+    final client = MockClient((request) async {
+      requestedPaths.add(request.url.path);
+      if (request.url.path == '/api/user.info') {
+        return http.Response(
+          '{"status":"OK","result":[{"handle":"tourist","rating":3900}]}',
+          200,
+        );
+      }
+      if (request.url.path == '/api/user.status') {
+        return http.Response(
+          jsonEncode({
+            'status': 'OK',
+            'result': [
+              {
+                'verdict': 'OK',
+                'problem': {'contestId': 1, 'index': 'A', 'name': 'A'},
+              },
+              {
+                'verdict': 'OK',
+                'problem': {'contestId': 1, 'index': 'A', 'name': 'Renamed'},
+              },
+              {
+                'verdict': 'WRONG_ANSWER',
+                'problem': {'contestId': 2, 'index': 'B', 'name': 'B'},
+              },
+            ],
+          }),
+          200,
+        );
+      }
+      return http.Response('unexpected', 500);
+    });
+
+    final profile = await CodeforcesProvider().fetchProfile(client, 'tourist');
+
+    expect(requestedPaths, ['/api/user.info', '/api/user.status']);
+    expect(profile.solvedCount, 1);
+    expect(profile.rating, 3900);
   });
 }

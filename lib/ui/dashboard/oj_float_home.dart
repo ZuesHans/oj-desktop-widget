@@ -1,0 +1,469 @@
+part of '../../main.dart';
+
+class OjFloatHome extends StatefulWidget {
+  const OjFloatHome({
+    super.key,
+    this.enablePlatformIntegration = true,
+    this.autoInitializeController = true,
+  });
+
+  final bool enablePlatformIntegration;
+  final bool autoInitializeController;
+
+  @override
+  State<OjFloatHome> createState() => _OjFloatHomeState();
+}
+
+class _OjFloatHomeState extends State<OjFloatHome>
+    with TrayListener, WindowListener {
+  late final OjController _controller;
+  AppDisplayMode _mode = AppDisplayMode.compact;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = OjController(
+      storage: LocalStore(),
+      startupService: widget.enablePlatformIntegration
+          ? LaunchAtStartupService()
+          : NoopStartupService(),
+      service: RefreshService(
+        client: http.Client(),
+        providers: {
+          'codeforces': CodeforcesProvider(),
+          'leetcode': LeetCodeProvider(),
+          'atcoder': AtCoderProvider(),
+          'luogu': LuoguProvider(),
+          'nowcoder': NowcoderProvider(),
+        },
+      ),
+    );
+    if (widget.enablePlatformIntegration) {
+      trayManager.addListener(this);
+      windowManager.addListener(this);
+      unawaited(_setupTray());
+    }
+    if (widget.autoInitializeController) {
+      unawaited(_controller.init().then((_) async {
+        if (widget.enablePlatformIntegration) {
+          await _applyWindowPreferences(_controller.state.config);
+        }
+      }));
+    }
+  }
+
+  Future<void> _setupTray() async {
+    if (!(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      return;
+    }
+    if (Platform.isWindows) {
+      final iconFile = await _extractTrayIcon();
+      await trayManager.setIcon(iconFile.path);
+    }
+    await trayManager.setToolTip('OJ Float');
+    await _setupTrayMenu();
+  }
+
+  Future<void> _setupTrayMenu() async {
+    await trayManager.setContextMenu(
+      Menu(
+        items: [
+          MenuItem(key: 'show', label: '显示窗口'),
+          MenuItem(key: 'hide', label: '隐藏窗口'),
+          MenuItem(key: 'toggle_on_top', label: '窗口置顶/取消置顶'),
+          MenuItem.separator(),
+          MenuItem(key: 'refresh', label: '立即刷新'),
+          MenuItem.separator(),
+          MenuItem(key: 'exit', label: '退出程序'),
+        ],
+      ),
+    );
+  }
+
+  Future<File> _extractTrayIcon() async {
+    final bytes = await rootBundle.load('assets/app_icon.ico');
+    final directory = await getTemporaryDirectory();
+    final iconFile =
+        File('${directory.path}${Platform.pathSeparator}oj_float_app_icon.ico');
+    await iconFile.writeAsBytes(bytes.buffer.asUint8List(), flush: true);
+    return iconFile;
+  }
+
+  @override
+  void dispose() {
+    if (widget.enablePlatformIntegration) {
+      trayManager.removeListener(this);
+      windowManager.removeListener(this);
+    }
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  void onTrayIconMouseDown() async {
+    await windowManager.show();
+    await windowManager.focus();
+  }
+
+  @override
+  void onTrayMenuItemClick(MenuItem menuItem) async {
+    switch (menuItem.key) {
+      case 'show':
+        await windowManager.show();
+        await windowManager.focus();
+        break;
+      case 'hide':
+        await windowManager.hide();
+        break;
+      case 'toggle_on_top':
+        final nextConfig = _controller.state.config.copyWith(
+          alwaysOnTop: !_controller.state.config.alwaysOnTop,
+        );
+        await _controller.saveConfig(nextConfig);
+        await _applyWindowPreferences(nextConfig);
+        await _setupTrayMenu();
+        break;
+      case 'refresh':
+        await _controller.refresh();
+        break;
+      case 'exit':
+        await _exitApp();
+        break;
+    }
+  }
+
+  @override
+  void onWindowClose() async {
+    if (_controller.state.config.closeToTray) {
+      await windowManager.hide();
+      return;
+    }
+    await _exitApp();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        if (_mode == AppDisplayMode.compact) {
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            body: _CompactWidget(
+              state: _controller.state,
+              refreshing: _controller.refreshing,
+              onRefresh: _controller.refreshing ? null : _controller.refresh,
+              onOpenDashboard: () => _setMode(AppDisplayMode.dashboard),
+              onExit: _exitApp,
+            ),
+          );
+        }
+
+        if (_mode == AppDisplayMode.heatmap) {
+          return Scaffold(
+            backgroundColor: _appSurfaceColor,
+            body: SafeArea(
+              child: Column(
+                children: [
+                  _WindowHeader(
+                    refreshing: _controller.refreshing,
+                    onRefresh:
+                        _controller.refreshing ? null : _controller.refresh,
+                    onSettings: () => _openSettings(context),
+                    onCompact: () => _setMode(AppDisplayMode.compact),
+                    onMinimize: () => windowManager.minimize(),
+                    onExit: _exitApp,
+                  ),
+                  Expanded(
+                    child: HeatmapPage(
+                      summary: HeatmapSummary.fromSnapshots(
+                        _controller.state.snapshots,
+                      ),
+                      onBack: () => _setMode(AppDisplayMode.dashboard),
+                      onExport: () => _exportData(context),
+                      onImport: () => _importData(context),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        if (_mode == AppDisplayMode.problems) {
+          return Scaffold(
+            backgroundColor: _appSurfaceColor,
+            body: SafeArea(
+              child: Column(
+                children: [
+                  _WindowHeader(
+                    refreshing: _controller.refreshing,
+                    onRefresh:
+                        _controller.refreshing ? null : _controller.refresh,
+                    onSettings: () => _openSettings(context),
+                    onCompact: () => _setMode(AppDisplayMode.compact),
+                    onMinimize: () => windowManager.minimize(),
+                    onExit: _exitApp,
+                  ),
+                  Expanded(
+                    child: ProblemsPage(
+                      problems: _controller.state.problems,
+                      onBack: () => _setMode(AppDisplayMode.dashboard),
+                      onParseLink: _controller.parseProblemLink,
+                      onSave: _controller.saveProblem,
+                      onDelete: _controller.deleteProblem,
+                      onMarkAccepted: _controller.markProblemAccepted,
+                      onOpenProblem: _openProblemUrl,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return Scaffold(
+          backgroundColor: _appSurfaceColor,
+          body: SafeArea(
+            child: Column(
+              children: [
+                _WindowHeader(
+                  refreshing: _controller.refreshing,
+                  onRefresh:
+                      _controller.refreshing ? null : _controller.refresh,
+                  onSettings: () => _openSettings(context),
+                  onCompact: () => _setMode(AppDisplayMode.compact),
+                  onMinimize: () => windowManager.minimize(),
+                  onExit: _exitApp,
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+                    children: [
+                      _SummaryPanel(state: _controller.state),
+                      const SizedBox(height: 12),
+                      _HeatmapEntryPanel(
+                        summary: HeatmapSummary.fromSnapshots(
+                          _controller.state.snapshots,
+                        ),
+                        onOpen: _openHeatmap,
+                        onExport: () => _exportData(context),
+                        onImport: () => _importData(context),
+                      ),
+                      const SizedBox(height: 12),
+                      _ProblemsEntryPanel(
+                        problems: _controller.state.problems,
+                        onOpen: () => _setMode(AppDisplayMode.problems),
+                      ),
+                      const SizedBox(height: 12),
+                      ...supportedOjs.map(
+                        (meta) => _OjTile(
+                          meta: meta,
+                          config: _controller.state.config.accounts[meta.id],
+                          results:
+                              _controller.state.latest[meta.id] ?? const [],
+                          today: _controller.todayDeltaFor(meta.id),
+                          accountToday:
+                              _controller.todayDeltaByAccountFor(meta.id),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _DailyPanel(state: _controller.state),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openSettings(BuildContext context) async {
+    final updated = await showDialog<AppConfig>(
+      context: context,
+      builder: (_) => SettingsDialog(config: _controller.state.config),
+    );
+    if (updated != null) {
+      Object? saveError;
+      try {
+        await _controller.saveConfig(updated);
+      } catch (error) {
+        saveError = error;
+      }
+      if (widget.enablePlatformIntegration) {
+        await _applyWindowPreferences(updated);
+        await _setupTrayMenu();
+      }
+      if (saveError != null) {
+        if (!context.mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Start at login update failed: ${normalizeError(saveError)}',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  void _openHeatmap() {
+    _setMode(AppDisplayMode.heatmap);
+  }
+
+  Future<void> _exportData(BuildContext context) async {
+    try {
+      final result = await exportOjData(
+        config: _controller.state.config,
+        snapshots: _controller.state.snapshots,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Exported portable backup JSON and daily summary CSV to ${result.directory.path}',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Export failed: ${normalizeError(error)}')),
+      );
+    }
+  }
+
+  Future<void> _importData(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Import Backup'),
+        content: const Text(
+          'Import will replace current local config and snapshots. '
+          'A safety backup will be created before import.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Import Backup'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      final selection = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+        allowMultiple: false,
+      );
+      final path = selection?.files.single.path;
+      if (path == null) {
+        return;
+      }
+      final result = await _controller.importPortableBackup(File(path));
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Import completed. Current config and snapshots were replaced '
+            'from backup. Safety backup: ${result.safetyBackupFile.path}',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Import failed: ${normalizeError(error)}')),
+      );
+    }
+  }
+
+  Future<void> _openProblemUrl(ProblemRecord problem) async {
+    final uri = Uri.tryParse(problem.url);
+    if (uri == null || !uri.hasScheme) {
+      throw FetchException('Invalid problem URL.');
+    }
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened) {
+      throw FetchException('Failed to open problem URL.');
+    }
+  }
+
+  void _setMode(AppDisplayMode mode) {
+    if (_mode == mode) {
+      return;
+    }
+    setState(() => _mode = mode);
+    if (widget.enablePlatformIntegration) {
+      unawaited(_syncWindowMode(mode));
+    }
+  }
+
+  Future<void> _syncWindowMode(AppDisplayMode mode) async {
+    try {
+      switch (mode) {
+        case AppDisplayMode.compact:
+          await windowManager.setResizable(false);
+          await windowManager.setMinimumSize(_compactMinimumWindowSize);
+          await windowManager.setSize(_compactWindowSize, animate: true);
+          break;
+        case AppDisplayMode.dashboard:
+          await windowManager.setResizable(true);
+          await windowManager.setMinimumSize(_dashboardMinimumWindowSize);
+          await windowManager.setSize(_dashboardWindowSize, animate: true);
+          break;
+        case AppDisplayMode.heatmap:
+          await windowManager.setResizable(true);
+          await windowManager.setMinimumSize(_heatmapMinimumWindowSize);
+          await windowManager.setSize(_heatmapWindowSize, animate: true);
+          break;
+        case AppDisplayMode.problems:
+          await windowManager.setResizable(true);
+          await windowManager.setMinimumSize(_heatmapMinimumWindowSize);
+          await windowManager.setSize(const Size(760, 620), animate: true);
+          break;
+      }
+    } on MissingPluginException {
+      // Widget tests do not load the desktop window plugin.
+    }
+  }
+
+  Future<void> _applyWindowPreferences(AppConfig config) async {
+    try {
+      await windowManager.setAlwaysOnTop(config.alwaysOnTop);
+      await windowManager.setSkipTaskbar(!config.showInTaskbar);
+    } on MissingPluginException {
+      // Widget tests do not load the desktop window plugin.
+    }
+  }
+
+  Future<void> _exitApp() async {
+    try {
+      await windowManager.setPreventClose(false);
+      await trayManager.destroy();
+      await windowManager.destroy();
+    } on MissingPluginException {
+      // Widget tests do not load the desktop window or tray plugins.
+    }
+  }
+}

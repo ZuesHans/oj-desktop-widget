@@ -21,6 +21,21 @@ void main() {
 
     expect(backup.config.accounts['codeforces']!.usernames, ['alice']);
     expect(backup.snapshots, hasLength(1));
+    expect(backup.problems, isEmpty);
+  });
+
+  test('backup problems are optional and parsed when present', () {
+    final oldBackup = parsePortableBackupJson(_backupJson());
+    expect(oldBackup.problems, isEmpty);
+
+    final backup = parsePortableBackupJson(_backupJson(
+      problems: [
+        _problem().toStorageJson(),
+        {'id': 'broken'}
+      ],
+    ));
+    expect(backup.problems, hasLength(1));
+    expect(backup.problems.single.tags, ['贪心', '构造']);
   });
 
   test('schemaVersion mismatch is rejected', () {
@@ -97,6 +112,7 @@ void main() {
       await store.replaceSnapshots([
         _snapshot('2026-06-15', 'old-user', 1),
       ]);
+      await store.replaceProblems([_problem(id: 'old-problem')]);
 
       final controller = OjController(
         storage: store,
@@ -110,6 +126,7 @@ void main() {
       await importFile.writeAsString(_backupJson(
         config: _portableConfig('new-user'),
         snapshots: [_snapshotJson('2026-06-16', 'new-user', 7)],
+        problems: [_problem(id: 'new-problem').toStorageJson()],
         dailyStats: [
           {'date': '2026-01-01', 'totalDelta': 123, 'active': true},
         ],
@@ -121,6 +138,7 @@ void main() {
       );
       final loadedConfig = await store.loadConfig();
       final loadedSnapshots = await store.loadSnapshots();
+      final loadedProblems = await store.loadProblems();
 
       expect(result.safetyBackupFile.path,
           contains('oj_float_pre_import_backup_'));
@@ -130,6 +148,7 @@ void main() {
       expect(loadedConfig.accounts['codeforces']!.usernames, ['new-user']);
       expect(loadedSnapshots, hasLength(1));
       expect(loadedSnapshots.single.username, 'new-user');
+      expect(loadedProblems.map((item) => item.id), ['new-problem']);
       expect(controller.state.todaySummary.totalDelta, 0);
     } finally {
       await directory.delete(recursive: true);
@@ -145,6 +164,7 @@ void main() {
       await store.replaceSnapshots([
         _snapshot('2026-06-15', 'old-user', 1),
       ]);
+      await store.replaceProblems([_problem(id: 'old-problem')]);
 
       final controller = OjController(
         storage: store,
@@ -158,6 +178,7 @@ void main() {
       await importFile.writeAsString(_backupJson(
         config: _portableConfig('new-user'),
         snapshots: [_snapshotJson('2026-06-16', 'new-user', 7)],
+        problems: [_problem(id: 'new-problem').toStorageJson()],
       ));
 
       store.failNextReplace = true;
@@ -171,10 +192,12 @@ void main() {
 
       final loadedConfig = await store.loadConfig();
       final loadedSnapshots = await store.loadSnapshots();
+      final loadedProblems = await store.loadProblems();
 
       expect(loadedConfig.accounts['codeforces']!.usernames, ['old-user']);
       expect(loadedSnapshots, hasLength(1));
       expect(loadedSnapshots.single.username, 'old-user');
+      expect(loadedProblems.map((item) => item.id), ['old-problem']);
     } finally {
       await directory.delete(recursive: true);
     }
@@ -190,6 +213,7 @@ String _backupJson({
   Map<String, Object?>? config,
   List<Object?> snapshots = const [],
   List<Object?> dailyStats = const [],
+  List<Object?>? problems,
 }) {
   return jsonEncode({
     'schemaVersion': schemaVersion,
@@ -198,6 +222,7 @@ String _backupJson({
     'exportedAt': '2026-06-16T12:00:00.000',
     'config': config ?? _portableConfig('alice'),
     'snapshots': snapshots,
+    if (problems != null) 'problems': problems,
     'dailyStats': dailyStats,
   });
 }
@@ -260,4 +285,17 @@ class _FailingReplaceStore extends LocalStore {
     }
     return super.replaceSnapshots(snapshots);
   }
+}
+
+ProblemRecord _problem({String id = 'lxyz123abc'}) {
+  return ProblemRecord.create(
+    id: id,
+    title: 'CF 1799A',
+    url: 'https://codeforces.com/problemset/problem/1799/A',
+    platform: ProblemPlatform.cf,
+    status: ProblemStatus.AC,
+    tags: const ['贪心', '构造'],
+    date: '2026-06-21',
+    now: DateTime.parse('2026-06-21T12:00:00'),
+  );
 }
