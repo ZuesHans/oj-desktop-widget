@@ -29,11 +29,15 @@ import '../../services/oj_controller.dart';
 import '../../services/refresh_service.dart';
 import '../app_theme.dart';
 import '../compact/compact_widget.dart';
+import '../contests/contests_entry_panel.dart';
+import '../contests/contests_page.dart';
 import '../heatmap/heatmap_entry_panel.dart';
 import '../heatmap/heatmap_page.dart';
 import '../problems/problems_entry_panel.dart';
 import '../problems/problems_page.dart';
 import '../settings/settings_dialog.dart';
+import '../teammates/teammates_entry_panel.dart';
+import '../teammates/teammates_page.dart';
 import 'daily_panel.dart';
 import 'oj_tile.dart';
 import 'summary_panel.dart';
@@ -261,6 +265,70 @@ class _OjFloatHomeState extends State<OjFloatHome>
           );
         }
 
+        if (_mode == AppDisplayMode.contests) {
+          return Scaffold(
+            backgroundColor: appSurfaceColor,
+            body: SafeArea(
+              child: Column(
+                children: [
+                  WindowHeader(
+                    refreshing: _controller.refreshing,
+                    onRefresh:
+                        _controller.refreshing ? null : _controller.refresh,
+                    onSettings: () => _openSettings(context),
+                    onCompact: () => _setMode(AppDisplayMode.compact),
+                    onMinimize: () => windowManager.minimize(),
+                    onExit: _exitApp,
+                  ),
+                  Expanded(
+                    child: ContestsPage(
+                      contests: _controller.state.contests,
+                      rankPoints: _controller.contestRankPoints(),
+                      onBack: () => _setMode(AppDisplayMode.dashboard),
+                      onSave: _controller.saveContest,
+                      onDelete: _controller.deleteContest,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        if (_mode == AppDisplayMode.teammates) {
+          return Scaffold(
+            backgroundColor: appSurfaceColor,
+            body: SafeArea(
+              child: Column(
+                children: [
+                  WindowHeader(
+                    refreshing: _controller.refreshing,
+                    onRefresh:
+                        _controller.refreshing ? null : _controller.refresh,
+                    onSettings: () => _openSettings(context),
+                    onCompact: () => _setMode(AppDisplayMode.compact),
+                    onMinimize: () => windowManager.minimize(),
+                    onExit: _exitApp,
+                  ),
+                  Expanded(
+                    child: TeammatesPage(
+                      data: _controller.state.teammates,
+                      todayRanking: _controller.teammateTodayRanking(),
+                      recentRankings: _controller.teammateRecentRankings(),
+                      refreshing: _controller.refreshingTeammates,
+                      onBack: () => _setMode(AppDisplayMode.dashboard),
+                      onSave: _controller.saveTeammate,
+                      onDelete: _controller.deleteTeammate,
+                      onRefreshAll: _controller.refreshAllTeammates,
+                      onRefreshOne: _controller.refreshTeammate,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
         return Scaffold(
           backgroundColor: appSurfaceColor,
           body: SafeArea(
@@ -293,6 +361,17 @@ class _OjFloatHomeState extends State<OjFloatHome>
                       ProblemsEntryPanel(
                         problems: _controller.state.problems,
                         onOpen: () => _setMode(AppDisplayMode.problems),
+                      ),
+                      const SizedBox(height: 12),
+                      ContestsEntryPanel(
+                        contests: _controller.state.contests,
+                        onOpen: () => _setMode(AppDisplayMode.contests),
+                      ),
+                      const SizedBox(height: 12),
+                      TeammatesEntryPanel(
+                        teammates: _controller.state.teammates,
+                        todayRanking: _controller.teammateTodayRanking(),
+                        onOpen: () => _setMode(AppDisplayMode.teammates),
                       ),
                       const SizedBox(height: 12),
                       ...supportedOjs.map(
@@ -359,6 +438,9 @@ class _OjFloatHomeState extends State<OjFloatHome>
       final result = await exportOjData(
         config: _controller.state.config,
         snapshots: _controller.state.snapshots,
+        problems: _controller.state.problems,
+        contests: _controller.state.contests,
+        teammates: _controller.state.teammates,
       );
       if (!context.mounted) {
         return;
@@ -477,6 +559,16 @@ class _OjFloatHomeState extends State<OjFloatHome>
           await windowManager.setSize(heatmapWindowSize, animate: true);
           break;
         case AppDisplayMode.problems:
+          await windowManager.setResizable(true);
+          await windowManager.setMinimumSize(heatmapMinimumWindowSize);
+          await windowManager.setSize(const Size(760, 620), animate: true);
+          break;
+        case AppDisplayMode.contests:
+          await windowManager.setResizable(true);
+          await windowManager.setMinimumSize(heatmapMinimumWindowSize);
+          await windowManager.setSize(const Size(760, 620), animate: true);
+          break;
+        case AppDisplayMode.teammates:
           await windowManager.setResizable(true);
           await windowManager.setMinimumSize(heatmapMinimumWindowSize);
           await windowManager.setSize(const Size(760, 620), animate: true);

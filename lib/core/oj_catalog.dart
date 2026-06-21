@@ -21,14 +21,14 @@ const supportedOjs = <OjMeta>[
   ),
   OjMeta(
     id: 'luogu',
-    name: '娲涜胺',
-    hint: '鏁板瓧 UID',
+    name: '洛谷',
+    hint: '用户名 / UID',
     profileBaseUrl: 'https://www.luogu.com.cn/user/',
   ),
   OjMeta(
     id: 'nowcoder',
-    name: '鐗涘',
-    hint: '鏁板瓧鐢ㄦ埛 ID',
+    name: '牛客',
+    hint: '用户名 / 用户 ID',
     profileBaseUrl: 'https://www.nowcoder.com/users/',
   ),
 ];

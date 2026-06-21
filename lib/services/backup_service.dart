@@ -6,9 +6,11 @@ import 'package:path_provider/path_provider.dart';
 
 import '../core/oj_catalog.dart';
 import '../models/app_config.dart';
+import '../models/contest_record.dart';
 import '../models/fetch_result.dart';
 import '../models/problem_record.dart';
 import '../models/solved_snapshot.dart';
+import '../models/teammate.dart';
 import 'daily_summary_service.dart';
 
 class ExportResult {
@@ -34,17 +36,23 @@ class ParsedPortableBackup {
     required this.config,
     required this.snapshots,
     required this.problems,
+    required this.contests,
+    required this.teammates,
   });
 
   final AppConfig config;
   final List<SolvedSnapshot> snapshots;
   final List<ProblemRecord> problems;
+  final List<ContestRecord> contests;
+  final TeammateStoreData teammates;
 }
 
 Future<ExportResult> exportOjData({
   required AppConfig config,
   required List<SolvedSnapshot> snapshots,
   List<ProblemRecord> problems = const [],
+  List<ContestRecord> contests = const [],
+  TeammateStoreData teammates = const TeammateStoreData(),
   DateTime? now,
   Directory? directory,
   String prefix = 'oj_float_backup',
@@ -68,6 +76,8 @@ Future<ExportResult> exportOjData({
       config: config,
       snapshots: snapshots,
       problems: problems,
+      contests: contests,
+      teammates: teammates,
       exportedAt: exportTime,
     ),
   );
@@ -99,6 +109,8 @@ String buildPortableBackupJson({
   required AppConfig config,
   required List<SolvedSnapshot> snapshots,
   List<ProblemRecord> problems = const [],
+  List<ContestRecord> contests = const [],
+  TeammateStoreData teammates = const TeammateStoreData(),
   required DateTime exportedAt,
 }) {
   return const JsonEncoder.withIndent('  ').convert(
@@ -110,6 +122,8 @@ String buildPortableBackupJson({
       'config': buildPortableConfigJson(config),
       'snapshots': snapshots.map((snapshot) => snapshot.toJson()).toList(),
       'problems': problems.map((problem) => problem.toStorageJson()).toList(),
+      'contests': contests.map((contest) => contest.toStorageJson()).toList(),
+      'teammates': trimTeammateStoreData(teammates, now: exportedAt).toJson(),
       'dailyStats': buildDailyStatsJson(snapshots),
     },
   );
@@ -179,10 +193,54 @@ ParsedPortableBackup parsePortableBackupJson(String jsonText) {
   }
   problems.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
+  final rawContests = data['contests'];
+  final contests = <ContestRecord>[];
+  if (rawContests != null) {
+    if (rawContests is! List) {
+      throw const FormatException('Backup contests must be an array.');
+    }
+    for (final item in rawContests) {
+      try {
+        if (item is! Map) {
+          continue;
+        }
+        final contest = ContestRecord.tryFromJson(
+          Map<String, dynamic>.from(item),
+        );
+        if (contest != null) {
+          contests.add(contest);
+        }
+      } catch (_) {
+        continue;
+      }
+    }
+  }
+  contests.sort((a, b) {
+    final byDate = b.date.compareTo(a.date);
+    if (byDate != 0) {
+      return byDate;
+    }
+    return b.updatedAt.compareTo(a.updatedAt);
+  });
+
+  final rawTeammates = data['teammates'];
+  var teammates = const TeammateStoreData();
+  if (rawTeammates != null) {
+    if (rawTeammates is! Map) {
+      throw const FormatException('Backup teammates must be an object.');
+    }
+    teammates = TeammateStoreData.tryFromJson(
+          Map<String, dynamic>.from(rawTeammates),
+        ) ??
+        const TeammateStoreData();
+  }
+
   return ParsedPortableBackup(
     config: AppConfig.fromPortableJson(Map<String, dynamic>.from(rawConfig)),
     snapshots: List.unmodifiable(snapshots),
     problems: List.unmodifiable(problems),
+    contests: List.unmodifiable(contests),
+    teammates: teammates,
   );
 }
 

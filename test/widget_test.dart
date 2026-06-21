@@ -62,6 +62,17 @@ void main() {
     expect(find.byKey(const ValueKey('import-backup-button')), findsOneWidget);
   });
 
+  testWidgets('dashboard shows a secondary teammates entry', (tester) async {
+    await tester.pumpWidget(buildTestApp());
+
+    await tester.tap(find.byKey(const ValueKey('open-dashboard-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('队友观察'), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('teammates-entry-button')), findsOneWidget);
+  });
+
   testWidgets('heatmap entry opens the heatmap page', (tester) async {
     await tester.pumpWidget(buildTestApp());
 
@@ -93,6 +104,55 @@ void main() {
 
     expect(find.byKey(const ValueKey('problems-page')), findsOneWidget);
     expect(find.byKey(const ValueKey('add-problem-button')), findsOneWidget);
+  });
+
+  testWidgets('teammates entry opens empty teammates page', (tester) async {
+    await tester.pumpWidget(buildTestApp());
+
+    await tester.tap(find.byKey(const ValueKey('open-dashboard-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('teammates-entry-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('teammates-page')), findsOneWidget);
+    expect(find.byKey(const ValueKey('add-teammate-button')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('refresh-teammates-button')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('今日统计从 04:00 开始'), findsOneWidget);
+    expect(find.text('还没有队友，先添加一个公开账号吧。'), findsOneWidget);
+  });
+
+  testWidgets('teammates page disables add button at max count',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TeammatesPage(
+          data: TeammateStoreData(
+            profiles: [
+              _teammate('a', 'Ann'),
+              _teammate('b', 'Bob'),
+              _teammate('c', 'Cal'),
+            ],
+          ),
+          todayRanking: const [],
+          recentRankings: const [],
+          refreshing: false,
+          onBack: () {},
+          onSave: (_) async {},
+          onDelete: (_) async {},
+          onRefreshAll: () async {},
+          onRefreshOne: (_) async {},
+        ),
+      ),
+    );
+
+    final addButton = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('add-teammate-button')),
+    );
+    expect(addButton.onPressed, isNull);
+    expect(find.text('最多添加 3 名队友'), findsOneWidget);
   });
 
   testWidgets('problems page manual form saves', (tester) async {
@@ -214,4 +274,15 @@ void main() {
 
     expect(opened, ['https://www.luogu.com.cn/problem/P1001']);
   });
+}
+
+TeammateProfile _teammate(String id, String nickname) {
+  return TeammateProfile.create(
+    id: id,
+    nickname: nickname,
+    accounts: const [
+      TeammateAccount(platform: 'codeforces', handle: 'alice'),
+    ],
+    now: DateTime.parse('2026-07-10T12:00:00'),
+  );
 }

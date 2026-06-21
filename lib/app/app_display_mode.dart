@@ -1,1 +1,8 @@
-enum AppDisplayMode { compact, dashboard, heatmap, problems }
+enum AppDisplayMode {
+  compact,
+  dashboard,
+  heatmap,
+  problems,
+  contests,
+  teammates
+}

@@ -6,8 +6,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/app_config.dart';
+import '../models/contest_record.dart';
 import '../models/problem_record.dart';
 import '../models/solved_snapshot.dart';
+import '../models/teammate.dart';
 
 class LocalStore {
   LocalStore({Directory? supportDirectory})
@@ -16,6 +18,8 @@ class LocalStore {
   static const _configKey = 'app_config_v1';
   static const _snapshotsFile = 'snapshots_v1.json';
   static const _problemsFile = 'problems_v1.json';
+  static const _contestsFile = 'contests_v1.json';
+  static const _teammatesFile = 'teammates_v1.json';
 
   final Directory? _supportDirectory;
 
@@ -155,6 +159,95 @@ class LocalStore {
   Future<void> replaceProblems(List<ProblemRecord> problems) =>
       saveProblems(problems);
 
+  Future<List<ContestRecord>> loadContests() async {
+    final file = await _contestsFileHandle();
+    if (!await file.exists()) {
+      return [];
+    }
+    try {
+      final data = jsonDecode(await file.readAsString());
+      if (data is! List) {
+        debugPrint('Invalid contests JSON: expected a list.');
+        return [];
+      }
+      final contests = <ContestRecord>[];
+      for (final item in data) {
+        try {
+          if (item is! Map) {
+            debugPrint('Skipping invalid contest: expected an object.');
+            continue;
+          }
+          final contest = ContestRecord.tryFromJson(
+            Map<String, dynamic>.from(item),
+          );
+          if (contest == null) {
+            debugPrint('Skipping invalid contest entry.');
+            continue;
+          }
+          contests.add(contest);
+        } catch (_) {
+          debugPrint('Skipping invalid contest entry.');
+        }
+      }
+      contests.sort((a, b) {
+        final byDate = b.date.compareTo(a.date);
+        if (byDate != 0) {
+          return byDate;
+        }
+        return b.updatedAt.compareTo(a.updatedAt);
+      });
+      return List.unmodifiable(contests);
+    } catch (_) {
+      debugPrint('Failed to parse contests. Using an empty list.');
+      return [];
+    }
+  }
+
+  Future<void> saveContests(List<ContestRecord> contests) async {
+    final file = await _contestsFileHandle();
+    await file.parent.create(recursive: true);
+    await file.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(
+        contests.map((item) => item.toStorageJson()).toList(),
+      ),
+    );
+  }
+
+  Future<void> replaceContests(List<ContestRecord> contests) =>
+      saveContests(contests);
+
+  Future<TeammateStoreData> loadTeammates() async {
+    final file = await _teammatesFileHandle();
+    if (!await file.exists()) {
+      return const TeammateStoreData();
+    }
+    try {
+      final data = jsonDecode(await file.readAsString());
+      if (data is! Map) {
+        debugPrint('Invalid teammates JSON: expected an object.');
+        return const TeammateStoreData();
+      }
+      return TeammateStoreData.tryFromJson(Map<String, dynamic>.from(data)) ??
+          const TeammateStoreData();
+    } catch (_) {
+      debugPrint('Failed to parse teammates. Using an empty list.');
+      return const TeammateStoreData();
+    }
+  }
+
+  Future<void> saveTeammates(TeammateStoreData teammates) async {
+    final file = await _teammatesFileHandle();
+    await file.parent.create(recursive: true);
+    await file.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(
+        trimTeammateStoreData(teammates).toJson(),
+      ),
+    );
+  }
+
+  Future<void> replaceTeammates(TeammateStoreData teammates) =>
+      saveTeammates(teammates);
+
   Future<File> _snapshotFile() async {
     final directory =
         _supportDirectory ?? await getApplicationSupportDirectory();
@@ -165,5 +258,17 @@ class LocalStore {
     final directory =
         _supportDirectory ?? await getApplicationSupportDirectory();
     return File('${directory.path}${Platform.pathSeparator}$_problemsFile');
+  }
+
+  Future<File> _contestsFileHandle() async {
+    final directory =
+        _supportDirectory ?? await getApplicationSupportDirectory();
+    return File('${directory.path}${Platform.pathSeparator}$_contestsFile');
+  }
+
+  Future<File> _teammatesFileHandle() async {
+    final directory =
+        _supportDirectory ?? await getApplicationSupportDirectory();
+    return File('${directory.path}${Platform.pathSeparator}$_teammatesFile');
   }
 }

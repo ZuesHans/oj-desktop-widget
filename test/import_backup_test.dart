@@ -22,19 +22,27 @@ void main() {
     expect(backup.config.accounts['codeforces']!.usernames, ['alice']);
     expect(backup.snapshots, hasLength(1));
     expect(backup.problems, isEmpty);
+    expect(backup.contests, isEmpty);
   });
 
-  test('backup problems are optional and parsed when present', () {
+  test('backup problems and contests are optional and parsed when present', () {
     final oldBackup = parsePortableBackupJson(_backupJson());
     expect(oldBackup.problems, isEmpty);
+    expect(oldBackup.contests, isEmpty);
 
     final backup = parsePortableBackupJson(_backupJson(
       problems: [
         _problem().toStorageJson(),
         {'id': 'broken'}
       ],
+      contests: [
+        _contest(id: 'contest-new').toStorageJson(),
+        {'id': 'broken'}
+      ],
     ));
     expect(backup.problems, hasLength(1));
+    expect(backup.contests, hasLength(1));
+    expect(backup.contests.single.id, 'contest-new');
     expect(backup.problems.single.tags, ['贪心', '构造']);
   });
 
@@ -113,6 +121,8 @@ void main() {
         _snapshot('2026-06-15', 'old-user', 1),
       ]);
       await store.replaceProblems([_problem(id: 'old-problem')]);
+      await store.replaceContests([_contest(id: 'old-contest')]);
+      await store.replaceContests([_contest(id: 'old-contest')]);
 
       final controller = OjController(
         storage: store,
@@ -127,6 +137,7 @@ void main() {
         config: _portableConfig('new-user'),
         snapshots: [_snapshotJson('2026-06-16', 'new-user', 7)],
         problems: [_problem(id: 'new-problem').toStorageJson()],
+        contests: [_contest(id: 'new-contest').toStorageJson()],
         dailyStats: [
           {'date': '2026-01-01', 'totalDelta': 123, 'active': true},
         ],
@@ -139,6 +150,7 @@ void main() {
       final loadedConfig = await store.loadConfig();
       final loadedSnapshots = await store.loadSnapshots();
       final loadedProblems = await store.loadProblems();
+      final loadedContests = await store.loadContests();
 
       expect(result.safetyBackupFile.path,
           contains('oj_float_pre_import_backup_'));
@@ -149,6 +161,7 @@ void main() {
       expect(loadedSnapshots, hasLength(1));
       expect(loadedSnapshots.single.username, 'new-user');
       expect(loadedProblems.map((item) => item.id), ['new-problem']);
+      expect(loadedContests.map((item) => item.id), ['new-contest']);
       expect(controller.state.todaySummary.totalDelta, 0);
     } finally {
       await directory.delete(recursive: true);
@@ -165,6 +178,7 @@ void main() {
         _snapshot('2026-06-15', 'old-user', 1),
       ]);
       await store.replaceProblems([_problem(id: 'old-problem')]);
+      await store.replaceContests([_contest(id: 'old-contest')]);
 
       final controller = OjController(
         storage: store,
@@ -179,6 +193,7 @@ void main() {
         config: _portableConfig('new-user'),
         snapshots: [_snapshotJson('2026-06-16', 'new-user', 7)],
         problems: [_problem(id: 'new-problem').toStorageJson()],
+        contests: [_contest(id: 'new-contest').toStorageJson()],
       ));
 
       store.failNextReplace = true;
@@ -193,11 +208,13 @@ void main() {
       final loadedConfig = await store.loadConfig();
       final loadedSnapshots = await store.loadSnapshots();
       final loadedProblems = await store.loadProblems();
+      final loadedContests = await store.loadContests();
 
       expect(loadedConfig.accounts['codeforces']!.usernames, ['old-user']);
       expect(loadedSnapshots, hasLength(1));
       expect(loadedSnapshots.single.username, 'old-user');
       expect(loadedProblems.map((item) => item.id), ['old-problem']);
+      expect(loadedContests.map((item) => item.id), ['old-contest']);
     } finally {
       await directory.delete(recursive: true);
     }
@@ -214,6 +231,7 @@ String _backupJson({
   List<Object?> snapshots = const [],
   List<Object?> dailyStats = const [],
   List<Object?>? problems,
+  List<Object?>? contests,
 }) {
   return jsonEncode({
     'schemaVersion': schemaVersion,
@@ -223,6 +241,7 @@ String _backupJson({
     'config': config ?? _portableConfig('alice'),
     'snapshots': snapshots,
     if (problems != null) 'problems': problems,
+    if (contests != null) 'contests': contests,
     'dailyStats': dailyStats,
   });
 }
@@ -297,5 +316,18 @@ ProblemRecord _problem({String id = 'lxyz123abc'}) {
     tags: const ['贪心', '构造'],
     date: '2026-06-21',
     now: DateTime.parse('2026-06-21T12:00:00'),
+  );
+}
+
+ContestRecord _contest({String id = 'contest-a'}) {
+  return ContestRecord.create(
+    id: id,
+    title: 'Summer Training Day 1',
+    date: '2026-07-01',
+    rank: 3,
+    totalParticipants: 42,
+    solvedCount: 5,
+    penalty: 712,
+    now: DateTime.parse('2026-07-01T12:00:00'),
   );
 }

@@ -1,9 +1,11 @@
 import '../core/time.dart';
 import '../services/daily_summary_service.dart';
 import 'app_config.dart';
+import 'contest_record.dart';
 import 'fetch_result.dart';
 import 'problem_record.dart';
 import 'solved_snapshot.dart';
+import 'teammate.dart';
 
 class OjState {
   const OjState({
@@ -11,6 +13,8 @@ class OjState {
     required this.latest,
     required this.snapshots,
     required this.problems,
+    required this.contests,
+    required this.teammates,
     required this.todaySummary,
   });
 
@@ -21,6 +25,8 @@ class OjState {
       latest: const {},
       snapshots: const [],
       problems: const [],
+      contests: const [],
+      teammates: const TeammateStoreData(),
       todaySummary: DailySummary.empty(today),
     );
   }
@@ -29,6 +35,8 @@ class OjState {
   final Map<String, List<FetchResult>> latest;
   final List<SolvedSnapshot> snapshots;
   final List<ProblemRecord> problems;
+  final List<ContestRecord> contests;
+  final TeammateStoreData teammates;
   final DailySummary todaySummary;
 
   OjState copyWith({
@@ -36,6 +44,8 @@ class OjState {
     Map<String, List<FetchResult>>? latest,
     List<SolvedSnapshot>? snapshots,
     List<ProblemRecord>? problems,
+    List<ContestRecord>? contests,
+    TeammateStoreData? teammates,
     DailySummary? todaySummary,
   }) {
     return OjState(
@@ -43,6 +53,8 @@ class OjState {
       latest: latest ?? this.latest,
       snapshots: snapshots ?? this.snapshots,
       problems: problems ?? this.problems,
+      contests: contests ?? this.contests,
+      teammates: teammates ?? this.teammates,
       todaySummary: todaySummary ?? this.todaySummary,
     );
   }
