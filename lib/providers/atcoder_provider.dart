@@ -21,6 +21,7 @@ class AtCoderProvider implements OjProvider {
     return OjProfile(
       solvedCount: count,
       profileUrl: 'https://atcoder.jp/users/$username',
+      source: 'kenkoooo_ac_rank',
     );
   }
 }

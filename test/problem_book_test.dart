@@ -157,9 +157,27 @@ void main() {
       service.filter(problems, status: ProblemStatus.AC).map((item) => item.id),
       ['b'],
     );
+    expect(
+      service.filter(problems, tag: first.tags.single).map((item) => item.id),
+      ['a'],
+    );
 
     problems = service.remove(problems, 'b');
     expect(problems.map((item) => item.id), ['a']);
+  });
+
+  test('tag stats count total and pending problems', () {
+    final stats = buildProblemTagStats([
+      _problem(id: 'a', status: ProblemStatus.TODO, tags: const ['DP']),
+      _problem(id: 'b', status: ProblemStatus.AC, tags: const ['dp']),
+      _problem(id: 'c', status: ProblemStatus.REVIEW, tags: const ['Graph']),
+    ]);
+
+    expect(stats.map((item) => item.tag), ['DP', 'Graph']);
+    expect(stats.first.total, 2);
+    expect(stats.first.pending, 1);
+    expect(stats.last.total, 1);
+    expect(stats.last.pending, 1);
   });
 }
 

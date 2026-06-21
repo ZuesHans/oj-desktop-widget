@@ -35,6 +35,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
   final TextEditingController _queryController = TextEditingController();
   ProblemStatus? _statusFilter;
   ProblemPlatform? _platformFilter;
+  String? _tagFilter;
   String _query = '';
 
   @override
@@ -49,6 +50,11 @@ class _ProblemsPageState extends State<ProblemsPage> {
       widget.problems,
       query: _query,
       status: _statusFilter,
+      platform: _platformFilter,
+      tag: _tagFilter,
+    );
+    final tagStats = buildProblemTagStats(
+      widget.problems,
       platform: _platformFilter,
     );
     final pending = widget.problems
@@ -155,12 +161,45 @@ class _ProblemsPageState extends State<ProblemsPage> {
                                 child: Text(problemPlatformLabel(platform)),
                               ),
                           ],
-                          onChanged: (value) =>
-                              setState(() => _platformFilter = value),
+                          onChanged: (value) => setState(() {
+                            _platformFilter = value;
+                            _tagFilter = null;
+                          }),
                         ),
                       ),
                     ],
                   ),
+                  if (tagStats.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final stat in tagStats.take(12))
+                            _TagStatChip(
+                              stat: stat,
+                              selected: stat.tag.toLowerCase() ==
+                                  _tagFilter?.toLowerCase(),
+                              onTap: () => setState(() {
+                                final selected = stat.tag.toLowerCase() ==
+                                    _tagFilter?.toLowerCase();
+                                _tagFilter = selected ? null : stat.tag;
+                              }),
+                            ),
+                          if (_tagFilter != null)
+                            ActionChip(
+                              key: const ValueKey('clear-tag-filter-chip'),
+                              avatar: const Icon(Icons.close, size: 16),
+                              label: const Text('清除标签'),
+                              onPressed: () =>
+                                  setState(() => _tagFilter = null),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -371,6 +410,29 @@ class _ProblemListItem extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _TagStatChip extends StatelessWidget {
+  const _TagStatChip({
+    required this.stat,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ProblemTagStat stat;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilterChip(
+      key: ValueKey('problem-tag-filter-${stat.tag}'),
+      selected: selected,
+      label: Text('${stat.tag} ${stat.total}'),
+      tooltip: '未 AC ${stat.pending} / 总数 ${stat.total}',
+      onSelected: (_) => onTap(),
     );
   }
 }

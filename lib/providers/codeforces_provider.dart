@@ -36,6 +36,7 @@ class CodeforcesProvider implements OjProvider {
         solvedCount: solvedCount,
         profileUrl: profileUrl,
         rating: rating,
+        source: 'ojhunt',
       );
     } catch (_) {
       // Match oj_helper's primary Codeforces solved-count source. Keep the
@@ -49,6 +50,7 @@ class CodeforcesProvider implements OjProvider {
         solvedCount: solvedCount,
         profileUrl: profileUrl,
         rating: rating,
+        source: 'codeforces_user_status',
       );
     } catch (_) {
       // Fall back to the public profile HTML as a last resort.
@@ -68,6 +70,7 @@ class CodeforcesProvider implements OjProvider {
           solvedCount: solvedCount,
           profileUrl: profileUrl,
           rating: rating,
+          source: 'profile_html',
         );
       }
     } catch (_) {

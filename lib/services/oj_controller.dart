@@ -9,8 +9,10 @@ import '../core/solved_totals.dart';
 import '../core/time.dart';
 import '../models/app_config.dart';
 import '../models/contest_record.dart';
+import '../models/fetch_result.dart';
 import '../models/oj_state.dart';
 import '../models/problem_record.dart';
+import '../models/refresh_log_entry.dart';
 import '../models/solved_snapshot.dart';
 import '../models/teammate.dart';
 import '../platform/startup_service.dart';
@@ -52,12 +54,14 @@ class OjController extends ChangeNotifier {
   Future<void> init() async {
     final config = await storage.loadConfig();
     final snapshots = await storage.loadSnapshots();
+    final refreshLogs = await storage.loadRefreshLogs();
     final problems = await storage.loadProblems();
     final contests = await storage.loadContests();
     final teammates = await storage.loadTeammates();
     state = state.copyWith(
       config: config,
       snapshots: snapshots,
+      refreshLogs: refreshLogs,
       problems: problems,
       contests: contests,
       teammates: teammates,
@@ -136,6 +140,7 @@ class OjController extends ChangeNotifier {
     state = state.copyWith(
       config: await storage.loadConfig(),
       snapshots: await storage.loadSnapshots(),
+      refreshLogs: await storage.loadRefreshLogs(),
       problems: await storage.loadProblems(),
       contests: await storage.loadContests(),
       teammates: await storage.loadTeammates(),
@@ -164,20 +169,162 @@ class OjController extends ChangeNotifier {
     notifyListeners();
     try {
       final results = await service.refresh(state.config);
+      final guarded = _applyRefreshGuard(results, state.snapshots);
       final snapshots = [
         ...state.snapshots,
-        ...results.values
+        ...guarded.results.values
             .expand((items) => items)
+            .where((result) => result.status == FetchStatus.success)
             .map(SolvedSnapshot.fromResult),
       ];
+      final refreshLogs = _trimRefreshLogs([
+        ...guarded.logs,
+        ...state.refreshLogs,
+      ]);
       await storage.saveSnapshots(snapshots);
-      state = state.copyWith(latest: results, snapshots: snapshots);
+      await storage.saveRefreshLogs(refreshLogs);
+      state = state.copyWith(
+        latest: guarded.results,
+        snapshots: snapshots,
+        refreshLogs: refreshLogs,
+      );
       _recomputeSummaries();
     } finally {
       refreshing = false;
       notifyListeners();
     }
   }
+
+  _GuardedRefresh _applyRefreshGuard(
+    Map<String, List<FetchResult>> results,
+    List<SolvedSnapshot> snapshots,
+  ) {
+    final latestSuccess = _latestSuccessByAccount(snapshots);
+    final guardedResults = <String, List<FetchResult>>{};
+    final logs = <RefreshLogEntry>[];
+
+    for (final entry in results.entries) {
+      final guardedItems = <FetchResult>[];
+      for (final result in entry.value) {
+        final fetchedAt = result.fetchedAt ?? DateTime.now();
+        final key = _accountKey(result.ojId, result.username);
+        final previous = latestSuccess[key]?.solvedCount;
+        if (result.status == FetchStatus.success &&
+            result.solvedCount != null &&
+            previous != null &&
+            previous > 0 &&
+            result.solvedCount! <= 0) {
+          final message = '本次刷新返回 0，低于历史值 $previous，已保留旧数据。';
+          final blocked = FetchResult.failure(
+            ojId: result.ojId,
+            username: result.username,
+            error: message,
+            fetchedAt: fetchedAt,
+            source: result.source,
+            solvedCount: result.solvedCount,
+            previousSolvedCount: previous,
+          );
+          guardedItems.add(blocked);
+          logs.add(_logFromResult(blocked, RefreshLogStatus.blocked, message));
+          continue;
+        }
+        if (result.status == FetchStatus.success &&
+            result.solvedCount != null &&
+            previous != null &&
+            result.solvedCount! < previous) {
+          final message =
+              '本次刷新结果 ${result.solvedCount} 低于历史值 $previous，已保留旧数据。';
+          final blocked = FetchResult.failure(
+            ojId: result.ojId,
+            username: result.username,
+            error: message,
+            fetchedAt: fetchedAt,
+            source: result.source,
+            solvedCount: result.solvedCount,
+            previousSolvedCount: previous,
+          );
+          guardedItems.add(blocked);
+          logs.add(_logFromResult(blocked, RefreshLogStatus.blocked, message));
+          continue;
+        }
+
+        final enriched = result.copyWith(previousSolvedCount: previous);
+        guardedItems.add(enriched);
+        final logStatus = enriched.status == FetchStatus.success
+            ? _successLogStatus(enriched.source)
+            : RefreshLogStatus.failure;
+        logs.add(
+          _logFromResult(
+            enriched,
+            logStatus,
+            enriched.status == FetchStatus.success
+                ? '刷新成功'
+                : enriched.error ?? '刷新失败',
+          ),
+        );
+      }
+      guardedResults[entry.key] = List.unmodifiable(guardedItems);
+    }
+
+    return _GuardedRefresh(
+      results: Map.unmodifiable(guardedResults),
+      logs: List.unmodifiable(logs),
+    );
+  }
+
+  Map<String, SolvedSnapshot> _latestSuccessByAccount(
+    List<SolvedSnapshot> snapshots,
+  ) {
+    final latest = <String, SolvedSnapshot>{};
+    for (final snapshot in snapshots) {
+      if (snapshot.status != FetchStatus.success ||
+          snapshot.solvedCount == null) {
+        continue;
+      }
+      final key = _accountKey(snapshot.ojId, snapshot.username);
+      final current = latest[key];
+      if (current == null || snapshot.fetchedAt.isAfter(current.fetchedAt)) {
+        latest[key] = snapshot;
+      }
+    }
+    return latest;
+  }
+
+  RefreshLogStatus _successLogStatus(String source) {
+    return source == 'unknown' ||
+            source == 'primary' ||
+            source == 'ojhunt' ||
+            source == 'kenkoooo_ac_rank' ||
+            source == 'leetcode_graphql' ||
+            source == 'luogu_profile_html'
+        ? RefreshLogStatus.success
+        : RefreshLogStatus.fallbackSuccess;
+  }
+
+  RefreshLogEntry _logFromResult(
+    FetchResult result,
+    RefreshLogStatus status,
+    String message,
+  ) {
+    return RefreshLogEntry.create(
+      fetchedAt: result.fetchedAt ?? DateTime.now(),
+      ojId: result.ojId,
+      username: result.username,
+      status: status,
+      source: result.source,
+      solvedCount: result.solvedCount,
+      previousSolvedCount: result.previousSolvedCount,
+      message: message,
+    );
+  }
+
+  List<RefreshLogEntry> _trimRefreshLogs(List<RefreshLogEntry> logs) {
+    final sorted = [...logs]
+      ..sort((a, b) => b.fetchedAt.compareTo(a.fetchedAt));
+    return List.unmodifiable(sorted.take(200).toList());
+  }
+
+  String _accountKey(String ojId, String username) => '$ojId\n$username';
 
   Future<void> maybeAutoRefreshTeammates() async {
     if (state.teammates.profiles.isEmpty ||
@@ -321,4 +468,11 @@ class OjController extends ChangeNotifier {
     teammateService.dispose();
     super.dispose();
   }
+}
+
+class _GuardedRefresh {
+  const _GuardedRefresh({required this.results, required this.logs});
+
+  final Map<String, List<FetchResult>> results;
+  final List<RefreshLogEntry> logs;
 }

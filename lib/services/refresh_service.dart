@@ -47,6 +47,7 @@ class RefreshService {
           solvedCount: profile.solvedCount,
           rating: profile.rating,
           profileUrl: profile.profileUrl,
+          source: profile.source,
           fetchedAt: DateTime.now(),
         ),
       );

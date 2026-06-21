@@ -51,6 +51,7 @@ query userSessionProgress(\$username: String!) {
     return OjProfile(
       solvedCount: all['count'] as int? ?? 0,
       profileUrl: 'https://leetcode.com/$username/',
+      source: 'leetcode_graphql',
     );
   }
 }

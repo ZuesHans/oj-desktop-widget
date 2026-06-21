@@ -23,6 +23,7 @@ class LuoguProvider implements OjProvider {
     return OjProfile(
       solvedCount: parseLuoguSolvedCount(response.body),
       profileUrl: uri.toString(),
+      source: 'luogu_profile_html',
     );
   }
 }

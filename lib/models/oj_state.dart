@@ -4,6 +4,7 @@ import 'app_config.dart';
 import 'contest_record.dart';
 import 'fetch_result.dart';
 import 'problem_record.dart';
+import 'refresh_log_entry.dart';
 import 'solved_snapshot.dart';
 import 'teammate.dart';
 
@@ -15,6 +16,7 @@ class OjState {
     required this.problems,
     required this.contests,
     required this.teammates,
+    required this.refreshLogs,
     required this.todaySummary,
   });
 
@@ -27,6 +29,7 @@ class OjState {
       problems: const [],
       contests: const [],
       teammates: const TeammateStoreData(),
+      refreshLogs: const [],
       todaySummary: DailySummary.empty(today),
     );
   }
@@ -37,6 +40,7 @@ class OjState {
   final List<ProblemRecord> problems;
   final List<ContestRecord> contests;
   final TeammateStoreData teammates;
+  final List<RefreshLogEntry> refreshLogs;
   final DailySummary todaySummary;
 
   OjState copyWith({
@@ -46,6 +50,7 @@ class OjState {
     List<ProblemRecord>? problems,
     List<ContestRecord>? contests,
     TeammateStoreData? teammates,
+    List<RefreshLogEntry>? refreshLogs,
     DailySummary? todaySummary,
   }) {
     return OjState(
@@ -55,6 +60,7 @@ class OjState {
       problems: problems ?? this.problems,
       contests: contests ?? this.contests,
       teammates: teammates ?? this.teammates,
+      refreshLogs: refreshLogs ?? this.refreshLogs,
       todaySummary: todaySummary ?? this.todaySummary,
     );
   }

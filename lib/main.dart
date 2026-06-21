@@ -20,6 +20,7 @@ export 'models/fetch_result.dart';
 export 'models/oj_meta.dart';
 export 'models/oj_state.dart';
 export 'models/problem_record.dart';
+export 'models/refresh_log_entry.dart';
 export 'models/solved_snapshot.dart';
 export 'models/teammate.dart';
 export 'platform/startup_service.dart';

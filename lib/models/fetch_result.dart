@@ -3,11 +3,13 @@ class OjProfile {
     required this.solvedCount,
     required this.profileUrl,
     this.rating,
+    this.source = 'unknown',
   });
 
   final int solvedCount;
   final int? rating;
   final String profileUrl;
+  final String source;
 }
 
 enum FetchStatus { idle, success, failure }
@@ -22,6 +24,8 @@ class FetchResult {
     this.rating,
     this.profileUrl,
     this.error,
+    this.source = 'unknown',
+    this.previousSolvedCount,
   });
 
   factory FetchResult.success({
@@ -31,6 +35,8 @@ class FetchResult {
     required DateTime fetchedAt,
     int? rating,
     String? profileUrl,
+    String source = 'unknown',
+    int? previousSolvedCount,
   }) {
     return FetchResult(
       ojId: ojId,
@@ -40,6 +46,8 @@ class FetchResult {
       rating: rating,
       profileUrl: profileUrl,
       fetchedAt: fetchedAt,
+      source: source,
+      previousSolvedCount: previousSolvedCount,
     );
   }
 
@@ -48,6 +56,9 @@ class FetchResult {
     required String username,
     required String error,
     required DateTime fetchedAt,
+    String source = 'unknown',
+    int? solvedCount,
+    int? previousSolvedCount,
   }) {
     return FetchResult(
       ojId: ojId,
@@ -55,6 +66,9 @@ class FetchResult {
       status: FetchStatus.failure,
       error: error,
       fetchedAt: fetchedAt,
+      source: source,
+      solvedCount: solvedCount,
+      previousSolvedCount: previousSolvedCount,
     );
   }
 
@@ -65,5 +79,30 @@ class FetchResult {
   final int? rating;
   final String? profileUrl;
   final String? error;
+  final String source;
+  final int? previousSolvedCount;
   final DateTime? fetchedAt;
+
+  FetchResult copyWith({
+    FetchStatus? status,
+    int? solvedCount,
+    int? rating,
+    String? profileUrl,
+    String? error,
+    String? source,
+    int? previousSolvedCount,
+  }) {
+    return FetchResult(
+      ojId: ojId,
+      username: username,
+      status: status ?? this.status,
+      fetchedAt: fetchedAt,
+      solvedCount: solvedCount ?? this.solvedCount,
+      rating: rating ?? this.rating,
+      profileUrl: profileUrl ?? this.profileUrl,
+      error: error ?? this.error,
+      source: source ?? this.source,
+      previousSolvedCount: previousSolvedCount ?? this.previousSolvedCount,
+    );
+  }
 }

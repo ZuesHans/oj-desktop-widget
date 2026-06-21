@@ -29,7 +29,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('OJ Float'), findsOneWidget);
-    expect(find.text('Codeforces'), findsOneWidget);
+    expect(find.byKey(const ValueKey('refresh-logs-entry-button')),
+        findsOneWidget);
     expect(find.byKey(const ValueKey('compact-mode-button')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('compact-mode-button')));
@@ -106,10 +107,35 @@ void main() {
     expect(find.byKey(const ValueKey('add-problem-button')), findsOneWidget);
   });
 
+  testWidgets('dashboard opens refresh logs page', (tester) async {
+    await tester.pumpWidget(buildTestApp());
+
+    await tester.tap(find.byKey(const ValueKey('open-dashboard-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('refresh-logs-entry-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('refresh-logs-page')), findsOneWidget);
+    expect(find.text('暂无刷新记录'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('refresh-logs-back-button')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('teammates entry opens empty teammates page', (tester) async {
     await tester.pumpWidget(buildTestApp());
 
     await tester.tap(find.byKey(const ValueKey('open-dashboard-button')));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('teammates-entry-button')),
+      120,
+    );
+    await Scrollable.ensureVisible(
+      tester.element(find.byKey(const ValueKey('teammates-entry-button'))),
+      alignment: 0.5,
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('teammates-entry-button')));
     await tester.pumpAndSettle();
@@ -238,6 +264,60 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('已标记 AC'), findsOneWidget);
+  });
+
+  testWidgets('problems page tag chips filter and clear', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProblemsPage(
+          problems: [
+            ProblemRecord.create(
+              id: 'p1',
+              title: 'Graph Problem',
+              url: 'https://www.luogu.com.cn/problem/P1001',
+              platform: ProblemPlatform.lg,
+              status: ProblemStatus.TODO,
+              tags: const ['Graph'],
+              now: DateTime.parse('2026-06-21T12:00:00'),
+            ),
+            ProblemRecord.create(
+              id: 'p2',
+              title: 'Greedy Problem',
+              url: 'https://codeforces.com/problemset/problem/1799/A',
+              platform: ProblemPlatform.cf,
+              status: ProblemStatus.AC,
+              tags: const ['Greedy'],
+              now: DateTime.parse('2026-06-21T12:01:00'),
+            ),
+          ],
+          onBack: () {},
+          onParseLink: (_) async => const ParsedProblemLink(
+            title: 'Todo Problem',
+            url: 'https://www.luogu.com.cn/problem/P1001',
+            platform: ProblemPlatform.lg,
+          ),
+          onSave: (_) async {},
+          onDelete: (_) async {},
+          onMarkAccepted: (_) async {},
+          onOpenProblem: (_) async {},
+        ),
+      ),
+    );
+
+    expect(find.text('Graph Problem'), findsOneWidget);
+    expect(find.text('Greedy Problem'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('problem-tag-filter-Graph')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Graph Problem'), findsOneWidget);
+    expect(find.text('Greedy Problem'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('clear-tag-filter-chip')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Graph Problem'), findsOneWidget);
+    expect(find.text('Greedy Problem'), findsOneWidget);
   });
 
   testWidgets('problems page opens problem URL', (tester) async {

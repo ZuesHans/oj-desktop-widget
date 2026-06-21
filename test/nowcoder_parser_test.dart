@@ -113,6 +113,7 @@ void main() {
     expect(requestedUri.path, '/api/crawlers/nowcoder/2468');
     expect(profile.solvedCount, 42);
     expect(profile.profileUrl, 'https://www.nowcoder.com/users/2468');
+    expect(profile.source, 'ojhunt');
   });
 
   test('provider falls back to profile parsing when OJ Hunt fails', () async {
@@ -132,6 +133,7 @@ void main() {
       'www.nowcoder.com',
     ]);
     expect(profile.solvedCount, 44);
+    expect(profile.source, 'profile_html');
   });
 
   test('provider reports both OJ Hunt and profile failures', () async {

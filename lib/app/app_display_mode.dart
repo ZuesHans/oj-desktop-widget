@@ -3,6 +3,7 @@ enum AppDisplayMode {
   dashboard,
   heatmap,
   problems,
+  refreshLogs,
   contests,
   teammates
 }

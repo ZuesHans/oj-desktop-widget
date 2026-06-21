@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/app_config.dart';
 import '../models/contest_record.dart';
 import '../models/problem_record.dart';
+import '../models/refresh_log_entry.dart';
 import '../models/solved_snapshot.dart';
 import '../models/teammate.dart';
 
@@ -20,6 +21,8 @@ class LocalStore {
   static const _problemsFile = 'problems_v1.json';
   static const _contestsFile = 'contests_v1.json';
   static const _teammatesFile = 'teammates_v1.json';
+  static const _refreshLogsFile = 'refresh_logs_v1.json';
+  static const _maxRefreshLogs = 200;
 
   final Directory? _supportDirectory;
 
@@ -104,6 +107,57 @@ class LocalStore {
     await file.writeAsString(
       const JsonEncoder.withIndent('  ').convert(
         snapshots.map((item) => item.toJson()).toList(),
+      ),
+    );
+  }
+
+  Future<List<RefreshLogEntry>> loadRefreshLogs() async {
+    final file = await _refreshLogsFileHandle();
+    if (!await file.exists()) {
+      return [];
+    }
+    try {
+      final data = jsonDecode(await file.readAsString());
+      if (data is! List) {
+        debugPrint('Invalid refresh logs JSON: expected a list.');
+        return [];
+      }
+      final entries = <RefreshLogEntry>[];
+      for (final item in data) {
+        try {
+          if (item is! Map) {
+            debugPrint('Skipping invalid refresh log: expected an object.');
+            continue;
+          }
+          final entry = RefreshLogEntry.tryFromJson(
+            Map<String, dynamic>.from(item),
+          );
+          if (entry == null) {
+            debugPrint('Skipping invalid refresh log entry.');
+            continue;
+          }
+          entries.add(entry);
+        } catch (_) {
+          debugPrint('Skipping invalid refresh log entry.');
+        }
+      }
+      entries.sort((a, b) => b.fetchedAt.compareTo(a.fetchedAt));
+      return List.unmodifiable(entries.take(_maxRefreshLogs).toList());
+    } catch (_) {
+      debugPrint('Failed to parse refresh logs. Using an empty list.');
+      return [];
+    }
+  }
+
+  Future<void> saveRefreshLogs(List<RefreshLogEntry> entries) async {
+    final file = await _refreshLogsFileHandle();
+    await file.parent.create(recursive: true);
+    final sorted = [...entries]
+      ..sort((a, b) => b.fetchedAt.compareTo(a.fetchedAt));
+    final kept = sorted.take(_maxRefreshLogs).toList();
+    await file.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(
+        kept.map((item) => item.toJson()).toList(),
       ),
     );
   }
@@ -275,5 +329,11 @@ class LocalStore {
     final directory =
         _supportDirectory ?? await getApplicationSupportDirectory();
     return File('${directory.path}${Platform.pathSeparator}$_teammatesFile');
+  }
+
+  Future<File> _refreshLogsFileHandle() async {
+    final directory =
+        _supportDirectory ?? await getApplicationSupportDirectory();
+    return File('${directory.path}${Platform.pathSeparator}$_refreshLogsFile');
   }
 }

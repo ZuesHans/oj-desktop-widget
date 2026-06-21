@@ -35,6 +35,8 @@ import '../heatmap/heatmap_entry_panel.dart';
 import '../heatmap/heatmap_page.dart';
 import '../problems/problems_entry_panel.dart';
 import '../problems/problems_page.dart';
+import '../refresh_logs/refresh_logs_entry_panel.dart';
+import '../refresh_logs/refresh_logs_page.dart';
 import '../settings/settings_dialog.dart';
 import '../teammates/teammates_entry_panel.dart';
 import '../teammates/teammates_page.dart';
@@ -265,6 +267,33 @@ class _OjFloatHomeState extends State<OjFloatHome>
           );
         }
 
+        if (_mode == AppDisplayMode.refreshLogs) {
+          return Scaffold(
+            backgroundColor: appSurfaceColor,
+            body: SafeArea(
+              child: Column(
+                children: [
+                  WindowHeader(
+                    refreshing: _controller.refreshing,
+                    onRefresh:
+                        _controller.refreshing ? null : _controller.refresh,
+                    onSettings: () => _openSettings(context),
+                    onCompact: () => _setMode(AppDisplayMode.compact),
+                    onMinimize: () => windowManager.minimize(),
+                    onExit: _exitApp,
+                  ),
+                  Expanded(
+                    child: RefreshLogsPage(
+                      logs: _controller.state.refreshLogs,
+                      onBack: () => _setMode(AppDisplayMode.dashboard),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
         if (_mode == AppDisplayMode.contests) {
           return Scaffold(
             backgroundColor: appSurfaceColor,
@@ -361,6 +390,11 @@ class _OjFloatHomeState extends State<OjFloatHome>
                       ProblemsEntryPanel(
                         problems: _controller.state.problems,
                         onOpen: () => _setMode(AppDisplayMode.problems),
+                      ),
+                      const SizedBox(height: 12),
+                      RefreshLogsEntryPanel(
+                        logs: _controller.state.refreshLogs,
+                        onOpen: () => _setMode(AppDisplayMode.refreshLogs),
                       ),
                       const SizedBox(height: 12),
                       ContestsEntryPanel(
@@ -561,6 +595,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
           await windowManager.setSize(heatmapWindowSize, animate: true);
           break;
         case AppDisplayMode.problems:
+        case AppDisplayMode.refreshLogs:
           await windowManager.setResizable(true);
           await windowManager.setMinimumSize(heatmapMinimumWindowSize);
           await windowManager.setSize(const Size(760, 620), animate: true);

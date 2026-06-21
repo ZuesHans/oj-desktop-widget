@@ -193,6 +193,7 @@ void main() {
     ]);
     expect(profile.solvedCount, 670);
     expect(profile.rating, 3900);
+    expect(profile.source, 'ojhunt');
   });
 
   test('provider falls back to official user.status when ojhunt fails',
@@ -246,5 +247,6 @@ void main() {
     ]);
     expect(profile.solvedCount, 1);
     expect(profile.rating, 3900);
+    expect(profile.source, 'codeforces_user_status');
   });
 }

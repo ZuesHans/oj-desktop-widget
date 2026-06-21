@@ -21,6 +21,7 @@ class NowcoderProvider implements OjProvider {
       return OjProfile(
         solvedCount: parseNowcoderOjhuntSolvedCount(data),
         profileUrl: profileUri.toString(),
+        source: 'ojhunt',
       );
     } catch (error) {
       ojhuntError = error;
@@ -35,6 +36,7 @@ class NowcoderProvider implements OjProvider {
       return OjProfile(
         solvedCount: parseNowcoderSolvedCount(response.body),
         profileUrl: profileUri.toString(),
+        source: 'profile_html',
       );
     } catch (error) {
       throw FetchException(

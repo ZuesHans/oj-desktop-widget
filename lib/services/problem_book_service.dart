@@ -54,12 +54,14 @@ class ProblemBookService {
     String query = '',
     ProblemStatus? status,
     ProblemPlatform? platform,
+    String? tag,
   }) {
     return filterProblems(
       problems,
       query: query,
       status: status,
       platform: platform,
+      tag: tag,
     );
   }
 
@@ -88,18 +90,37 @@ class ProblemBookService {
   void dispose() => client.close();
 }
 
+class ProblemTagStat {
+  const ProblemTagStat({
+    required this.tag,
+    required this.total,
+    required this.pending,
+  });
+
+  final String tag;
+  final int total;
+  final int pending;
+}
+
 List<ProblemRecord> filterProblems(
   List<ProblemRecord> problems, {
   String query = '',
   ProblemStatus? status,
   ProblemPlatform? platform,
+  String? tag,
 }) {
   final normalizedQuery = query.trim().toLowerCase();
+  final normalizedTag = tag?.trim().toLowerCase();
   return List.unmodifiable(problems.where((problem) {
     if (status != null && problem.status != status) {
       return false;
     }
     if (platform != null && problem.platform != platform) {
+      return false;
+    }
+    if (normalizedTag != null &&
+        normalizedTag.isNotEmpty &&
+        !problem.tags.any((item) => item.toLowerCase() == normalizedTag)) {
       return false;
     }
     if (normalizedQuery.isEmpty) {
@@ -114,6 +135,58 @@ List<ProblemRecord> filterProblems(
     ].join('\n').toLowerCase();
     return haystack.contains(normalizedQuery);
   }));
+}
+
+List<ProblemTagStat> buildProblemTagStats(
+  List<ProblemRecord> problems, {
+  ProblemPlatform? platform,
+}) {
+  final stats = <String, _MutableProblemTagStat>{};
+  for (final problem in problems) {
+    if (platform != null && problem.platform != platform) {
+      continue;
+    }
+    for (final tag in problem.tags) {
+      final key = tag.toLowerCase();
+      final stat = stats.putIfAbsent(
+        key,
+        () => _MutableProblemTagStat(tag),
+      );
+      stat.total += 1;
+      if (problem.status != ProblemStatus.AC) {
+        stat.pending += 1;
+      }
+    }
+  }
+  final result = stats.values
+      .map(
+        (stat) => ProblemTagStat(
+          tag: stat.label,
+          total: stat.total,
+          pending: stat.pending,
+        ),
+      )
+      .toList()
+    ..sort((a, b) {
+      final byPending = b.pending.compareTo(a.pending);
+      if (byPending != 0) {
+        return byPending;
+      }
+      final byTotal = b.total.compareTo(a.total);
+      if (byTotal != 0) {
+        return byTotal;
+      }
+      return a.tag.toLowerCase().compareTo(b.tag.toLowerCase());
+    });
+  return List.unmodifiable(result);
+}
+
+class _MutableProblemTagStat {
+  _MutableProblemTagStat(this.label);
+
+  final String label;
+  int total = 0;
+  int pending = 0;
 }
 
 Uri normalizeProblemUri(String input) {
