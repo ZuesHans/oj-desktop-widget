@@ -428,13 +428,12 @@ class TeammateStoreData {
       }
     }
 
-    final sanitized = TeammateStoreData(
+    return TeammateStoreData(
       profiles: List.unmodifiable(profiles),
       records: List.unmodifiable(records),
       snapshots: List.unmodifiable(snapshots),
       lastAutoRefreshTrainingDate: lastAutoRefreshTrainingDate as String?,
     );
-    return trimTeammateStoreData(sanitized, now: DateTime.now());
   }
 
   final List<TeammateProfile> profiles;

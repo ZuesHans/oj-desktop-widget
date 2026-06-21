@@ -218,6 +218,36 @@ void main() {
     final parsed = parsePortableBackupJson(jsonEncode(data));
     expect(parsed.teammates.profiles, isEmpty);
   });
+
+  test('backup import trims teammates by exportedAt instead of restore date',
+      () {
+    final exported = buildPortableBackupJson(
+      config: _config(),
+      snapshots: const [],
+      teammates: TeammateStoreData(
+        profiles: [_teammate('t1', 'Alice')],
+        records: [
+          _record('t1', '2026-07-10', 2),
+          _record('t1', '2026-07-03', 9),
+        ],
+        snapshots: [
+          _snapshot('t1', '2026-07-10'),
+          _snapshot('t1', '2026-07-03'),
+        ],
+      ),
+      exportedAt: DateTime.parse('2026-07-10T12:00:00'),
+    );
+
+    final parsed = parsePortableBackupJson(exported);
+
+    expect(parsed.teammates.records.map((record) => record.trainingDate), [
+      '2026-07-10',
+    ]);
+    expect(
+        parsed.teammates.snapshots.map((snapshot) => snapshot.trainingDate), [
+      '2026-07-10',
+    ]);
+  });
 }
 
 TeammateService _service(Map<String, OjProvider> providers) {

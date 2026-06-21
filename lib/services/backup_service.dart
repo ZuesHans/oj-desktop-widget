@@ -144,6 +144,9 @@ ParsedPortableBackup parsePortableBackupJson(String jsonText) {
   if (data['exportType'] != 'portable_backup') {
     throw const FormatException('Backup exportType is not portable_backup.');
   }
+  final exportedAt = data['exportedAt'];
+  final parsedExportedAt =
+      exportedAt is String ? DateTime.tryParse(exportedAt) : null;
   final rawConfig = data['config'];
   if (rawConfig is! Map) {
     throw const FormatException('Backup config is missing or invalid.');
@@ -233,6 +236,10 @@ ParsedPortableBackup parsePortableBackupJson(String jsonText) {
           Map<String, dynamic>.from(rawTeammates),
         ) ??
         const TeammateStoreData();
+    teammates = trimTeammateStoreData(
+      teammates,
+      now: parsedExportedAt ?? _latestTeammateDate(teammates),
+    );
   }
 
   return ParsedPortableBackup(
@@ -242,6 +249,17 @@ ParsedPortableBackup parsePortableBackupJson(String jsonText) {
     contests: List.unmodifiable(contests),
     teammates: teammates,
   );
+}
+
+DateTime _latestTeammateDate(TeammateStoreData teammates) {
+  final dates = <String>[
+    ...teammates.records.map((record) => record.trainingDate),
+    ...teammates.snapshots.map((snapshot) => snapshot.trainingDate),
+  ]..sort();
+  if (dates.isEmpty) {
+    return DateTime.now();
+  }
+  return DateTime.parse('${dates.last}T12:00:00');
 }
 
 Map<String, Object?> buildPortableConfigJson(AppConfig config) {

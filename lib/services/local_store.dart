@@ -245,8 +245,13 @@ class LocalStore {
     );
   }
 
-  Future<void> replaceTeammates(TeammateStoreData teammates) =>
-      saveTeammates(teammates);
+  Future<void> replaceTeammates(TeammateStoreData teammates) async {
+    final file = await _teammatesFileHandle();
+    await file.parent.create(recursive: true);
+    await file.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(teammates.toJson()),
+    );
+  }
 
   Future<File> _snapshotFile() async {
     final directory =

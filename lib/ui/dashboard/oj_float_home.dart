@@ -468,7 +468,8 @@ class _OjFloatHomeState extends State<OjFloatHome>
       builder: (_) => AlertDialog(
         title: const Text('Import Backup'),
         content: const Text(
-          'Import will replace current local config and snapshots. '
+          'Import will replace current local config, snapshots, problem book, '
+          'contest records, and teammate data. '
           'A safety backup will be created before import.',
         ),
         actions: [
@@ -504,8 +505,9 @@ class _OjFloatHomeState extends State<OjFloatHome>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Import completed. Current config and snapshots were replaced '
-            'from backup. Safety backup: ${result.safetyBackupFile.path}',
+            'Import completed. Local config, snapshots, problem book, '
+            'contest records, and teammate data were replaced from backup. '
+            'Safety backup: ${result.safetyBackupFile.path}',
           ),
         ),
       );
