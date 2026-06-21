@@ -66,6 +66,23 @@ void main() {
 
     expect(total, 7);
   });
+
+  test('blocked account displays retained solved count in totals', () {
+    final total = totalSolvedFromLatest({
+      'codeforces': [
+        FetchResult.failure(
+          ojId: 'codeforces',
+          username: 'a',
+          error: 'retained',
+          fetchedAt: DateTime.parse('2026-06-15T08:00:00'),
+          solvedCount: 0,
+          previousSolvedCount: 670,
+        ),
+      ],
+    });
+
+    expect(total, 670);
+  });
 }
 
 class _FakeProvider implements OjProvider {

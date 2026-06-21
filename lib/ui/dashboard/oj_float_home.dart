@@ -503,8 +503,9 @@ class _OjFloatHomeState extends State<OjFloatHome>
         title: const Text('Import Backup'),
         content: const Text(
           'Import will replace current local config, snapshots, problem book, '
-          'contest records, and teammate data. '
-          'A safety backup will be created before import.',
+          'contest records, and teammate data. Refresh logs are local-only '
+          'diagnostics and will be cleared after import. A safety backup will '
+          'be created before import.',
         ),
         actions: [
           TextButton(
@@ -541,6 +542,8 @@ class _OjFloatHomeState extends State<OjFloatHome>
           content: Text(
             'Import completed. Local config, snapshots, problem book, '
             'contest records, and teammate data were replaced from backup. '
+            'Refresh logs were cleared because they are not part of portable '
+            'backups. '
             'Safety backup: ${result.safetyBackupFile.path}',
           ),
         ),

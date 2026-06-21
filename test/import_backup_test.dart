@@ -122,7 +122,9 @@ void main() {
       ]);
       await store.replaceProblems([_problem(id: 'old-problem')]);
       await store.replaceContests([_contest(id: 'old-contest')]);
-      await store.replaceContests([_contest(id: 'old-contest')]);
+      await store.saveRefreshLogs([
+        _refreshLog(username: 'old-user'),
+      ]);
 
       final controller = OjController(
         storage: store,
@@ -151,6 +153,7 @@ void main() {
       final loadedSnapshots = await store.loadSnapshots();
       final loadedProblems = await store.loadProblems();
       final loadedContests = await store.loadContests();
+      final loadedRefreshLogs = await store.loadRefreshLogs();
 
       expect(result.safetyBackupFile.path,
           contains('oj_float_pre_import_backup_'));
@@ -162,6 +165,8 @@ void main() {
       expect(loadedSnapshots.single.username, 'new-user');
       expect(loadedProblems.map((item) => item.id), ['new-problem']);
       expect(loadedContests.map((item) => item.id), ['new-contest']);
+      expect(loadedRefreshLogs, isEmpty);
+      expect(controller.state.refreshLogs, isEmpty);
       expect(controller.state.todaySummary.totalDelta, 0);
     } finally {
       await directory.delete(recursive: true);
@@ -179,6 +184,9 @@ void main() {
       ]);
       await store.replaceProblems([_problem(id: 'old-problem')]);
       await store.replaceContests([_contest(id: 'old-contest')]);
+      await store.saveRefreshLogs([
+        _refreshLog(username: 'old-user'),
+      ]);
 
       final controller = OjController(
         storage: store,
@@ -209,12 +217,14 @@ void main() {
       final loadedSnapshots = await store.loadSnapshots();
       final loadedProblems = await store.loadProblems();
       final loadedContests = await store.loadContests();
+      final loadedRefreshLogs = await store.loadRefreshLogs();
 
       expect(loadedConfig.accounts['codeforces']!.usernames, ['old-user']);
       expect(loadedSnapshots, hasLength(1));
       expect(loadedSnapshots.single.username, 'old-user');
       expect(loadedProblems.map((item) => item.id), ['old-problem']);
       expect(loadedContests.map((item) => item.id), ['old-contest']);
+      expect(loadedRefreshLogs.map((item) => item.username), ['old-user']);
     } finally {
       await directory.delete(recursive: true);
     }
@@ -304,6 +314,18 @@ class _FailingReplaceStore extends LocalStore {
     }
     return super.replaceSnapshots(snapshots);
   }
+}
+
+RefreshLogEntry _refreshLog({String username = 'alice'}) {
+  return RefreshLogEntry.create(
+    fetchedAt: DateTime.parse('2026-06-15T08:00:00'),
+    ojId: 'codeforces',
+    username: username,
+    status: RefreshLogStatus.success,
+    source: 'primary',
+    message: 'ok',
+    solvedCount: 1,
+  );
 }
 
 ProblemRecord _problem({String id = 'lxyz123abc'}) {

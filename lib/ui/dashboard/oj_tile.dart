@@ -26,11 +26,10 @@ class OjTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = config?.enabled ?? false;
     final usernames = config?.usernames ?? const <String>[];
-    final hasSuccess =
-        results.any((result) => result.status == FetchStatus.success);
-    final successfulSolved = totalSolvedFromResults(results);
-    final solvedText = hasSuccess
-        ? '$successfulSolved'
+    final hasDisplayCount = results.any(hasDisplaySolvedCount);
+    final displayedSolved = totalSolvedFromResults(results);
+    final solvedText = hasDisplayCount
+        ? '$displayedSolved'
         : results.any((result) => result.status == FetchStatus.failure)
             ? 'Failed'
             : enabled && usernames.isNotEmpty
@@ -115,9 +114,10 @@ class _AccountResultLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final retained = retainedSolvedCountForResult(result);
     final statusText = switch (result.status) {
       FetchStatus.success => '${result.solvedCount ?? 0} (+$today)',
-      FetchStatus.failure => 'Failed',
+      FetchStatus.failure => retained == null ? 'Failed' : '$retained (保留)',
       FetchStatus.idle => 'Pending',
     };
     final color =

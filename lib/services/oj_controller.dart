@@ -104,6 +104,7 @@ class OjController extends ChangeNotifier {
     final previousProblems = state.problems;
     final previousContests = state.contests;
     final previousTeammates = state.teammates;
+    final previousRefreshLogs = state.refreshLogs;
     final safetyBackup = await exportOjData(
       config: state.config,
       snapshots: state.snapshots,
@@ -120,6 +121,7 @@ class OjController extends ChangeNotifier {
       await storage.replaceProblems(imported.problems);
       await storage.replaceContests(imported.contests);
       await storage.replaceTeammates(imported.teammates);
+      await storage.saveRefreshLogs(const []);
     } catch (error) {
       try {
         await storage.saveConfig(previousConfig);
@@ -127,6 +129,7 @@ class OjController extends ChangeNotifier {
         await storage.replaceProblems(previousProblems);
         await storage.replaceContests(previousContests);
         await storage.replaceTeammates(previousTeammates);
+        await storage.saveRefreshLogs(previousRefreshLogs);
       } catch (rollbackError) {
         throw FetchException(
           'Import failed and rollback failed: ${normalizeError(rollbackError)}',
@@ -140,7 +143,7 @@ class OjController extends ChangeNotifier {
     state = state.copyWith(
       config: await storage.loadConfig(),
       snapshots: await storage.loadSnapshots(),
-      refreshLogs: await storage.loadRefreshLogs(),
+      refreshLogs: const [],
       problems: await storage.loadProblems(),
       contests: await storage.loadContests(),
       teammates: await storage.loadTeammates(),

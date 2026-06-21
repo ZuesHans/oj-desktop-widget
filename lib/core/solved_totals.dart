@@ -12,9 +12,31 @@ int totalSolvedFromLatest(Map<String, List<FetchResult>> latest) {
 }
 
 int totalSolvedFromResults(Iterable<FetchResult> results) {
-  return results
-      .where((result) => result.status == FetchStatus.success)
-      .fold<int>(0, (sum, result) => sum + (result.solvedCount ?? 0));
+  return results.fold<int>(
+    0,
+    (sum, result) => sum + displaySolvedCountForResult(result),
+  );
+}
+
+bool hasDisplaySolvedCount(FetchResult result) {
+  return result.status == FetchStatus.success ||
+      retainedSolvedCountForResult(result) != null;
+}
+
+int displaySolvedCountForResult(FetchResult result) {
+  if (result.status == FetchStatus.success) {
+    return result.solvedCount ?? 0;
+  }
+  return retainedSolvedCountForResult(result) ?? 0;
+}
+
+int? retainedSolvedCountForResult(FetchResult result) {
+  if (result.status == FetchStatus.failure &&
+      result.solvedCount != null &&
+      result.previousSolvedCount != null) {
+    return result.previousSolvedCount;
+  }
+  return null;
 }
 
 String normalizeError(Object error) {
