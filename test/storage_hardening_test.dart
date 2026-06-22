@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const _configKey = 'app_config_v1';
 const _snapshotsFile = 'snapshots_v1.json';
+const _refreshLogsFile = 'refresh_logs_v1.json';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -153,6 +154,52 @@ void main() {
 
       expect(snapshots, hasLength(1));
       expect(snapshots.single.username, '');
+    });
+  });
+
+  group('refresh log storage hardening', () {
+    test('damaged refresh log file falls back to an empty list', () async {
+      final directory = await Directory.systemTemp.createTemp('oj_float_test_');
+      try {
+        await File(
+          '${directory.path}${Platform.pathSeparator}$_refreshLogsFile',
+        ).writeAsString('{not-json');
+
+        final logs =
+            await LocalStore(supportDirectory: directory).loadRefreshLogs();
+
+        expect(logs, isEmpty);
+      } finally {
+        await directory.delete(recursive: true);
+      }
+    });
+
+    test('refresh logs keep only the latest 200 entries', () async {
+      final directory = await Directory.systemTemp.createTemp('oj_float_test_');
+      try {
+        final store = LocalStore(supportDirectory: directory);
+        final base = DateTime.parse('2026-06-15T08:00:00');
+        await store.saveRefreshLogs([
+          for (var i = 0; i < 205; i++)
+            RefreshLogEntry.create(
+              fetchedAt: base.add(Duration(minutes: i)),
+              ojId: 'codeforces',
+              username: 'alice',
+              status: RefreshLogStatus.success,
+              source: 'primary',
+              message: 'ok $i',
+              solvedCount: i,
+            ),
+        ]);
+
+        final logs = await store.loadRefreshLogs();
+
+        expect(logs, hasLength(200));
+        expect(logs.first.solvedCount, 204);
+        expect(logs.last.solvedCount, 5);
+      } finally {
+        await directory.delete(recursive: true);
+      }
     });
   });
 
