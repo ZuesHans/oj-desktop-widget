@@ -47,14 +47,11 @@ class SyncService {
       );
     }
     final endpoint = Uri.tryParse(config.endpointUrl.trim());
-    if (endpoint == null ||
-        !endpoint.hasScheme ||
-        (endpoint.scheme != 'http' && endpoint.scheme != 'https') ||
-        endpoint.host.trim().isEmpty) {
+    if (endpoint == null || !_isAllowedSyncEndpoint(endpoint)) {
       return const SyncResult(
         status: SyncStatus.failure,
         endpointLabel: '',
-        message: 'Sync endpoint must be an absolute HTTP(S) URL.',
+        message: 'Sync endpoint must use HTTPS, except localhost HTTP for dev.',
       );
     }
     final normalizedToken = token.trim();
@@ -136,9 +133,11 @@ Map<String, Object?> buildOjSyncPayload({
     'schemaVersion': 1,
     'app': 'oj_float',
     'syncedAt': now.toIso8601String(),
-    if (config.syncDailyStats) 'dailyStats': buildOjSyncDailyStats(snapshots),
-    if (config.syncProblems)
-      'problems': buildOjSyncProblems(problems, config: config),
+    'dailyStats':
+        config.syncDailyStats ? buildOjSyncDailyStats(snapshots) : const [],
+    'problems': config.syncProblems
+        ? buildOjSyncProblems(problems, config: config)
+        : const [],
   };
 }
 
@@ -196,4 +195,18 @@ String maskSyncToken(String token) {
 String safeEndpointLabel(Uri endpoint) {
   final port = endpoint.hasPort ? ':${endpoint.port}' : '';
   return '${endpoint.scheme}://${endpoint.host}$port';
+}
+
+bool _isAllowedSyncEndpoint(Uri endpoint) {
+  if (!endpoint.hasScheme || endpoint.host.trim().isEmpty) {
+    return false;
+  }
+  if (endpoint.scheme == 'https') {
+    return true;
+  }
+  if (endpoint.scheme != 'http') {
+    return false;
+  }
+  final host = endpoint.host.toLowerCase();
+  return host == 'localhost' || host == '127.0.0.1' || host == '::1';
 }

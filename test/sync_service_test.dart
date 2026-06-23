@@ -72,6 +72,26 @@ void main() {
     expect(problems.single['analysis'], 'private analysis');
   });
 
+  test('disabled sync scopes are sent as empty arrays to clear projections',
+      () {
+    final payload = buildOjSyncPayload(
+      config: const SyncConfig(
+        enabled: true,
+        syncDailyStats: false,
+        syncProblems: false,
+      ),
+      snapshots: [
+        _snapshot('2026-06-22', 'demo_user', 10, hour: 8),
+        _snapshot('2026-06-22', 'demo_user', 15, hour: 20),
+      ],
+      problems: [_problem()],
+      now: DateTime.parse('2026-06-23T15:00:00'),
+    );
+
+    expect(payload['dailyStats'], isEmpty);
+    expect(payload['problems'], isEmpty);
+  });
+
   test('token and endpoint labels are safe for logs', () {
     expect(maskSyncToken(''), '');
     expect(maskSyncToken('short'), '****');
@@ -109,6 +129,41 @@ void main() {
     expect(result.status, SyncStatus.success);
     expect(authorization, 'Bearer secret-token');
     expect(body, isNot(contains('secret-token')));
+  });
+
+  test('sync rejects plain HTTP except localhost development endpoints',
+      () async {
+    var requests = 0;
+    final service = SyncService(
+      client: MockClient((_) async {
+        requests += 1;
+        return http.Response('{"success":true}', 200);
+      }),
+    );
+    addTearDown(service.dispose);
+
+    final rejected = await service.sync(
+      config: const SyncConfig(
+        enabled: true,
+        endpointUrl: 'http://example.com/api/oj-sync',
+      ),
+      token: 'secret-token',
+      snapshots: const [],
+      problems: const [],
+    );
+    final allowed = await service.sync(
+      config: const SyncConfig(
+        enabled: true,
+        endpointUrl: 'http://localhost:8787/api/oj-sync',
+      ),
+      token: 'secret-token',
+      snapshots: const [],
+      problems: const [],
+    );
+
+    expect(rejected.status, SyncStatus.failure);
+    expect(allowed.status, SyncStatus.success);
+    expect(requests, 1);
   });
 }
 
