@@ -13,13 +13,17 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  test('config saves launchAtStartup state', () async {
+  test('config saves launchAtStartup and sync state', () async {
     final store = LocalStore();
     final config = _config(
       launchAtStartup: true,
       alwaysOnTop: false,
       showInTaskbar: false,
       closeToTray: false,
+      sync: const SyncConfig(
+        enabled: true,
+        endpointUrl: 'https://example.com/api/oj-sync',
+      ),
     );
 
     await store.saveConfig(config);
@@ -29,9 +33,12 @@ void main() {
     expect(loaded.alwaysOnTop, isFalse);
     expect(loaded.showInTaskbar, isFalse);
     expect(loaded.closeToTray, isFalse);
+    expect(loaded.sync.enabled, isTrue);
+    expect(loaded.sync.endpointUrl, 'https://example.com/api/oj-sync');
+    expect(loaded.toJson().toString(), isNot(contains('secret-token')));
   });
 
-  testWidgets('settings page shows start at login switch', (tester) async {
+  testWidgets('settings page shows startup and sync switches', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -47,9 +54,10 @@ void main() {
     expect(
         find.byKey(const ValueKey('show-in-taskbar-switch')), findsOneWidget);
     expect(find.byKey(const ValueKey('close-to-tray-switch')), findsOneWidget);
-    expect(find.text('窗口置顶'), findsOneWidget);
-    expect(find.text('在任务栏显示'), findsOneWidget);
-    expect(find.text('关闭时最小化到托盘'), findsOneWidget);
+    expect(find.byKey(const ValueKey('sync-enabled-switch')), findsOneWidget);
+    expect(find.byKey(const ValueKey('sync-endpoint-field')), findsOneWidget);
+    expect(find.byKey(const ValueKey('sync-token-field')), findsOneWidget);
+    expect(find.text('Webhook sync'), findsOneWidget);
   });
 
   test('startup plugin failure does not block saving other settings', () async {
@@ -60,6 +68,7 @@ void main() {
       storage: store,
       service: RefreshService(client: http.Client(), providers: const {}),
       startupService: startupService,
+      syncSecretStore: MemorySyncSecretStore(),
     );
     final config = _config(
       launchAtStartup: true,
@@ -77,6 +86,7 @@ void main() {
       expect(loaded.accounts['codeforces']!.usernames, ['saved-user']);
     } finally {
       await directory.delete(recursive: true);
+      controller.dispose();
     }
   });
 
@@ -88,6 +98,7 @@ void main() {
       storage: store,
       service: RefreshService(client: http.Client(), providers: const {}),
       startupService: startupService,
+      syncSecretStore: MemorySyncSecretStore(),
     );
     final config = _config(
       launchAtStartup: true,
@@ -107,6 +118,7 @@ void main() {
       expect(loaded.accounts['codeforces']!.usernames, ['saved-after-false']);
     } finally {
       await directory.delete(recursive: true);
+      controller.dispose();
     }
   });
 }
@@ -118,6 +130,7 @@ AppConfig _config({
   bool closeToTray = true,
   String username = 'alice',
   bool enabled = true,
+  SyncConfig sync = const SyncConfig(),
 }) {
   return AppConfig(
     refreshIntervalMinutes: 45,
@@ -125,6 +138,7 @@ AppConfig _config({
     alwaysOnTop: alwaysOnTop,
     showInTaskbar: showInTaskbar,
     closeToTray: closeToTray,
+    sync: sync,
     accounts: {
       for (final meta in supportedOjs)
         meta.id: meta.id == 'codeforces'

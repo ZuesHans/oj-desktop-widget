@@ -27,6 +27,7 @@ import '../../services/heatmap_service.dart';
 import '../../services/local_store.dart';
 import '../../services/oj_controller.dart';
 import '../../services/refresh_service.dart';
+import '../../services/sync_service.dart';
 import '../app_theme.dart';
 import '../compact/compact_widget.dart';
 import '../contests/contests_entry_panel.dart';
@@ -433,19 +434,30 @@ class _OjFloatHomeState extends State<OjFloatHome>
   }
 
   Future<void> _openSettings(BuildContext context) async {
-    final updated = await showDialog<AppConfig>(
+    final syncToken = await _controller.loadSyncToken();
+    if (!context.mounted) {
+      return;
+    }
+    final result = await showDialog<SettingsDialogResult>(
       context: context,
-      builder: (_) => SettingsDialog(config: _controller.state.config),
+      builder: (_) => SettingsDialog(
+        config: _controller.state.config,
+        initialSyncToken: syncToken,
+      ),
     );
-    if (updated != null) {
+    if (result != null) {
       Object? saveError;
       try {
-        await _controller.saveConfig(updated);
+        await _controller.saveSyncToken(result.syncToken);
+        await _controller.saveConfig(
+          result.config,
+          syncAfterRefresh: !result.syncNow,
+        );
       } catch (error) {
         saveError = error;
       }
       if (widget.enablePlatformIntegration) {
-        await _applyWindowPreferences(updated);
+        await _applyWindowPreferences(result.config);
         await _setupTrayMenu();
       }
       if (saveError != null) {
@@ -460,6 +472,28 @@ class _OjFloatHomeState extends State<OjFloatHome>
           ),
         );
       }
+      if (result.syncNow && saveError == null) {
+        final syncResult = await _controller.syncNow();
+        if (!context.mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_formatSyncResult(syncResult))),
+        );
+      }
+    }
+  }
+
+  String _formatSyncResult(SyncResult result) {
+    switch (result.status) {
+      case SyncStatus.success:
+        return 'Sync succeeded: ${result.endpointLabel}';
+      case SyncStatus.skipped:
+        return 'Sync skipped: ${result.message}';
+      case SyncStatus.failure:
+        final target =
+            result.endpointLabel.isEmpty ? 'endpoint' : result.endpointLabel;
+        return 'Sync failed for $target: ${result.message}';
     }
   }
 
