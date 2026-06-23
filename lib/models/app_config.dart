@@ -6,6 +6,7 @@ class AppConfig {
   const AppConfig({
     required this.refreshIntervalMinutes,
     required this.accounts,
+    this.sync = const SyncConfig(),
     this.launchAtStartup = false,
     this.alwaysOnTop = true,
     this.showInTaskbar = true,
@@ -19,6 +20,7 @@ class AppConfig {
       alwaysOnTop: true,
       showInTaskbar: true,
       closeToTray: true,
+      sync: const SyncConfig(),
       accounts: {
         for (final meta in supportedOjs)
           meta.id: const OjAccountConfig(usernames: [], enabled: false),
@@ -41,6 +43,7 @@ class AppConfig {
           json['showInTaskbar'] is bool ? json['showInTaskbar'] as bool : true,
       closeToTray:
           json['closeToTray'] is bool ? json['closeToTray'] as bool : true,
+      sync: SyncConfig.fromJson(json['sync']),
       accounts: {
         for (final meta in supportedOjs)
           meta.id: _parseAccountConfig(
@@ -86,6 +89,7 @@ class AppConfig {
           json['showInTaskbar'] is bool ? json['showInTaskbar'] as bool : true,
       closeToTray:
           json['closeToTray'] is bool ? json['closeToTray'] as bool : true,
+      sync: const SyncConfig(),
       accounts: accounts,
     );
   }
@@ -115,6 +119,7 @@ class AppConfig {
   final bool alwaysOnTop;
   final bool showInTaskbar;
   final bool closeToTray;
+  final SyncConfig sync;
 
   AppConfig copyWith({
     int? refreshIntervalMinutes,
@@ -123,6 +128,7 @@ class AppConfig {
     bool? alwaysOnTop,
     bool? showInTaskbar,
     bool? closeToTray,
+    SyncConfig? sync,
   }) {
     return AppConfig(
       refreshIntervalMinutes:
@@ -132,6 +138,7 @@ class AppConfig {
       alwaysOnTop: alwaysOnTop ?? this.alwaysOnTop,
       showInTaskbar: showInTaskbar ?? this.showInTaskbar,
       closeToTray: closeToTray ?? this.closeToTray,
+      sync: sync ?? this.sync,
     );
   }
 
@@ -141,9 +148,87 @@ class AppConfig {
         'alwaysOnTop': alwaysOnTop,
         'showInTaskbar': showInTaskbar,
         'closeToTray': closeToTray,
+        'sync': sync.toJson(),
         'accounts': {
           for (final entry in accounts.entries) entry.key: entry.value.toJson(),
         },
+      };
+}
+
+class SyncConfig {
+  const SyncConfig({
+    this.enabled = false,
+    this.endpointUrl = '',
+    this.syncDailyStats = true,
+    this.syncProblems = true,
+    this.includeProblemNote = false,
+    this.includeProblemAnalysis = false,
+    this.autoSyncAfterRefresh = true,
+  });
+
+  factory SyncConfig.fromJson(Object? value) {
+    if (value is! Map) {
+      return const SyncConfig();
+    }
+    final json = Map<String, dynamic>.from(value);
+    return SyncConfig(
+      enabled: json['enabled'] is bool ? json['enabled'] as bool : false,
+      endpointUrl:
+          json['endpointUrl'] is String ? json['endpointUrl'] as String : '',
+      syncDailyStats: json['syncDailyStats'] is bool
+          ? json['syncDailyStats'] as bool
+          : true,
+      syncProblems:
+          json['syncProblems'] is bool ? json['syncProblems'] as bool : true,
+      includeProblemNote: json['includeProblemNote'] is bool
+          ? json['includeProblemNote'] as bool
+          : false,
+      includeProblemAnalysis: json['includeProblemAnalysis'] is bool
+          ? json['includeProblemAnalysis'] as bool
+          : false,
+      autoSyncAfterRefresh: json['autoSyncAfterRefresh'] is bool
+          ? json['autoSyncAfterRefresh'] as bool
+          : true,
+    );
+  }
+
+  final bool enabled;
+  final String endpointUrl;
+  final bool syncDailyStats;
+  final bool syncProblems;
+  final bool includeProblemNote;
+  final bool includeProblemAnalysis;
+  final bool autoSyncAfterRefresh;
+
+  SyncConfig copyWith({
+    bool? enabled,
+    String? endpointUrl,
+    bool? syncDailyStats,
+    bool? syncProblems,
+    bool? includeProblemNote,
+    bool? includeProblemAnalysis,
+    bool? autoSyncAfterRefresh,
+  }) {
+    return SyncConfig(
+      enabled: enabled ?? this.enabled,
+      endpointUrl: endpointUrl?.trim() ?? this.endpointUrl,
+      syncDailyStats: syncDailyStats ?? this.syncDailyStats,
+      syncProblems: syncProblems ?? this.syncProblems,
+      includeProblemNote: includeProblemNote ?? this.includeProblemNote,
+      includeProblemAnalysis:
+          includeProblemAnalysis ?? this.includeProblemAnalysis,
+      autoSyncAfterRefresh: autoSyncAfterRefresh ?? this.autoSyncAfterRefresh,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'enabled': enabled,
+        'endpointUrl': endpointUrl,
+        'syncDailyStats': syncDailyStats,
+        'syncProblems': syncProblems,
+        'includeProblemNote': includeProblemNote,
+        'includeProblemAnalysis': includeProblemAnalysis,
+        'autoSyncAfterRefresh': autoSyncAfterRefresh,
       };
 }
 

@@ -22,6 +22,8 @@ import 'daily_summary_service.dart';
 import 'local_store.dart';
 import 'problem_book_service.dart';
 import 'refresh_service.dart';
+import 'sync_secret_store.dart';
+import 'sync_service.dart';
 import 'teammate_service.dart';
 
 class OjController extends ChangeNotifier {
@@ -32,13 +34,17 @@ class OjController extends ChangeNotifier {
     ProblemBookService? problemBookService,
     ContestRecordService? contestRecordService,
     TeammateService? teammateService,
+    SyncService? syncService,
+    SyncSecretStore? syncSecretStore,
   })  : problemBookService =
             problemBookService ?? ProblemBookService(client: http.Client()),
         contestRecordService =
             contestRecordService ?? const ContestRecordService(),
         teammateService = teammateService ??
             TeammateService(
-                client: http.Client(), providers: service.providers);
+                client: http.Client(), providers: service.providers),
+        syncService = syncService ?? SyncService(client: http.Client()),
+        syncSecretStore = syncSecretStore ?? SecureSyncSecretStore();
 
   final LocalStore storage;
   final RefreshService service;
@@ -46,9 +52,13 @@ class OjController extends ChangeNotifier {
   final ProblemBookService problemBookService;
   final ContestRecordService contestRecordService;
   final TeammateService teammateService;
+  final SyncService syncService;
+  final SyncSecretStore syncSecretStore;
   OjState state = OjState.initial();
   bool refreshing = false;
   bool refreshingTeammates = false;
+  bool syncing = false;
+  SyncResult? lastSyncResult;
   Timer? _timer;
 
   Future<void> init() async {
@@ -73,7 +83,10 @@ class OjController extends ChangeNotifier {
     await maybeAutoRefreshTeammates();
   }
 
-  Future<void> saveConfig(AppConfig config) async {
+  Future<void> saveConfig(
+    AppConfig config, {
+    bool syncAfterRefresh = true,
+  }) async {
     await storage.saveConfig(config);
     state = state.copyWith(config: config);
     _schedule();
@@ -88,7 +101,7 @@ class OjController extends ChangeNotifier {
     } catch (error) {
       startupError = error;
     }
-    await refresh();
+    await refresh(syncAfterRefresh: syncAfterRefresh);
     if (startupError != null) {
       throw FetchException(normalizeError(startupError));
     }
@@ -164,7 +177,7 @@ class OjController extends ChangeNotifier {
     return ImportResult(safetyBackupFile: safetyBackup.backupFile);
   }
 
-  Future<void> refresh() async {
+  Future<void> refresh({bool syncAfterRefresh = true}) async {
     if (refreshing) {
       return;
     }
@@ -192,9 +205,54 @@ class OjController extends ChangeNotifier {
         refreshLogs: refreshLogs,
       );
       _recomputeSummaries();
+      if (syncAfterRefresh && state.config.sync.autoSyncAfterRefresh) {
+        unawaited(_syncSilently());
+      }
     } finally {
       refreshing = false;
       notifyListeners();
+    }
+  }
+
+  Future<String> loadSyncToken() {
+    return syncSecretStore.readToken();
+  }
+
+  Future<void> saveSyncToken(String token) {
+    return syncSecretStore.saveToken(token);
+  }
+
+  Future<SyncResult> syncNow() async {
+    if (syncing) {
+      return lastSyncResult ??
+          const SyncResult(
+            status: SyncStatus.skipped,
+            endpointLabel: '',
+            message: 'Sync is already running.',
+          );
+    }
+    syncing = true;
+    notifyListeners();
+    try {
+      final result = await syncService.sync(
+        config: state.config.sync,
+        token: await syncSecretStore.readToken(),
+        snapshots: state.snapshots,
+        problems: state.problems,
+      );
+      lastSyncResult = result;
+      return result;
+    } finally {
+      syncing = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _syncSilently() async {
+    try {
+      await syncNow();
+    } catch (_) {
+      // Sync is optional and must never break local refresh.
     }
   }
 
@@ -469,6 +527,7 @@ class OjController extends ChangeNotifier {
     service.dispose();
     problemBookService.dispose();
     teammateService.dispose();
+    syncService.dispose();
     super.dispose();
   }
 }

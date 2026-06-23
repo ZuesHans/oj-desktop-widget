@@ -38,6 +38,8 @@ export 'services/local_store.dart';
 export 'services/oj_controller.dart';
 export 'services/problem_book_service.dart';
 export 'services/refresh_service.dart';
+export 'services/sync_secret_store.dart';
+export 'services/sync_service.dart';
 export 'services/teammate_service.dart';
 export 'ui/dashboard/oj_float_home.dart';
 export 'ui/contests/contest_editor.dart';
