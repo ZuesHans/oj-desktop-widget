@@ -131,6 +131,47 @@ void main() {
     expect(body, isNot(contains('secret-token')));
   });
 
+  test('fetchWebsiteProblems pulls public website records from sync host',
+      () async {
+    late Uri requestedUri;
+    final service = SyncService(
+      client: MockClient((request) async {
+        requestedUri = request.url;
+        return http.Response(
+          jsonEncode([
+            {
+              'id': 'website-problem',
+              'title': 'Website Problem',
+              'url': 'https://example.com/problem/site',
+              'platform': 'other',
+              'status': 'TODO',
+              'tags': ['site'],
+              'date': '2026-06-24',
+              'note': '',
+              'analysis': '',
+              'created_at': '2026-06-24T12:00:00.000Z',
+              'updated_at': '2026-06-24T12:00:00.000Z',
+            },
+          ]),
+          200,
+        );
+      }),
+    );
+    addTearDown(service.dispose);
+
+    final problems = await service.fetchWebsiteProblems(
+      config: const SyncConfig(
+        enabled: true,
+        endpointUrl: 'https://example.com/api/oj-sync',
+      ),
+    );
+
+    expect(requestedUri.toString(), 'https://example.com/api/problems');
+    expect(problems, hasLength(1));
+    expect(problems.single.id, 'website-problem');
+    expect(problems.single.tags, ['site']);
+  });
+
   test('sync rejects plain HTTP except localhost development endpoints',
       () async {
     var requests = 0;

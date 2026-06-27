@@ -49,6 +49,29 @@ class ProblemBookService {
     return List.unmodifiable(problems.where((item) => item.id != id));
   }
 
+  List<ProblemRecord> mergeSyncedProblems(
+    List<ProblemRecord> local,
+    List<ProblemRecord> incoming,
+  ) {
+    final merged = <ProblemRecord>[...local];
+    for (final problem in incoming) {
+      final index = merged.indexWhere(
+        (item) =>
+            item.id == problem.id ||
+            _normalizedUrl(item.url) == _normalizedUrl(problem.url),
+      );
+      if (index < 0) {
+        merged.add(problem);
+        continue;
+      }
+      if (problem.updatedAt.isAfter(merged[index].updatedAt)) {
+        merged[index] = problem;
+      }
+    }
+    merged.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return List.unmodifiable(merged);
+  }
+
   List<ProblemRecord> filter(
     List<ProblemRecord> problems, {
     String query = '',
@@ -187,6 +210,10 @@ class _MutableProblemTagStat {
   final String label;
   int total = 0;
   int pending = 0;
+}
+
+String _normalizedUrl(String value) {
+  return value.trim().toLowerCase();
 }
 
 Uri normalizeProblemUri(String input) {

@@ -166,6 +166,41 @@ void main() {
     expect(problems.map((item) => item.id), ['a']);
   });
 
+  test('mergeSyncedProblems appends website records and deduplicates URLs', () {
+    final service = ProblemBookService(client: MockClient((_) async {
+      return http.Response('', 404);
+    }));
+    addTearDown(service.dispose);
+
+    final local = _problem(
+      id: 'local',
+      title: 'Local Title',
+      updatedAt: DateTime.parse('2026-06-21T08:00:00'),
+    );
+    final newerWebsiteCopy = _problem(
+      id: 'website-copy',
+      title: 'Website Title',
+      updatedAt: DateTime.parse('2026-06-21T10:00:00'),
+    );
+    final websiteOnly = _problem(
+      id: 'website-only',
+      title: 'Website Only',
+      url: 'https://example.com/problem/2',
+      updatedAt: DateTime.parse('2026-06-21T09:00:00'),
+    );
+
+    final merged = service.mergeSyncedProblems(
+      [local],
+      [newerWebsiteCopy, websiteOnly],
+    );
+
+    expect(merged, hasLength(2));
+    expect(merged.map((item) => item.title), [
+      'Website Title',
+      'Website Only',
+    ]);
+  });
+
   test('tag stats count total and pending problems', () {
     final stats = buildProblemTagStats([
       _problem(id: 'a', status: ProblemStatus.TODO, tags: const ['DP']),
@@ -184,6 +219,7 @@ void main() {
 ProblemRecord _problem({
   String id = 'lxyz123abc',
   String title = 'CF 1799A',
+  String url = 'https://codeforces.com/problemset/problem/1799/A',
   ProblemStatus status = ProblemStatus.AC,
   List<String> tags = const ['贪心', '构造'],
   DateTime? updatedAt,
@@ -192,7 +228,7 @@ ProblemRecord _problem({
   return ProblemRecord(
     id: id,
     title: title,
-    url: 'https://codeforces.com/problemset/problem/1799/A',
+    url: url,
     platform: ProblemPlatform.cf,
     status: status,
     tags: tags,

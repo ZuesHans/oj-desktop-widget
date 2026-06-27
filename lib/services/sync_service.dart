@@ -32,6 +32,47 @@ class SyncService {
 
   final http.Client client;
 
+  Future<List<ProblemRecord>> fetchWebsiteProblems({
+    required SyncConfig config,
+  }) async {
+    if (!config.enabled || !config.syncProblems) {
+      return const [];
+    }
+    final syncEndpoint = Uri.tryParse(config.endpointUrl.trim());
+    if (syncEndpoint == null || !_isAllowedSyncEndpoint(syncEndpoint)) {
+      return const [];
+    }
+    final endpoint = websiteProblemsEndpointFor(syncEndpoint);
+    try {
+      final response = await client.get(
+        endpoint,
+        headers: const {'user-agent': 'OJ-Float-Sync/1'},
+      ).timeout(const Duration(seconds: 18));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return const [];
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is! List) {
+        return const [];
+      }
+      final problems = <ProblemRecord>[];
+      for (final item in decoded) {
+        if (item is! Map) {
+          continue;
+        }
+        final problem = ProblemRecord.tryFromJson(
+          Map<String, dynamic>.from(item),
+        );
+        if (problem != null) {
+          problems.add(problem);
+        }
+      }
+      return List.unmodifiable(problems);
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<SyncResult> sync({
     required SyncConfig config,
     required String token,
@@ -195,6 +236,11 @@ String maskSyncToken(String token) {
 String safeEndpointLabel(Uri endpoint) {
   final port = endpoint.hasPort ? ':${endpoint.port}' : '';
   return '${endpoint.scheme}://${endpoint.host}$port';
+}
+
+Uri websiteProblemsEndpointFor(Uri syncEndpoint) {
+  return syncEndpoint.replace(
+      path: '/api/problems', query: null, fragment: null);
 }
 
 bool _isAllowedSyncEndpoint(Uri endpoint) {

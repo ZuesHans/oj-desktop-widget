@@ -234,11 +234,26 @@ class OjController extends ChangeNotifier {
     syncing = true;
     notifyListeners();
     try {
+      final websiteProblems = await syncService.fetchWebsiteProblems(
+        config: state.config.sync,
+      );
+      var problems = state.problems;
+      if (websiteProblems.isNotEmpty) {
+        problems = problemBookService.mergeSyncedProblems(
+          state.problems,
+          websiteProblems,
+        );
+        if (!listEquals(problems, state.problems)) {
+          await storage.saveProblems(problems);
+          state = state.copyWith(problems: problems);
+          notifyListeners();
+        }
+      }
       final result = await syncService.sync(
         config: state.config.sync,
         token: await syncSecretStore.readToken(),
         snapshots: state.snapshots,
-        problems: state.problems,
+        problems: problems,
       );
       lastSyncResult = result;
       return result;
