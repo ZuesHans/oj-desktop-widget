@@ -62,6 +62,9 @@ void main() {
     expect(parseProblemPlatform('hdu'), ProblemPlatform.hd);
     expect(parseProblemPlatform('luogu'), ProblemPlatform.lg);
     expect(parseProblemPlatform('nowcoder'), ProblemPlatform.nc);
+    expect(parseProblemPlatform('娲涜胺'), ProblemPlatform.lg);
+    expect(parseProblemPlatform('鐗涘'), ProblemPlatform.nc);
+    expect(parseProblemPlatform('鍏朵粬'), ProblemPlatform.other);
 
     final cases = {
       'https://codeforces.com/problemset/problem/1799/A': ProblemPlatform.cf,

@@ -220,6 +220,7 @@ ProblemPlatform? parseProblemPlatform(Object? value) {
     case 'lg':
     case 'luogu':
     case '洛谷':
+    case '娲涜胺':
       return ProblemPlatform.lg;
     case 'poj':
       return ProblemPlatform.poj;
@@ -228,6 +229,7 @@ ProblemPlatform? parseProblemPlatform(Object? value) {
     case 'nc':
     case 'nowcoder':
     case '牛客':
+    case '鐗涘':
       return ProblemPlatform.nc;
     case 'spoj':
       return ProblemPlatform.spoj;
@@ -237,6 +239,7 @@ ProblemPlatform? parseProblemPlatform(Object? value) {
     case 'leetcode.cn':
       return ProblemPlatform.lccn;
     case 'other':
+    case '鍏朵粬':
       return ProblemPlatform.other;
   }
   return null;
@@ -265,7 +268,24 @@ String problemPlatformLabel(ProblemPlatform platform) {
     case ProblemPlatform.lccn:
       return 'LeetCode CN';
     case ProblemPlatform.other:
-      return 'Other';
+      return '其他';
+  }
+}
+
+String problemStatusLabel(ProblemStatus status) {
+  switch (status) {
+    case ProblemStatus.AC:
+      return '已通过';
+    case ProblemStatus.WA:
+      return '答案错误';
+    case ProblemStatus.TLE:
+      return '超时';
+    case ProblemStatus.RE:
+      return '运行错误';
+    case ProblemStatus.REVIEW:
+      return '复盘中';
+    case ProblemStatus.TODO:
+      return '待做';
   }
 }
 
