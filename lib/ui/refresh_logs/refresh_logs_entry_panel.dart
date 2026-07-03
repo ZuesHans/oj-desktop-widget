@@ -29,13 +29,13 @@ class RefreshLogsEntryPanel extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.fact_check_outlined, color: accentColor),
+          Icon(Icons.fact_check_outlined, color: accentColor),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   '刷新日志',
                   style: TextStyle(
                     color: textPrimaryColor,
@@ -47,8 +47,7 @@ class RefreshLogsEntryPanel extends StatelessWidget {
                   '拦截 $blocked · 失败 $failures · $latest',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style:
-                      const TextStyle(color: textSecondaryColor, fontSize: 12),
+                  style: TextStyle(color: textSecondaryColor, fontSize: 12),
                 ),
               ],
             ),

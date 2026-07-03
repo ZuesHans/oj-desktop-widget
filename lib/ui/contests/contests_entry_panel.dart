@@ -30,13 +30,13 @@ class ContestsEntryPanel extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.emoji_events_outlined, color: accentColor),
+          Icon(Icons.emoji_events_outlined, color: accentColor),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   '比赛记录',
                   style: TextStyle(
                     color: textPrimaryColor,
@@ -49,7 +49,7 @@ class ContestsEntryPanel extends StatelessWidget {
                       ? '记录训练赛、校内赛和模拟赛排名'
                       : '共 ${contests.length} 场 · 最近 #${latest!.rank} · 最好 #$bestRank',
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: textSecondaryColor,
                     fontSize: 12,
                   ),

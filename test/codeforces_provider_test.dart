@@ -159,6 +159,52 @@ void main() {
     });
   });
 
+  group('countCodeforcesAcceptedSubmissionsInWindow', () {
+    test('counts accepted unique problems inside the local training window',
+        () {
+      final start = DateTime(2026, 7, 10, 4);
+      final end = start.add(const Duration(days: 1));
+      int seconds(DateTime time) => time.toUtc().millisecondsSinceEpoch ~/ 1000;
+
+      expect(
+        countCodeforcesAcceptedSubmissionsInWindow([
+          {
+            'verdict': 'OK',
+            'creationTimeSeconds': seconds(start),
+            'problem': {'contestId': 1, 'index': 'A'},
+          },
+          {
+            'verdict': 'OK',
+            'creationTimeSeconds': seconds(start.add(const Duration(hours: 2))),
+            'problem': {'contestId': 1, 'index': 'A'},
+          },
+          {
+            'verdict': 'OK',
+            'creationTimeSeconds': seconds(start.add(const Duration(hours: 3))),
+            'problem': {'contestId': 2, 'index': 'B'},
+          },
+          {
+            'verdict': 'WRONG_ANSWER',
+            'creationTimeSeconds': seconds(start.add(const Duration(hours: 4))),
+            'problem': {'contestId': 3, 'index': 'C'},
+          },
+          {
+            'verdict': 'OK',
+            'creationTimeSeconds':
+                seconds(start.subtract(const Duration(seconds: 1))),
+            'problem': {'contestId': 4, 'index': 'D'},
+          },
+          {
+            'verdict': 'OK',
+            'creationTimeSeconds': seconds(end),
+            'problem': {'contestId': 5, 'index': 'E'},
+          },
+        ], start, end),
+        2,
+      );
+    });
+  });
+
   test('provider prefers ojhunt solved count like oj_helper', () async {
     final requestedHostsAndPaths = <String>[];
     final client = MockClient((request) async {

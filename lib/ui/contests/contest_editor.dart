@@ -171,7 +171,7 @@ class _ContestEditorDialogState extends State<ContestEditorDialog> {
                   maxLines: 4,
                 ),
                 const SizedBox(height: 8),
-                const Align(
+                Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
                     '排名数值越小代表成绩越好。',

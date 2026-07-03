@@ -107,7 +107,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       _parseMessage!,
-                      style: const TextStyle(color: textSecondaryColor),
+                      style: TextStyle(color: textSecondaryColor),
                     ),
                   ),
                 ],

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:window_manager/window_manager.dart';
 
 class WindowHeader extends StatelessWidget {
   const WindowHeader({
@@ -10,6 +9,7 @@ class WindowHeader extends StatelessWidget {
     required this.onCompact,
     required this.onMinimize,
     required this.onExit,
+    this.onStartDrag,
   });
 
   final bool refreshing;
@@ -18,11 +18,12 @@ class WindowHeader extends StatelessWidget {
   final VoidCallback onCompact;
   final VoidCallback onMinimize;
   final VoidCallback onExit;
+  final VoidCallback? onStartDrag;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onPanStart: (_) => windowManager.startDragging(),
+      onPanStart: onStartDrag == null ? null : (_) => onStartDrag!(),
       child: Container(
         height: 58,
         padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -33,7 +34,7 @@ class WindowHeader extends StatelessWidget {
             const SizedBox(width: 8),
             const Expanded(
               child: Text(
-                'OJ Float',
+                'OJ 悬浮窗',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
               ),
             ),
@@ -54,7 +55,7 @@ class WindowHeader extends StatelessWidget {
             ),
             IconButton(
               key: const ValueKey('compact-mode-button'),
-              tooltip: 'Compact',
+              tooltip: '缩小窗口',
               onPressed: onCompact,
               icon: const Icon(Icons.close_fullscreen),
             ),

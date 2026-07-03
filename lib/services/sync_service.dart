@@ -84,7 +84,7 @@ class SyncService {
       return const SyncResult(
         status: SyncStatus.skipped,
         endpointLabel: '',
-        message: 'Sync is disabled.',
+        message: '同步未启用。',
       );
     }
     final endpoint = Uri.tryParse(config.endpointUrl.trim());
@@ -92,7 +92,7 @@ class SyncService {
       return const SyncResult(
         status: SyncStatus.failure,
         endpointLabel: '',
-        message: 'Sync endpoint must use HTTPS, except localhost HTTP for dev.',
+        message: '同步地址必须使用 HTTPS；本地开发可使用 localhost HTTP。',
       );
     }
     final normalizedToken = token.trim();
@@ -100,7 +100,7 @@ class SyncService {
       return SyncResult(
         status: SyncStatus.failure,
         endpointLabel: safeEndpointLabel(endpoint),
-        message: 'Sync token is empty.',
+        message: '同步密钥不能为空。',
       );
     }
 
@@ -134,7 +134,7 @@ class SyncService {
         status: SyncStatus.failure,
         endpointLabel: safeEndpointLabel(endpoint),
         httpStatus: response.statusCode,
-        message: 'Sync endpoint returned HTTP ${response.statusCode}.',
+        message: '同步地址返回 HTTP ${response.statusCode}。',
       );
     } catch (error) {
       return SyncResult(

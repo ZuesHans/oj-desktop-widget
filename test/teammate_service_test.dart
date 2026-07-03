@@ -95,6 +95,32 @@ void main() {
     service.dispose();
   });
 
+  test('daily activity provider counts accepted work on first refresh',
+      () async {
+    final provider = _FakeActivityProvider(
+      profiles: {
+        'alice': const OjProfile(
+          solvedCount: 104,
+          profileUrl: 'https://example.test/a',
+        ),
+      },
+      acceptedCounts: {'alice': 4},
+    );
+    final service = _service({'codeforces': provider});
+    var data = TeammateStoreData(profiles: [_teammate('t1', 'Alice')]);
+
+    data = await service.refreshTeammate(
+      data,
+      't1',
+      now: DateTime.parse('2026-07-10T20:00:00'),
+    );
+
+    expect(data.records.single.totalDelta, 4);
+    expect(data.snapshots.single.solvedTotalAtStart, 100);
+    expect(data.snapshots.single.latestSolvedTotal, 104);
+    service.dispose();
+  });
+
   test('solved count decrease does not produce negative delta', () async {
     final service = _service({
       'codeforces': _FakeProvider({
@@ -321,5 +347,28 @@ class _FakeProvider implements OjProvider {
       throw outcome;
     }
     throw FetchException('missing');
+  }
+}
+
+class _FakeActivityProvider extends _FakeProvider
+    implements OjDailyActivityProvider {
+  _FakeActivityProvider({
+    required Map<String, Object> profiles,
+    required this.acceptedCounts,
+  }) : super(profiles);
+
+  final Map<String, int> acceptedCounts;
+
+  @override
+  Future<OjDailyActivity> fetchDailyActivity(
+    http.Client client,
+    String username, {
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    return OjDailyActivity(
+      acceptedCount: acceptedCounts[username] ?? 0,
+      source: 'fake_daily',
+    );
   }
 }

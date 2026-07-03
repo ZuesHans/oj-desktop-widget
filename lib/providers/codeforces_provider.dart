@@ -6,7 +6,7 @@ import '../core/http_client.dart';
 import '../models/fetch_result.dart';
 import 'oj_provider.dart';
 
-class CodeforcesProvider implements OjProvider {
+class CodeforcesProvider implements OjProvider, OjDailyActivityProvider {
   @override
   Future<OjProfile> fetchProfile(http.Client client, String username) async {
     final handle = normalizeCodeforcesHandle(username);
@@ -78,6 +78,25 @@ class CodeforcesProvider implements OjProvider {
     }
 
     throw FetchException('Codeforces submission API 和主页解析均失败');
+  }
+
+  @override
+  Future<OjDailyActivity> fetchDailyActivity(
+    http.Client client,
+    String username, {
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final handle = normalizeCodeforcesHandle(username);
+    final submissions = await fetchCodeforcesSubmissions(client, handle);
+    return OjDailyActivity(
+      acceptedCount: countCodeforcesAcceptedSubmissionsInWindow(
+        submissions,
+        start,
+        end,
+      ),
+      source: 'codeforces_user_status_daily',
+    );
   }
 }
 
@@ -193,6 +212,37 @@ int countCodeforcesSolvedSubmissions(List<dynamic> submissions) {
   return solved.length;
 }
 
+int countCodeforcesAcceptedSubmissionsInWindow(
+  List<dynamic> submissions,
+  DateTime start,
+  DateTime end,
+) {
+  final solved = <String>{};
+  for (final item in submissions) {
+    if (item is! Map || item['verdict'] != 'OK') {
+      continue;
+    }
+    final seconds = item['creationTimeSeconds'];
+    if (seconds is! num) {
+      continue;
+    }
+    final submittedAt = DateTime.fromMillisecondsSinceEpoch(
+      seconds.toInt() * 1000,
+    ).toLocal();
+    if (submittedAt.isBefore(start) || !submittedAt.isBefore(end)) {
+      continue;
+    }
+    final problem = item['problem'];
+    if (problem is Map) {
+      final key = codeforcesProblemKey(problem);
+      if (key != null) {
+        solved.add(key);
+      }
+    }
+  }
+  return solved.length;
+}
+
 Future<int> fetchCodeforcesSolvedCountFromOjhunt(
   http.Client client,
   String handle,
@@ -205,6 +255,15 @@ Future<int> fetchCodeforcesSolvedCountFromOjhunt(
 }
 
 Future<int> fetchCodeforcesSolvedCountFromSubmissions(
+  http.Client client,
+  String handle,
+) async {
+  return countCodeforcesSolvedSubmissions(
+    await fetchCodeforcesSubmissions(client, handle),
+  );
+}
+
+Future<List<dynamic>> fetchCodeforcesSubmissions(
   http.Client client,
   String handle,
 ) async {
@@ -223,5 +282,5 @@ Future<int> fetchCodeforcesSolvedCountFromSubmissions(
   if (result is! List) {
     throw FetchException('Codeforces 返回格式变化');
   }
-  return countCodeforcesSolvedSubmissions(result);
+  return result;
 }

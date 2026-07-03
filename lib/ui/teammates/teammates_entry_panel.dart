@@ -27,13 +27,13 @@ class TeammatesEntryPanel extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.groups_2_outlined, color: accentColor),
+          Icon(Icons.groups_2_outlined, color: accentColor),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   '队友观察',
                   style: TextStyle(
                     color: textPrimaryColor,
@@ -48,7 +48,7 @@ class TeammatesEntryPanel extends StatelessWidget {
                           ? '共 ${teammates.profiles.length} 人 · 刷新后生成今日排行'
                           : '共 ${teammates.profiles.length} 人 · 今日领先 ${leader.profile.nickname} +${leader.record.totalDelta}',
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: textSecondaryColor,
                     fontSize: 12,
                   ),

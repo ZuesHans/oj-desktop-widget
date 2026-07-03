@@ -12,12 +12,14 @@ class HeatmapPage extends StatelessWidget {
     required this.onBack,
     required this.onExport,
     required this.onImport,
+    this.showBackButton = true,
   });
 
   final HeatmapSummary summary;
   final VoidCallback onBack;
   final VoidCallback onExport;
   final VoidCallback onImport;
+  final bool showBackButton;
 
   @override
   Widget build(BuildContext context) {
@@ -27,14 +29,16 @@ class HeatmapPage extends StatelessWidget {
       children: [
         Row(
           children: [
-            IconButton(
-              key: const ValueKey('heatmap-back-button'),
-              tooltip: '返回',
-              onPressed: onBack,
-              icon: const Icon(Icons.arrow_back),
-            ),
-            const SizedBox(width: 4),
-            const Expanded(
+            if (showBackButton) ...[
+              IconButton(
+                key: const ValueKey('heatmap-back-button'),
+                tooltip: '返回',
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back),
+              ),
+              const SizedBox(width: 4),
+            ],
+            Expanded(
               child: Text(
                 '热力图',
                 overflow: TextOverflow.ellipsis,
@@ -47,14 +51,14 @@ class HeatmapPage extends StatelessWidget {
             ),
             IconButton(
               key: const ValueKey('heatmap-export-data-button'),
-              tooltip: 'Export Backup',
+              tooltip: '导出备份',
               onPressed: onExport,
               color: accentColor,
               icon: const Icon(Icons.download),
             ),
             IconButton(
               key: const ValueKey('heatmap-import-backup-button'),
-              tooltip: 'Import Backup',
+              tooltip: '导入备份',
               onPressed: onImport,
               color: accentColor,
               icon: const Icon(Icons.upload_file),

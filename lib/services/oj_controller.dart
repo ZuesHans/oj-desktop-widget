@@ -96,7 +96,7 @@ class OjController extends ChangeNotifier {
       final startupUpdated =
           await startupService.setEnabled(config.launchAtStartup);
       if (!startupUpdated) {
-        startupError = FetchException('Start at login update failed.');
+        startupError = FetchException('登录时启动设置更新失败。');
       }
     } catch (error) {
       startupError = error;
@@ -145,11 +145,11 @@ class OjController extends ChangeNotifier {
         await storage.saveRefreshLogs(previousRefreshLogs);
       } catch (rollbackError) {
         throw FetchException(
-          'Import failed and rollback failed: ${normalizeError(rollbackError)}',
+          '导入失败，回滚也失败：${normalizeError(rollbackError)}',
         );
       }
       throw FetchException(
-        'Import failed. Current config and snapshots were restored: '
+        '导入失败，当前配置和快照已恢复：'
         '${normalizeError(error)}',
       );
     }
@@ -169,7 +169,7 @@ class OjController extends ChangeNotifier {
       final startupSynced =
           await startupService.setEnabled(state.config.launchAtStartup);
       if (!startupSynced) {
-        throw FetchException('Start at login update failed.');
+        throw FetchException('登录时启动设置更新失败。');
       }
     } catch (_) {
       // Import restores local state even if the OS startup toggle cannot sync.
@@ -228,7 +228,7 @@ class OjController extends ChangeNotifier {
           const SyncResult(
             status: SyncStatus.skipped,
             endpointLabel: '',
-            message: 'Sync is already running.',
+            message: '同步正在进行中。',
           );
     }
     syncing = true;
@@ -267,7 +267,7 @@ class OjController extends ChangeNotifier {
     try {
       await syncNow();
     } catch (_) {
-      // Sync is optional and must never break local refresh.
+      // 同步是可选功能，不能影响本地刷新。
     }
   }
 
@@ -429,10 +429,6 @@ class OjController extends ChangeNotifier {
     await storage.saveProblems(problems);
     state = state.copyWith(problems: problems);
     notifyListeners();
-  }
-
-  Future<void> markProblemAccepted(ProblemRecord problem) {
-    return saveProblem(problem.copyWith(status: ProblemStatus.AC));
   }
 
   Future<void> saveContest(ContestRecord contest) async {

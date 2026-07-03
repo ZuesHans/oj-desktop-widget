@@ -10,15 +10,17 @@ class Pill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: cardMutedColor,
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: borderColor),
       ),
       child: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           color: textPrimaryColor,
+          fontSize: 12,
           fontWeight: FontWeight.w700,
         ),
       ),

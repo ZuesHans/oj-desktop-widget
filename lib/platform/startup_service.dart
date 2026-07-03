@@ -14,7 +14,7 @@ class NoopStartupService implements StartupService {
 class LaunchAtStartupService implements StartupService {
   LaunchAtStartupService() {
     launchAtStartup.setup(
-      appName: 'OJ Float',
+      appName: 'OJ 悬浮窗',
       appPath: Platform.resolvedExecutable,
       packageName: 'oj_float',
     );

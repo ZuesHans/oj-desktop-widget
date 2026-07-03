@@ -16,6 +16,7 @@ class ContestsPage extends StatelessWidget {
     required this.onBack,
     required this.onSave,
     required this.onDelete,
+    this.showBackButton = true,
   });
 
   final List<ContestRecord> contests;
@@ -23,6 +24,7 @@ class ContestsPage extends StatelessWidget {
   final VoidCallback onBack;
   final Future<void> Function(ContestRecord contest) onSave;
   final Future<void> Function(String id) onDelete;
+  final bool showBackButton;
 
   @override
   Widget build(BuildContext context) {
@@ -46,13 +48,15 @@ class ContestsPage extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
               child: Row(
                 children: [
-                  IconButton(
-                    key: const ValueKey('contests-back-button'),
-                    tooltip: '返回',
-                    onPressed: onBack,
-                    icon: const Icon(Icons.arrow_back),
-                  ),
-                  const SizedBox(width: 4),
+                  if (showBackButton) ...[
+                    IconButton(
+                      key: const ValueKey('contests-back-button'),
+                      tooltip: '返回',
+                      onPressed: onBack,
+                      icon: const Icon(Icons.arrow_back),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
                   const Expanded(
                     child: Text(
                       '比赛记录',
@@ -229,7 +233,7 @@ class _SummaryTile extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   color: textSecondaryColor,
                   fontSize: 11,
                 ),
@@ -239,7 +243,7 @@ class _SummaryTile extends StatelessWidget {
                 value,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   color: textPrimaryColor,
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
@@ -282,7 +286,7 @@ class _RankChartCardState extends State<_RankChartCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
               Expanded(
                 child: Text(
@@ -302,7 +306,7 @@ class _RankChartCardState extends State<_RankChartCard> {
           ),
           const SizedBox(height: 10),
           if (widget.points.length < 2)
-            const SizedBox(
+            SizedBox(
               height: 180,
               child: Center(
                 child: Text(
@@ -382,7 +386,7 @@ class _SelectedContest extends StatelessWidget {
         children: [
           Text(
             record.title,
-            style: const TextStyle(
+            style: TextStyle(
               color: textPrimaryColor,
               fontWeight: FontWeight.w800,
             ),
@@ -430,7 +434,7 @@ class _ContestListItem extends StatelessWidget {
                   contest.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: textPrimaryColor,
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
@@ -460,7 +464,7 @@ class _ContestListItem extends StatelessWidget {
               contest.note,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: textPrimaryColor),
+              style: TextStyle(color: textPrimaryColor),
             ),
           ],
           const SizedBox(height: 8),
@@ -502,7 +506,7 @@ class _RankChip extends StatelessWidget {
       ),
       child: Text(
         '#$rank',
-        style: const TextStyle(
+        style: TextStyle(
           color: accentColor,
           fontWeight: FontWeight.w800,
         ),
@@ -524,7 +528,7 @@ class _EmptyContestList extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: borderColor),
       ),
-      child: const Text(
+      child: Text(
         '还没有比赛记录，先新增一场训练赛吧。',
         style: TextStyle(color: textSecondaryColor),
       ),
@@ -679,7 +683,7 @@ void _drawLabel(
   final painter = TextPainter(
     text: TextSpan(
       text: text,
-      style: const TextStyle(color: textSecondaryColor, fontSize: 10),
+      style: TextStyle(color: textSecondaryColor, fontSize: 10),
     ),
     textDirection: TextDirection.ltr,
   )..layout();
@@ -698,7 +702,7 @@ void _drawDateLabel(
   final painter = TextPainter(
     text: TextSpan(
       text: text.substring(5),
-      style: const TextStyle(color: textSecondaryColor, fontSize: 10),
+      style: TextStyle(color: textSecondaryColor, fontSize: 10),
     ),
     textDirection: TextDirection.ltr,
   )..layout();

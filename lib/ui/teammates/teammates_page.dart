@@ -19,6 +19,7 @@ class TeammatesPage extends StatelessWidget {
     required this.onDelete,
     required this.onRefreshAll,
     required this.onRefreshOne,
+    this.showBackButton = true,
   });
 
   final TeammateStoreData data;
@@ -30,6 +31,7 @@ class TeammatesPage extends StatelessWidget {
   final Future<void> Function(String id) onDelete;
   final Future<void> Function() onRefreshAll;
   final Future<void> Function(String id) onRefreshOne;
+  final bool showBackButton;
 
   @override
   Widget build(BuildContext context) {
@@ -45,13 +47,15 @@ class TeammatesPage extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
               child: Row(
                 children: [
-                  IconButton(
-                    key: const ValueKey('teammates-back-button'),
-                    tooltip: '返回',
-                    onPressed: onBack,
-                    icon: const Icon(Icons.arrow_back),
-                  ),
-                  const SizedBox(width: 4),
+                  if (showBackButton) ...[
+                    IconButton(
+                      key: const ValueKey('teammates-back-button'),
+                      tooltip: '返回',
+                      onPressed: onBack,
+                      icon: const Icon(Icons.arrow_back),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
                   const Expanded(
                     child: Text(
                       '队友观察',
@@ -92,7 +96,7 @@ class TeammatesPage extends StatelessWidget {
                   ),
                   if (!canAdd) ...[
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       '最多添加 3 名队友',
                       style: TextStyle(color: textSecondaryColor),
                     ),
@@ -223,12 +227,12 @@ class _TrainingDayNote extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.schedule, color: accentColor),
+          Icon(Icons.schedule, color: accentColor),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               '训练日 $trainingDate · 今日统计从 04:00 开始',
-              style: const TextStyle(
+              style: TextStyle(
                 color: textPrimaryColor,
                 fontWeight: FontWeight.w700,
               ),
@@ -318,7 +322,7 @@ class _TeammateCard extends StatelessWidget {
                   profile.nickname,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: textPrimaryColor,
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
@@ -337,14 +341,14 @@ class _TeammateCard extends StatelessWidget {
                 .join(' · '),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: textSecondaryColor, fontSize: 12),
+            style: TextStyle(color: textSecondaryColor, fontSize: 12),
           ),
           const SizedBox(height: 6),
           Text(
             record?.refreshedAt == null
                 ? '尚未刷新'
                 : '最近刷新 ${formatTime(record!.refreshedAt)}',
-            style: const TextStyle(color: textSecondaryColor, fontSize: 12),
+            style: TextStyle(color: textSecondaryColor, fontSize: 12),
           ),
           if (errors.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -412,7 +416,7 @@ class _RankingCard extends StatelessWidget {
         children: [
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               color: textPrimaryColor,
               fontSize: 16,
               fontWeight: FontWeight.w800,
@@ -425,7 +429,7 @@ class _RankingCard extends StatelessWidget {
               child: Center(
                 child: Text(
                   emptyText,
-                  style: const TextStyle(color: textSecondaryColor),
+                  style: TextStyle(color: textSecondaryColor),
                 ),
               ),
             )
@@ -462,7 +466,7 @@ class _RecentRankingCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             '最近 7 天排行',
             style: TextStyle(
               color: textPrimaryColor,
@@ -472,7 +476,7 @@ class _RecentRankingCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           if (!hasRecords)
-            const SizedBox(
+            SizedBox(
               height: 64,
               child: Center(
                 child: Text(
@@ -513,14 +517,14 @@ class _DailyRankingGroup extends StatelessWidget {
           children: [
             Text(
               ranking.trainingDate,
-              style: const TextStyle(
+              style: TextStyle(
                 color: textPrimaryColor,
                 fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(height: 6),
             if (ranking.entries.isEmpty)
-              const Text(
+              Text(
                 '无记录',
                 style: TextStyle(color: textSecondaryColor, fontSize: 12),
               )
@@ -566,7 +570,7 @@ class _RankRow extends StatelessWidget {
             width: 28,
             child: Text(
               '#$rank',
-              style: const TextStyle(
+              style: TextStyle(
                 color: textSecondaryColor,
                 fontWeight: FontWeight.w700,
               ),
@@ -578,7 +582,7 @@ class _RankRow extends StatelessWidget {
               entry.profile.nickname,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 color: textPrimaryColor,
                 fontWeight: FontWeight.w700,
               ),
@@ -603,7 +607,7 @@ class _RankRow extends StatelessWidget {
             child: Text(
               '+${entry.record.totalDelta}',
               textAlign: TextAlign.right,
-              style: const TextStyle(
+              style: TextStyle(
                 color: textPrimaryColor,
                 fontWeight: FontWeight.w800,
               ),
@@ -630,7 +634,7 @@ class _DeltaChip extends StatelessWidget {
       ),
       child: Text(
         '今日 +$delta',
-        style: const TextStyle(
+        style: TextStyle(
           color: accentColor,
           fontWeight: FontWeight.w800,
         ),
@@ -656,7 +660,7 @@ class _EmptyCard extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: const TextStyle(color: textSecondaryColor),
+        style: TextStyle(color: textSecondaryColor),
       ),
     );
   }
