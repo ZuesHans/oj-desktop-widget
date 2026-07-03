@@ -184,7 +184,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
             ),
             Expanded(
               child: visible.isEmpty
-                  ? Center(
+                  ? const Center(
                       child: Text(
                         '还没有题目，先添加一个链接或手动录入。',
                         style: TextStyle(color: textSecondaryColor),
@@ -382,14 +382,15 @@ class _ProblemsHeader extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: accentColor.withValues(alpha: 0.2)),
                 ),
-                child: Icon(Icons.auto_stories_outlined, color: accentColor),
+                child:
+                    const Icon(Icons.auto_stories_outlined, color: accentColor),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       '补题 / 错题本',
                       style: TextStyle(
                         color: textPrimaryColor,
@@ -402,7 +403,8 @@ class _ProblemsHeader extends StatelessWidget {
                       pending == 0 ? '今天没有欠账，很清爽。' : '还剩 $pending 题待处理',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: textSecondaryColor, fontSize: 12),
+                      style: const TextStyle(
+                          color: textSecondaryColor, fontSize: 12),
                     ),
                   ],
                 ),
@@ -478,7 +480,7 @@ class _SummaryMetric extends StatelessWidget {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+                style: const TextStyle(
                   color: textSecondaryColor,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
@@ -552,7 +554,7 @@ class _ProblemListItem extends StatelessWidget {
                           problem.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: const TextStyle(
                             color: textPrimaryColor,
                             fontSize: 15,
                             fontWeight: FontWeight.w900,
@@ -570,14 +572,15 @@ class _ProblemListItem extends StatelessWidget {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      Icon(Icons.public, size: 14, color: textSecondaryColor),
+                      const Icon(Icons.public,
+                          size: 14, color: textSecondaryColor),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           '${problemPlatformLabel(problem.platform)} · ${problem.date}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: const TextStyle(
                             color: textSecondaryColor,
                             fontSize: 12,
                           ),
@@ -593,7 +596,7 @@ class _ProblemListItem extends StatelessWidget {
                             problem.url,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: textSecondaryColor,
                               fontSize: 12,
                             ),
@@ -602,7 +605,7 @@ class _ProblemListItem extends StatelessWidget {
                             preview,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: textPrimaryColor,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -813,7 +816,7 @@ class _DetailLine extends StatelessWidget {
       children: [
         Text(
           label,
-          style: TextStyle(
+          style: const TextStyle(
             color: textSecondaryColor,
             fontSize: 12,
             fontWeight: FontWeight.w700,
@@ -822,7 +825,7 @@ class _DetailLine extends StatelessWidget {
         const SizedBox(height: 4),
         SelectableText(
           value,
-          style: TextStyle(color: textPrimaryColor, fontSize: 13),
+          style: const TextStyle(color: textPrimaryColor, fontSize: 13),
         ),
       ],
     );
@@ -856,7 +859,7 @@ class _DetailSection extends StatelessWidget {
         children: [
           Text(
             title,
-            style: TextStyle(
+            style: const TextStyle(
               color: textPrimaryColor,
               fontWeight: FontWeight.w800,
             ),

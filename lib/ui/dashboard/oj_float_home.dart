@@ -90,11 +90,13 @@ class _OjFloatHomeState extends State<OjFloatHome>
       unawaited(_setupTray());
     }
     if (widget.autoInitializeController) {
-      unawaited(_controller.init().then((_) async {
-        if (widget.enablePlatformIntegration) {
-          await _applyWindowPreferences(_controller.state.config);
-        }
-      }));
+      unawaited(
+        _controller.init().then((_) async {
+          if (widget.enablePlatformIntegration) {
+            await _applyWindowPreferences(_controller.state.config);
+          }
+        }),
+      );
     }
   }
 
@@ -129,8 +131,9 @@ class _OjFloatHomeState extends State<OjFloatHome>
   Future<File> _extractTrayIcon() async {
     final bytes = await rootBundle.load('assets/app_icon.ico');
     final directory = await getTemporaryDirectory();
-    final iconFile =
-        File('${directory.path}${Platform.pathSeparator}oj_float_app_icon.ico');
+    final iconFile = File(
+      '${directory.path}${Platform.pathSeparator}oj_float_app_icon.ico',
+    );
     await iconFile.writeAsBytes(bytes.buffer.asUint8List(), flush: true);
     return iconFile;
   }
@@ -258,7 +261,6 @@ class _OjFloatHomeState extends State<OjFloatHome>
                       onParseLink: _controller.parseProblemLink,
                       onSave: _controller.saveProblem,
                       onDelete: _controller.deleteProblem,
-                      onMarkAccepted: _controller.markProblemAccepted,
                       onOpenProblem: _openProblemUrl,
                     ),
                   ),
@@ -416,8 +418,9 @@ class _OjFloatHomeState extends State<OjFloatHome>
                           results:
                               _controller.state.latest[meta.id] ?? const [],
                           today: _controller.todayDeltaFor(meta.id),
-                          accountToday:
-                              _controller.todayDeltaByAccountFor(meta.id),
+                          accountToday: _controller.todayDeltaByAccountFor(
+                            meta.id,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -477,9 +480,9 @@ class _OjFloatHomeState extends State<OjFloatHome>
         if (!context.mounted) {
           return;
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_formatSyncResult(syncResult))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_formatSyncResult(syncResult))));
       }
     }
   }

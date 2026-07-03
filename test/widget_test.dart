@@ -16,7 +16,9 @@ void main() {
     expect(find.text('AC'), findsOneWidget);
     expect(find.text('Today'), findsOneWidget);
     expect(
-        find.byKey(const ValueKey('compact-refresh-button')), findsOneWidget);
+      find.byKey(const ValueKey('compact-refresh-button')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('open-dashboard-button')), findsOneWidget);
     expect(find.text('OJ Float'), findsNothing);
     expect(find.text('Codeforces'), findsNothing);
@@ -29,8 +31,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('OJ Float'), findsOneWidget);
-    expect(find.byKey(const ValueKey('refresh-logs-entry-button')),
-        findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('refresh-logs-entry-button')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('compact-mode-button')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('compact-mode-button')));
@@ -46,7 +50,9 @@ void main() {
     await tester.pumpWidget(buildTestApp());
 
     expect(
-        find.byKey(const ValueKey('compact-refresh-button')), findsOneWidget);
+      find.byKey(const ValueKey('compact-refresh-button')),
+      findsOneWidget,
+    );
     expect(find.byTooltip('Refresh'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
@@ -71,7 +77,9 @@ void main() {
 
     expect(find.text('队友观察'), findsOneWidget);
     expect(
-        find.byKey(const ValueKey('teammates-entry-button')), findsOneWidget);
+      find.byKey(const ValueKey('teammates-entry-button')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('heatmap entry opens the heatmap page', (tester) async {
@@ -150,8 +158,9 @@ void main() {
     expect(find.text('还没有队友，先添加一个公开账号吧。'), findsOneWidget);
   });
 
-  testWidgets('teammates page disables add button at max count',
-      (tester) async {
+  testWidgets('teammates page disables add button at max count', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: TeammatesPage(
@@ -195,7 +204,6 @@ void main() {
           ),
           onSave: (problem) async => saved.add(problem),
           onDelete: (_) async {},
-          onMarkAccepted: (_) async {},
           onOpenProblem: (_) async {},
         ),
       ),
@@ -231,7 +239,8 @@ void main() {
     expect(saved.single.analysis, isNotEmpty);
   });
 
-  testWidgets('problems page can mark an item as AC', (tester) async {
+  testWidgets('problems page can change status from the card', (tester) async {
+    final saved = <ProblemRecord>[];
     await tester.pumpWidget(
       MaterialApp(
         home: ProblemsPage(
@@ -251,19 +260,29 @@ void main() {
             url: 'https://www.luogu.com.cn/problem/P1001',
             platform: ProblemPlatform.lg,
           ),
-          onSave: (_) async {},
+          onSave: (problem) async => saved.add(problem),
           onDelete: (_) async {},
-          onMarkAccepted: (_) async {},
           onOpenProblem: (_) async {},
         ),
       ),
     );
 
-    expect(find.text('TODO'), findsOneWidget);
+    expect(find.text('待做'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('mark-ac-problem-p1')));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('已标记 AC'), findsOneWidget);
+    expect(saved.single.status, ProblemStatus.AC);
+    expect(find.textContaining('已改为已通过'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('problem-status-menu-p1')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('problem-status-option-p1-REVIEW')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(saved.last.status, ProblemStatus.REVIEW);
+    expect(find.textContaining('已改为复盘中'), findsOneWidget);
   });
 
   testWidgets('problems page tag chips filter and clear', (tester) async {
@@ -298,7 +317,6 @@ void main() {
           ),
           onSave: (_) async {},
           onDelete: (_) async {},
-          onMarkAccepted: (_) async {},
           onOpenProblem: (_) async {},
         ),
       ),
@@ -343,7 +361,6 @@ void main() {
           ),
           onSave: (_) async {},
           onDelete: (_) async {},
-          onMarkAccepted: (_) async {},
           onOpenProblem: (problem) async => opened.add(problem.url),
         ),
       ),
@@ -360,9 +377,7 @@ TeammateProfile _teammate(String id, String nickname) {
   return TeammateProfile.create(
     id: id,
     nickname: nickname,
-    accounts: const [
-      TeammateAccount(platform: 'codeforces', handle: 'alice'),
-    ],
+    accounts: const [TeammateAccount(platform: 'codeforces', handle: 'alice')],
     now: DateTime.parse('2026-07-10T12:00:00'),
   );
 }

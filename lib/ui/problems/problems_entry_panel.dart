@@ -56,7 +56,7 @@ class ProblemsEntryPanel extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   '补题 / 错题本',
                   style: TextStyle(
                     color: textPrimaryColor,
@@ -67,7 +67,8 @@ class ProblemsEntryPanel extends StatelessWidget {
                 Text(
                   subtitle,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: textSecondaryColor, fontSize: 12),
+                  style:
+                      const TextStyle(color: textSecondaryColor, fontSize: 12),
                 ),
               ],
             ),
