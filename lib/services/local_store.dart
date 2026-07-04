@@ -35,12 +35,12 @@ class LocalStore {
     try {
       final data = jsonDecode(raw);
       if (data is! Map) {
-        debugPrint('Invalid app config JSON: expected an object.');
+        debugPrint('应用配置 JSON 无效：应为对象。');
         return AppConfig.defaults();
       }
       return AppConfig.fromJson(Map<String, dynamic>.from(data));
     } catch (_) {
-      debugPrint('Failed to parse app config. Using defaults.');
+      debugPrint('解析应用配置失败，已使用默认值。');
       return AppConfig.defaults();
     }
   }
@@ -58,32 +58,32 @@ class LocalStore {
     try {
       final data = jsonDecode(await file.readAsString());
       if (data is! List) {
-        debugPrint('Invalid snapshots JSON: expected a list.');
+        debugPrint('快照 JSON 无效：应为列表。');
         return [];
       }
       final snapshots = <SolvedSnapshot>[];
       for (final item in data) {
         try {
           if (item is! Map) {
-            debugPrint('Skipping invalid snapshot: expected an object.');
+            debugPrint('已跳过无效快照：应为对象。');
             continue;
           }
           final snapshot = SolvedSnapshot.tryFromJson(
             Map<String, dynamic>.from(item),
           );
           if (snapshot == null) {
-            debugPrint('Skipping invalid snapshot entry.');
+            debugPrint('已跳过无效快照条目。');
             continue;
           }
           snapshots.add(snapshot);
         } catch (_) {
-          debugPrint('Skipping invalid snapshot entry.');
+          debugPrint('已跳过无效快照条目。');
           continue;
         }
       }
       return snapshots;
     } catch (_) {
-      debugPrint('Failed to parse snapshots. Using an empty list.');
+      debugPrint('解析快照失败，已使用空列表。');
       return [];
     }
   }
@@ -119,32 +119,32 @@ class LocalStore {
     try {
       final data = jsonDecode(await file.readAsString());
       if (data is! List) {
-        debugPrint('Invalid refresh logs JSON: expected a list.');
+        debugPrint('刷新日志 JSON 无效：应为列表。');
         return [];
       }
       final entries = <RefreshLogEntry>[];
       for (final item in data) {
         try {
           if (item is! Map) {
-            debugPrint('Skipping invalid refresh log: expected an object.');
+            debugPrint('已跳过无效刷新日志：应为对象。');
             continue;
           }
           final entry = RefreshLogEntry.tryFromJson(
             Map<String, dynamic>.from(item),
           );
           if (entry == null) {
-            debugPrint('Skipping invalid refresh log entry.');
+            debugPrint('已跳过无效刷新日志条目。');
             continue;
           }
           entries.add(entry);
         } catch (_) {
-          debugPrint('Skipping invalid refresh log entry.');
+          debugPrint('已跳过无效刷新日志条目。');
         }
       }
       entries.sort((a, b) => b.fetchedAt.compareTo(a.fetchedAt));
       return List.unmodifiable(entries.take(_maxRefreshLogs).toList());
     } catch (_) {
-      debugPrint('Failed to parse refresh logs. Using an empty list.');
+      debugPrint('解析刷新日志失败，已使用空列表。');
       return [];
     }
   }
@@ -170,32 +170,32 @@ class LocalStore {
     try {
       final data = jsonDecode(await file.readAsString());
       if (data is! List) {
-        debugPrint('Invalid problems JSON: expected a list.');
+        debugPrint('题单 JSON 无效：应为列表。');
         return [];
       }
       final problems = <ProblemRecord>[];
       for (final item in data) {
         try {
           if (item is! Map) {
-            debugPrint('Skipping invalid problem: expected an object.');
+            debugPrint('已跳过无效题目：应为对象。');
             continue;
           }
           final problem = ProblemRecord.tryFromJson(
             Map<String, dynamic>.from(item),
           );
           if (problem == null) {
-            debugPrint('Skipping invalid problem entry.');
+            debugPrint('已跳过无效题目条目。');
             continue;
           }
           problems.add(problem);
         } catch (_) {
-          debugPrint('Skipping invalid problem entry.');
+          debugPrint('已跳过无效题目条目。');
         }
       }
       problems.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       return List.unmodifiable(problems);
     } catch (_) {
-      debugPrint('Failed to parse problems. Using an empty list.');
+      debugPrint('解析题单失败，已使用空列表。');
       return [];
     }
   }
@@ -221,26 +221,26 @@ class LocalStore {
     try {
       final data = jsonDecode(await file.readAsString());
       if (data is! List) {
-        debugPrint('Invalid contests JSON: expected a list.');
+        debugPrint('比赛记录 JSON 无效：应为列表。');
         return [];
       }
       final contests = <ContestRecord>[];
       for (final item in data) {
         try {
           if (item is! Map) {
-            debugPrint('Skipping invalid contest: expected an object.');
+            debugPrint('已跳过无效比赛记录：应为对象。');
             continue;
           }
           final contest = ContestRecord.tryFromJson(
             Map<String, dynamic>.from(item),
           );
           if (contest == null) {
-            debugPrint('Skipping invalid contest entry.');
+            debugPrint('已跳过无效比赛记录条目。');
             continue;
           }
           contests.add(contest);
         } catch (_) {
-          debugPrint('Skipping invalid contest entry.');
+          debugPrint('已跳过无效比赛记录条目。');
         }
       }
       contests.sort((a, b) {
@@ -252,7 +252,7 @@ class LocalStore {
       });
       return List.unmodifiable(contests);
     } catch (_) {
-      debugPrint('Failed to parse contests. Using an empty list.');
+      debugPrint('解析比赛记录失败，已使用空列表。');
       return [];
     }
   }
@@ -278,13 +278,13 @@ class LocalStore {
     try {
       final data = jsonDecode(await file.readAsString());
       if (data is! Map) {
-        debugPrint('Invalid teammates JSON: expected an object.');
+        debugPrint('队友数据 JSON 无效：应为对象。');
         return const TeammateStoreData();
       }
       return TeammateStoreData.tryFromJson(Map<String, dynamic>.from(data)) ??
           const TeammateStoreData();
     } catch (_) {
-      debugPrint('Failed to parse teammates. Using an empty list.');
+      debugPrint('解析队友数据失败，已使用空列表。');
       return const TeammateStoreData();
     }
   }

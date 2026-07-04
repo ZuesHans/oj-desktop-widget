@@ -1,30 +1,23 @@
 import 'package:flutter/material.dart';
 
-import '../../core/solved_totals.dart';
 import '../../core/time.dart';
 import '../../models/oj_state.dart';
 import '../app_theme.dart';
 import '../shared/pill.dart';
+import 'home_summary_view_model.dart';
 
 class SummaryPanel extends StatelessWidget {
-  const SummaryPanel({super.key, required this.state});
+  const SummaryPanel({super.key, required this.state, this.viewModel});
 
   final OjState state;
+  final HomeSummaryViewModel? viewModel;
 
   @override
   Widget build(BuildContext context) {
-    final totalSolved = totalSolvedFromLatest(state.latest);
-    final today = state.todaySummary.totalDelta;
-    final updatedAt = state.latest.values
-        .expand((items) => items)
-        .where((item) => item.fetchedAt != null)
-        .map((item) => item.fetchedAt!)
-        .fold<DateTime?>(null, (latest, item) {
-      if (latest == null || item.isAfter(latest)) {
-        return item;
-      }
-      return latest;
-    });
+    final summary = viewModel ?? HomeSummaryViewModel.fromState(state);
+    final totalSolved = summary.totalSolved;
+    final today = summary.todayDelta;
+    final updatedAt = summary.updatedAt;
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -50,7 +43,7 @@ class SummaryPanel extends StatelessWidget {
                 child: Text(
                   updatedAt == null ? '尚未刷新' : '更新 ${formatTime(updatedAt)}',
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: textSecondaryColor),
+                  style: TextStyle(color: textSecondaryColor),
                 ),
               ),
             ],

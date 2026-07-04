@@ -15,8 +15,8 @@ class ProblemsPage extends StatefulWidget {
     required this.onParseLink,
     required this.onSave,
     required this.onDelete,
-    required this.onMarkAccepted,
     required this.onOpenProblem,
+    this.showBackButton = true,
   });
 
   final List<ProblemRecord> problems;
@@ -24,8 +24,8 @@ class ProblemsPage extends StatefulWidget {
   final Future<ParsedProblemLink> Function(String url) onParseLink;
   final Future<void> Function(ProblemRecord problem) onSave;
   final Future<void> Function(String id) onDelete;
-  final Future<void> Function(ProblemRecord problem) onMarkAccepted;
   final Future<void> Function(ProblemRecord problem) onOpenProblem;
+  final bool showBackButton;
 
   @override
   State<ProblemsPage> createState() => _ProblemsPageState();
@@ -60,6 +60,10 @@ class _ProblemsPageState extends State<ProblemsPage> {
     final pending = widget.problems
         .where((problem) => problem.status != ProblemStatus.AC)
         .length;
+    final accepted = widget.problems.length - pending;
+    final review = widget.problems
+        .where((problem) => problem.status == ProblemStatus.REVIEW)
+        .length;
     return Scaffold(
       backgroundColor: appSurfaceColor,
       body: Container(
@@ -67,37 +71,17 @@ class _ProblemsPageState extends State<ProblemsPage> {
         color: appSurfaceColor,
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-              child: Row(
-                children: [
-                  IconButton(
-                    key: const ValueKey('problems-back-button'),
-                    tooltip: '返回',
-                    onPressed: widget.onBack,
-                    icon: const Icon(Icons.arrow_back),
-                  ),
-                  const SizedBox(width: 4),
-                  const Expanded(
-                    child: Text(
-                      '补题 / 错题本',
-                      style:
-                          TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                  Pill(label: '待处理 $pending'),
-                  const SizedBox(width: 8),
-                  FilledButton.icon(
-                    key: const ValueKey('add-problem-button'),
-                    onPressed: () => _openEditor(context),
-                    icon: const Icon(Icons.add),
-                    label: const Text('添加'),
-                  ),
-                ],
-              ),
+            _ProblemsHeader(
+              showBackButton: widget.showBackButton,
+              onBack: widget.onBack,
+              onAdd: () => _openEditor(context),
+              total: widget.problems.length,
+              pending: pending,
+              accepted: accepted,
+              review: review,
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
               child: Column(
                 children: [
                   TextField(
@@ -107,7 +91,6 @@ class _ProblemsPageState extends State<ProblemsPage> {
                       prefixIcon: Icon(Icons.search),
                       hintText: '搜索标题、链接、标签或笔记',
                       isDense: true,
-                      border: OutlineInputBorder(),
                     ),
                     onChanged: (value) => setState(() => _query = value),
                   ),
@@ -121,8 +104,6 @@ class _ProblemsPageState extends State<ProblemsPage> {
                           initialValue: _statusFilter,
                           decoration: const InputDecoration(
                             labelText: '状态',
-                            isDense: true,
-                            border: OutlineInputBorder(),
                           ),
                           items: [
                             const DropdownMenuItem<ProblemStatus?>(
@@ -132,7 +113,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
                             for (final status in ProblemStatus.values)
                               DropdownMenuItem<ProblemStatus?>(
                                 value: status,
-                                child: Text(status.name),
+                                child: Text(problemStatusLabel(status)),
                               ),
                           ],
                           onChanged: (value) =>
@@ -147,8 +128,6 @@ class _ProblemsPageState extends State<ProblemsPage> {
                           initialValue: _platformFilter,
                           decoration: const InputDecoration(
                             labelText: '平台',
-                            isDense: true,
-                            border: OutlineInputBorder(),
                           ),
                           items: [
                             const DropdownMenuItem<ProblemPlatform?>(
@@ -205,28 +184,44 @@ class _ProblemsPageState extends State<ProblemsPage> {
             ),
             Expanded(
               child: visible.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Text(
                         '还没有题目，先添加一个链接或手动录入。',
                         style: TextStyle(color: textSecondaryColor),
                       ),
                     )
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      itemCount: visible.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) => _ProblemListItem(
-                        problem: visible[index],
-                        onEdit: () =>
-                            _openEditor(context, problem: visible[index]),
-                        onMarkAccepted:
-                            visible[index].status == ProblemStatus.AC
-                                ? null
-                                : () => _markAccepted(context, visible[index]),
-                        onDelete: () => _delete(context, visible[index]),
-                        onOpenProblem: () =>
-                            _openProblem(context, visible[index]),
-                      ),
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        final columns = constraints.maxWidth >= 680 ? 2 : 1;
+                        return GridView.builder(
+                          padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: columns,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                            mainAxisExtent: 158,
+                          ),
+                          itemCount: visible.length,
+                          itemBuilder: (context, index) => _ProblemListItem(
+                            problem: visible[index],
+                            onView: () => _openDetails(
+                              context,
+                              visible[index],
+                            ),
+                            onEdit: () =>
+                                _openEditor(context, problem: visible[index]),
+                            onStatusChanged: (status) => _changeStatus(
+                              context,
+                              visible[index],
+                              status,
+                            ),
+                            onDelete: () => _delete(context, visible[index]),
+                            onOpenProblem: () =>
+                                _openProblem(context, visible[index]),
+                          ),
+                        );
+                      },
                     ),
             ),
           ],
@@ -267,15 +262,26 @@ class _ProblemsPageState extends State<ProblemsPage> {
     }
   }
 
-  Future<void> _markAccepted(
-      BuildContext context, ProblemRecord problem) async {
-    await widget.onMarkAccepted(problem);
+  Future<void> _changeStatus(
+    BuildContext context,
+    ProblemRecord problem,
+    ProblemStatus status,
+  ) async {
+    if (problem.status == status) {
+      return;
+    }
+    final updated = problem.copyWith(status: status);
+    await widget.onSave(updated);
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${problem.title} 已标记 AC')),
-    );
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('${problem.title} 已改为${problemStatusLabel(status)}'),
+        ),
+      );
   }
 
   Future<void> _delete(BuildContext context, ProblemRecord problem) async {
@@ -300,113 +306,569 @@ class _ProblemsPageState extends State<ProblemsPage> {
       );
     }
   }
+
+  Future<void> _openDetails(
+    BuildContext context,
+    ProblemRecord problem,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _ProblemDetailsDialog(
+        problem: problem,
+        onEdit: () {
+          Navigator.pop(context);
+          _openEditor(context, problem: problem);
+        },
+        onOpenProblem: () {
+          Navigator.pop(context);
+          _openProblem(context, problem);
+        },
+        onStatusChanged: (status) {
+          Navigator.pop(context);
+          _changeStatus(context, problem, status);
+        },
+      ),
+    );
+  }
 }
 
-class _ProblemListItem extends StatelessWidget {
-  const _ProblemListItem({
-    required this.problem,
-    required this.onEdit,
-    required this.onMarkAccepted,
-    required this.onDelete,
-    required this.onOpenProblem,
+class _ProblemsHeader extends StatelessWidget {
+  const _ProblemsHeader({
+    required this.showBackButton,
+    required this.onBack,
+    required this.onAdd,
+    required this.total,
+    required this.pending,
+    required this.accepted,
+    required this.review,
   });
 
-  final ProblemRecord problem;
-  final VoidCallback onEdit;
-  final VoidCallback? onMarkAccepted;
-  final VoidCallback onDelete;
-  final VoidCallback onOpenProblem;
+  final bool showBackButton;
+  final VoidCallback onBack;
+  final VoidCallback onAdd;
+  final int total;
+  final int pending;
+  final int accepted;
+  final int review;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: borderColor),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (showBackButton) ...[
+                IconButton(
+                  key: const ValueKey('problems-back-button'),
+                  tooltip: '返回',
+                  onPressed: onBack,
+                  icon: const Icon(Icons.arrow_back),
+                ),
+                const SizedBox(width: 4),
+              ],
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: accentColor.withValues(alpha: 0.2)),
+                ),
+                child: Icon(Icons.auto_stories_outlined, color: accentColor),
+              ),
+              const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  problem.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: textPrimaryColor,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '补题 / 错题本',
+                      style: TextStyle(
+                        color: textPrimaryColor,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      pending == 0 ? '今天没有欠账，很清爽。' : '还剩 $pending 题待处理',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: textSecondaryColor, fontSize: 12),
+                    ),
+                  ],
                 ),
               ),
-              _ProblemStatusChip(status: problem.status),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                key: const ValueKey('add-problem-button'),
+                onPressed: onAdd,
+                icon: const Icon(Icons.add),
+                label: const Text('添加'),
+              ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            '${problemPlatformLabel(problem.platform)} · ${problem.date}',
-            style: const TextStyle(color: textSecondaryColor, fontSize: 12),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            problem.url,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: textSecondaryColor, fontSize: 12),
-          ),
-          if (problem.tags.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final tag in problem.tags) Pill(label: tag),
-              ],
-            ),
-          ],
-          if (problem.note.isNotEmpty || problem.analysis.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              problem.analysis.isNotEmpty ? problem.analysis : problem.note,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: textPrimaryColor),
-            ),
-          ],
           const SizedBox(height: 10),
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              IconButton(
-                key: ValueKey('open-problem-${problem.id}'),
-                tooltip: '前往题目',
-                onPressed: onOpenProblem,
-                icon: const Icon(Icons.open_in_new),
+              _SummaryMetric(
+                label: '全部',
+                value: total,
+                color: textPrimaryColor,
               ),
-              IconButton(
-                key: ValueKey('edit-problem-${problem.id}'),
-                tooltip: '编辑',
-                onPressed: onEdit,
-                icon: const Icon(Icons.edit_outlined),
+              const SizedBox(width: 8),
+              _SummaryMetric(
+                label: '待处理',
+                value: pending,
+                color: dangerColor,
               ),
-              IconButton(
-                key: ValueKey('mark-ac-problem-${problem.id}'),
-                tooltip: '标记 AC',
-                onPressed: onMarkAccepted,
-                icon: const Icon(Icons.check_circle_outline),
+              const SizedBox(width: 8),
+              _SummaryMetric(
+                label: '复盘中',
+                value: review,
+                color: _problemStatusColor(ProblemStatus.REVIEW),
               ),
-              IconButton(
-                key: ValueKey('delete-problem-${problem.id}'),
-                tooltip: '删除',
-                onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline),
+              const SizedBox(width: 8),
+              _SummaryMetric(
+                label: '已通过',
+                value: accepted,
+                color: accentColor,
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryMetric extends StatelessWidget {
+  const _SummaryMetric({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final int value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withValues(alpha: 0.16)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: textSecondaryColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            Text(
+              '$value',
+              style: TextStyle(
+                color: color,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProblemListItem extends StatelessWidget {
+  const _ProblemListItem({
+    required this.problem,
+    required this.onView,
+    required this.onEdit,
+    required this.onStatusChanged,
+    required this.onDelete,
+    required this.onOpenProblem,
+  });
+
+  final ProblemRecord problem;
+  final VoidCallback onView;
+  final VoidCallback onEdit;
+  final ValueChanged<ProblemStatus> onStatusChanged;
+  final VoidCallback onDelete;
+  final VoidCallback onOpenProblem;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = _problemStatusColor(problem.status);
+    final preview = problem.analysis.isNotEmpty
+        ? '题解：${problem.analysis}'
+        : problem.note.isNotEmpty
+            ? '备注：${problem.note}'
+            : '';
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            color: statusColor.withValues(alpha: 0.85),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 10, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          problem.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: textPrimaryColor,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _ProblemStatusMenu(
+                        problemId: problem.id,
+                        status: problem.status,
+                        onChanged: onStatusChanged,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(Icons.public, size: 14, color: textSecondaryColor),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          '${problemPlatformLabel(problem.platform)} · ${problem.date}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: textSecondaryColor,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    height: 22,
+                    child: preview.isEmpty
+                        ? Text(
+                            problem.url,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: textSecondaryColor,
+                              fontSize: 12,
+                            ),
+                          )
+                        : Text(
+                            preview,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: textPrimaryColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                  ),
+                  const Spacer(),
+                  if (problem.tags.isNotEmpty)
+                    _ProblemTagStrip(tags: problem.tags),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      _CompactActionButton(
+                        key: ValueKey('view-problem-${problem.id}'),
+                        tooltip: '查看详情',
+                        onPressed: onView,
+                        icon: Icons.article_outlined,
+                      ),
+                      _CompactActionButton(
+                        key: ValueKey('open-problem-${problem.id}'),
+                        tooltip: '前往题目',
+                        onPressed: onOpenProblem,
+                        icon: Icons.open_in_new,
+                      ),
+                      _CompactActionButton(
+                        key: ValueKey('edit-problem-${problem.id}'),
+                        tooltip: '编辑',
+                        onPressed: onEdit,
+                        icon: Icons.edit_outlined,
+                      ),
+                      _CompactActionButton(
+                        key: ValueKey('mark-ac-problem-${problem.id}'),
+                        tooltip: '勾选为已通过',
+                        onPressed: problem.status == ProblemStatus.AC
+                            ? null
+                            : () => onStatusChanged(ProblemStatus.AC),
+                        icon: Icons.check_circle_outline,
+                      ),
+                      _CompactActionButton(
+                        key: ValueKey('delete-problem-${problem.id}'),
+                        tooltip: '删除',
+                        onPressed: onDelete,
+                        icon: Icons.delete_outline,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactActionButton extends StatelessWidget {
+  const _CompactActionButton({
+    super.key,
+    required this.tooltip,
+    required this.onPressed,
+    required this.icon,
+  });
+
+  final String tooltip;
+  final VoidCallback? onPressed;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: Icon(icon, size: 18),
+      constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+      padding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
+      style: IconButton.styleFrom(
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+  }
+}
+
+class _ProblemTagStrip extends StatelessWidget {
+  const _ProblemTagStrip({required this.tags});
+
+  final List<String> tags;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 24,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: tags.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 5),
+        itemBuilder: (context, index) => Pill(label: tags[index]),
+      ),
+    );
+  }
+}
+
+class _ProblemDetailsDialog extends StatelessWidget {
+  const _ProblemDetailsDialog({
+    required this.problem,
+    required this.onEdit,
+    required this.onOpenProblem,
+    required this.onStatusChanged,
+  });
+
+  final ProblemRecord problem;
+  final VoidCallback onEdit;
+  final VoidCallback onOpenProblem;
+  final ValueChanged<ProblemStatus> onStatusChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      titlePadding: const EdgeInsets.fromLTRB(22, 18, 14, 0),
+      contentPadding: const EdgeInsets.fromLTRB(22, 12, 22, 12),
+      actionsPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              problem.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 10),
+          _ProblemStatusMenu(
+            problemId: '${problem.id}-details',
+            status: problem.status,
+            onChanged: onStatusChanged,
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 540,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  Pill(label: problemPlatformLabel(problem.platform)),
+                  Pill(label: problem.date),
+                  for (final tag in problem.tags) Pill(label: tag),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _DetailLine(label: '链接', value: problem.url),
+              const SizedBox(height: 12),
+              _DetailSection(
+                title: '备注',
+                value: problem.note,
+                emptyText: '暂无备注',
+              ),
+              const SizedBox(height: 12),
+              _DetailSection(
+                title: '题解分析',
+                value: problem.analysis,
+                emptyText: '暂无题解分析',
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton.icon(
+          onPressed: onOpenProblem,
+          icon: const Icon(Icons.open_in_new),
+          label: const Text('前往题目'),
+        ),
+        TextButton.icon(
+          onPressed: onEdit,
+          icon: const Icon(Icons.edit_outlined),
+          label: const Text('编辑'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('关闭'),
+        ),
+      ],
+    );
+  }
+}
+
+class _DetailLine extends StatelessWidget {
+  const _DetailLine({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: textSecondaryColor,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 4),
+        SelectableText(
+          value,
+          style: TextStyle(color: textPrimaryColor, fontSize: 13),
+        ),
+      ],
+    );
+  }
+}
+
+class _DetailSection extends StatelessWidget {
+  const _DetailSection({
+    required this.title,
+    required this.value,
+    required this.emptyText,
+  });
+
+  final String title;
+  final String value;
+  final String emptyText;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = value.isEmpty ? emptyText : value;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cardMutedColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: textPrimaryColor,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          SelectableText(
+            text,
+            style: TextStyle(
+              color: value.isEmpty ? textSecondaryColor : textPrimaryColor,
+              fontSize: 13,
+              height: 1.35,
+            ),
           ),
         ],
       ),
@@ -431,30 +893,90 @@ class _TagStatChip extends StatelessWidget {
       key: ValueKey('problem-tag-filter-${stat.tag}'),
       selected: selected,
       label: Text('${stat.tag} ${stat.total}'),
-      tooltip: '未 AC ${stat.pending} / 总数 ${stat.total}',
+      tooltip: '未通过 ${stat.pending} / 总数 ${stat.total}',
       onSelected: (_) => onTap(),
     );
   }
 }
 
-class _ProblemStatusChip extends StatelessWidget {
-  const _ProblemStatusChip({required this.status});
+class _ProblemStatusMenu extends StatelessWidget {
+  const _ProblemStatusMenu({
+    required this.problemId,
+    required this.status,
+    required this.onChanged,
+  });
 
+  final String problemId;
   final ProblemStatus status;
+  final ValueChanged<ProblemStatus> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final color = status == ProblemStatus.AC ? accentColor : dangerColor;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        status.name,
-        style: TextStyle(color: color, fontWeight: FontWeight.w800),
+    final color = _problemStatusColor(status);
+    return PopupMenuButton<ProblemStatus>(
+      key: ValueKey('problem-status-menu-$problemId'),
+      tooltip: '切换状态',
+      onSelected: onChanged,
+      itemBuilder: (context) => [
+        for (final item in ProblemStatus.values)
+          PopupMenuItem(
+            key: ValueKey('problem-status-option-$problemId-${item.name}'),
+            value: item,
+            child: Row(
+              children: [
+                Icon(
+                  item == status
+                      ? Icons.check_circle
+                      : Icons.radio_button_unchecked,
+                  size: 18,
+                  color: item == status
+                      ? _problemStatusColor(item)
+                      : textSecondaryColor,
+                ),
+                const SizedBox(width: 8),
+                Text(problemStatusLabel(item)),
+              ],
+            ),
+          ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              status == ProblemStatus.AC
+                  ? Icons.check_circle
+                  : Icons.radio_button_unchecked,
+              size: 14,
+              color: color,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              problemStatusLabel(status),
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
+}
+
+Color _problemStatusColor(ProblemStatus status) {
+  return switch (status) {
+    ProblemStatus.AC => accentColor,
+    ProblemStatus.REVIEW => const Color(0xFF8A6F19),
+    ProblemStatus.TODO => textSecondaryColor,
+    ProblemStatus.WA || ProblemStatus.TLE || ProblemStatus.RE => dangerColor,
+  };
 }

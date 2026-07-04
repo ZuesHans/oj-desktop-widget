@@ -28,13 +28,13 @@ class HeatmapEntryPanel extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.calendar_view_week, color: accentColor),
+          Icon(Icons.calendar_view_week, color: accentColor),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   '热力图',
                   style: TextStyle(
                     color: textPrimaryColor,
@@ -43,24 +43,23 @@ class HeatmapEntryPanel extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'Current ${summary.currentStreak}d · Longest ${summary.longestStreak}d',
+                  '当前连续 ${summary.currentStreak} 天 · 最长连续 ${summary.longestStreak} 天',
                   overflow: TextOverflow.ellipsis,
-                  style:
-                      const TextStyle(color: textSecondaryColor, fontSize: 12),
+                  style: TextStyle(color: textSecondaryColor, fontSize: 12),
                 ),
               ],
             ),
           ),
           IconButton(
             key: const ValueKey('export-data-button'),
-            tooltip: 'Export Backup',
+            tooltip: '导出备份',
             onPressed: onExport,
             color: accentColor,
             icon: const Icon(Icons.download),
           ),
           IconButton(
             key: const ValueKey('import-backup-button'),
-            tooltip: 'Import Backup',
+            tooltip: '导入备份',
             onPressed: onImport,
             color: accentColor,
             icon: const Icon(Icons.upload_file),

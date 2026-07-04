@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app/oj_float_app.dart';
+import 'models/app_config.dart';
 import 'services/local_store.dart';
 import 'ui/app_theme.dart';
 
@@ -34,6 +35,7 @@ export 'services/backup_service.dart';
 export 'services/contest_record_service.dart';
 export 'services/daily_summary_service.dart';
 export 'services/heatmap_service.dart';
+export 'services/home_action_service.dart';
 export 'services/local_store.dart';
 export 'services/oj_controller.dart';
 export 'services/problem_book_service.dart';
@@ -41,7 +43,9 @@ export 'services/refresh_service.dart';
 export 'services/sync_secret_store.dart';
 export 'services/sync_service.dart';
 export 'services/teammate_service.dart';
+export 'services/window_shell_service.dart';
 export 'ui/dashboard/oj_float_home.dart';
+export 'ui/dashboard/home_summary_view_model.dart';
 export 'ui/contests/contest_editor.dart';
 export 'ui/contests/contests_page.dart';
 export 'ui/heatmap/heatmap_dialog.dart';
@@ -55,25 +59,27 @@ export 'ui/teammates/teammates_page.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  AppConfig? initialConfig;
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
-    final initialConfig = await LocalStore().loadConfig();
+    initialConfig = await LocalStore().loadConfig();
     final options = WindowOptions(
       size: compactWindowSize,
       minimumSize: compactMinimumWindowSize,
-      center: true,
-      title: 'OJ Float',
+      center: false,
+      title: 'OJ 悬浮窗',
       titleBarStyle: TitleBarStyle.hidden,
       alwaysOnTop: initialConfig.alwaysOnTop,
       backgroundColor: Colors.transparent,
       skipTaskbar: !initialConfig.showInTaskbar,
     );
     await windowManager.waitUntilReadyToShow(options, () async {
+      await windowManager.setAlignment(Alignment.topRight);
       await windowManager.setPreventClose(true);
       await windowManager.show();
       await windowManager.focus();
     });
   }
 
-  runApp(const OjFloatApp());
+  runApp(OjFloatApp(initialConfig: initialConfig));
 }

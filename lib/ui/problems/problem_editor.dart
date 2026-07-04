@@ -107,7 +107,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       _parseMessage!,
-                      style: const TextStyle(color: textSecondaryColor),
+                      style: TextStyle(color: textSecondaryColor),
                     ),
                   ),
                 ],
@@ -167,7 +167,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
                               for (final status in ProblemStatus.values)
                                 DropdownMenuItem(
                                   value: status,
-                                  child: Text(status.name),
+                                  child: Text(problemStatusLabel(status)),
                                 ),
                             ],
                             onChanged: (value) => setState(
@@ -216,7 +216,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
                   key: const ValueKey('problem-analysis-field'),
                   controller: _analysisController,
                   decoration: const InputDecoration(
-                    labelText: '题解心得 / Warning',
+                    labelText: '题解心得 / 注意事项',
                     border: OutlineInputBorder(),
                   ),
                   minLines: 4,

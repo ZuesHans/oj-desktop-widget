@@ -36,7 +36,7 @@ class DailyPanel extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           if (summary.deltas.isEmpty)
-            const Text('暂无今日快照', style: TextStyle(color: textSecondaryColor))
+            Text('暂无今日快照', style: TextStyle(color: textSecondaryColor))
           else
             ...supportedOjs.map((meta) {
               final delta = summary.deltas[meta.id];

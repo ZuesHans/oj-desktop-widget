@@ -22,6 +22,9 @@ class ProblemsEntryPanel extends StatelessWidget {
         .length;
     final accepted =
         problems.where((problem) => problem.status == ProblemStatus.AC).length;
+    final subtitle = todo == 0
+        ? '已 AC $accepted · 共 ${problems.length}'
+        : '待处理 $todo · 已 AC $accepted · 共 ${problems.length}';
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -31,13 +34,29 @@ class ProblemsEntryPanel extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.assignment_outlined, color: accentColor),
-          const SizedBox(width: 10),
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: (todo == 0 ? accentColor : dangerColor)
+                  .withValues(alpha: 0.11),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: (todo == 0 ? accentColor : dangerColor)
+                    .withValues(alpha: 0.18),
+              ),
+            ),
+            child: Icon(
+              todo == 0 ? Icons.check_circle_outline : Icons.assignment_late,
+              color: todo == 0 ? accentColor : dangerColor,
+            ),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   '补题 / 错题本',
                   style: TextStyle(
                     color: textPrimaryColor,
@@ -46,10 +65,9 @@ class ProblemsEntryPanel extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '待处理 $todo · 已 AC $accepted · 共 ${problems.length}',
+                  subtitle,
                   overflow: TextOverflow.ellipsis,
-                  style:
-                      const TextStyle(color: textSecondaryColor, fontSize: 12),
+                  style: TextStyle(color: textSecondaryColor, fontSize: 12),
                 ),
               ],
             ),

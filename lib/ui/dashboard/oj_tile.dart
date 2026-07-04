@@ -31,10 +31,10 @@ class OjTile extends StatelessWidget {
     final solvedText = hasDisplayCount
         ? '$displayedSolved'
         : results.any((result) => result.status == FetchStatus.failure)
-            ? 'Failed'
+            ? '失败'
             : enabled && usernames.isNotEmpty
-                ? 'Pending'
-                : 'Not set';
+                ? '等待刷新'
+                : '未设置';
     final shownUsernames = {
       for (final result in results) result.username,
     };
@@ -63,15 +63,14 @@ class OjTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(meta.name,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: textPrimaryColor,
                       fontWeight: FontWeight.w700,
                     )),
                 Text(
                   usernames.isEmpty ? meta.hint : usernames.join(', '),
                   overflow: TextOverflow.ellipsis,
-                  style:
-                      const TextStyle(color: textSecondaryColor, fontSize: 12),
+                  style: TextStyle(color: textSecondaryColor, fontSize: 12),
                 ),
                 const SizedBox(height: 6),
                 ...results.map(
@@ -90,13 +89,13 @@ class OjTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(solvedText,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: textPrimaryColor,
                     fontWeight: FontWeight.w800,
                   )),
               Text(
                 '今日 +$today',
-                style: const TextStyle(color: textSecondaryColor, fontSize: 12),
+                style: TextStyle(color: textSecondaryColor, fontSize: 12),
               ),
             ],
           ),
@@ -117,8 +116,8 @@ class _AccountResultLine extends StatelessWidget {
     final retained = retainedSolvedCountForResult(result);
     final statusText = switch (result.status) {
       FetchStatus.success => '${result.solvedCount ?? 0} (+$today)',
-      FetchStatus.failure => retained == null ? 'Failed' : '$retained (保留)',
-      FetchStatus.idle => 'Pending',
+      FetchStatus.failure => retained == null ? '失败' : '$retained (保留)',
+      FetchStatus.idle => '等待刷新',
     };
     final color =
         result.status == FetchStatus.failure ? dangerColor : textSecondaryColor;
@@ -135,8 +134,7 @@ class _AccountResultLine extends StatelessWidget {
                   result.username,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style:
-                      const TextStyle(color: textSecondaryColor, fontSize: 12),
+                  style: TextStyle(color: textSecondaryColor, fontSize: 12),
                 ),
               ),
               Text(
@@ -154,7 +152,7 @@ class _AccountResultLine extends StatelessWidget {
               result.error!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: dangerColor, fontSize: 12),
+              style: TextStyle(color: dangerColor, fontSize: 12),
             ),
         ],
       ),
@@ -178,11 +176,11 @@ class _PendingAccountLine extends StatelessWidget {
               username,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: textSecondaryColor, fontSize: 12),
+              style: TextStyle(color: textSecondaryColor, fontSize: 12),
             ),
           ),
-          const Text(
-            'Pending',
+          Text(
+            '等待刷新',
             style: TextStyle(color: textSecondaryColor, fontSize: 12),
           ),
         ],

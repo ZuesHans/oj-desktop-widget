@@ -169,7 +169,9 @@ class TeammateService {
     final snapshots = [...data.snapshots];
 
     final results = await Future.wait(
-      enabledAccounts.map((account) => _refreshAccount(account)),
+      enabledAccounts.map(
+        (account) => _refreshAccount(account, currentTrainingDate),
+      ),
     );
     for (final result in results) {
       if (result.error != null) {
@@ -178,6 +180,10 @@ class TeammateService {
       }
       final solvedTotal = result.solvedTotal!;
       errors.remove(result.account.platform);
+      final dailyAcceptedCount = result.dailyAcceptedCount;
+      final inferredStart = dailyAcceptedCount == null
+          ? solvedTotal
+          : math.max(0, solvedTotal - dailyAcceptedCount);
       final snapshotIndex = snapshots.indexWhere(
         (snapshot) =>
             snapshot.teammateId == teammateId &&
@@ -190,7 +196,7 @@ class TeammateService {
           teammateId: teammateId,
           platform: result.account.platform,
           trainingDate: currentTrainingDate,
-          solvedTotalAtStart: solvedTotal,
+          solvedTotalAtStart: inferredStart,
           latestSolvedTotal: solvedTotal,
           updatedAt: refreshTime,
         );
@@ -198,15 +204,19 @@ class TeammateService {
       } else {
         final previous = snapshots[snapshotIndex];
         snapshot = previous.copyWith(
+          solvedTotalAtStart: dailyAcceptedCount == null
+              ? previous.solvedTotalAtStart
+              : inferredStart,
           latestSolvedTotal: solvedTotal,
           updatedAt: refreshTime,
         );
         snapshots[snapshotIndex] = snapshot;
       }
-      deltas[result.account.platform] = math.max(
-        0,
-        snapshot.latestSolvedTotal - snapshot.solvedTotalAtStart,
-      );
+      deltas[result.account.platform] = dailyAcceptedCount ??
+          math.max(
+            0,
+            snapshot.latestSolvedTotal - snapshot.solvedTotalAtStart,
+          );
     }
     final totalDelta = deltas.values.fold<int>(0, (sum, item) => sum + item);
 
@@ -337,7 +347,10 @@ class TeammateService {
     };
   }
 
-  Future<_AccountRefreshResult> _refreshAccount(TeammateAccount account) async {
+  Future<_AccountRefreshResult> _refreshAccount(
+    TeammateAccount account,
+    String trainingDate,
+  ) async {
     final provider = providers[account.platform];
     if (provider == null) {
       return _AccountRefreshResult(
@@ -349,9 +362,15 @@ class TeammateService {
       final profile = await provider
           .fetchProfile(client, account.handle)
           .timeout(const Duration(seconds: 18));
+      final dailyAcceptedCount = await _fetchDailyAcceptedCount(
+        provider,
+        account.handle,
+        trainingDate,
+      );
       return _AccountRefreshResult(
         account: account,
         solvedTotal: profile.solvedCount,
+        dailyAcceptedCount: dailyAcceptedCount,
       );
     } catch (error) {
       return _AccountRefreshResult(
@@ -360,18 +379,52 @@ class TeammateService {
       );
     }
   }
+
+  Future<int?> _fetchDailyAcceptedCount(
+    OjProvider provider,
+    String handle,
+    String trainingDate,
+  ) async {
+    final activityProvider = provider is OjDailyActivityProvider
+        ? provider as OjDailyActivityProvider
+        : null;
+    if (activityProvider == null) {
+      return null;
+    }
+    final start = _trainingDayStart(trainingDate);
+    try {
+      final activity = await activityProvider
+          .fetchDailyActivity(
+            client,
+            handle,
+            start: start,
+            end: start.add(const Duration(days: 1)),
+          )
+          .timeout(const Duration(seconds: 18));
+      return math.max(0, activity.acceptedCount);
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 class _AccountRefreshResult {
   const _AccountRefreshResult({
     required this.account,
     this.solvedTotal,
+    this.dailyAcceptedCount,
     this.error,
   });
 
   final TeammateAccount account;
   final int? solvedTotal;
+  final int? dailyAcceptedCount;
   final String? error;
+}
+
+DateTime _trainingDayStart(String trainingDate) {
+  final date = DateTime.parse(trainingDate);
+  return DateTime(date.year, date.month, date.day, 4);
 }
 
 TeammateDailyRecord? _recordFor(

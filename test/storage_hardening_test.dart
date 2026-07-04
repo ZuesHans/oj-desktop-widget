@@ -89,6 +89,38 @@ void main() {
 
       expect(usernames, ['a', 'b']);
     });
+
+    test('dashboard module order keeps known visible items', () {
+      final config = AppConfig.fromJson({
+        'dashboardModules': [
+          'teammates',
+          'heatmap',
+          'unknown',
+          'teammates',
+        ],
+      });
+
+      expect(config.dashboardModules.take(2), [
+        DashboardModule.teammates,
+        DashboardModule.heatmap,
+      ]);
+      expect(config.dashboardModules, hasLength(2));
+    });
+
+    test('missing dashboard modules use default large float modules', () {
+      final config = AppConfig.fromJson({});
+
+      expect(config.dashboardModules.toSet(), defaultDashboardModules.toSet());
+    });
+
+    test('compact click target is parsed and persisted', () {
+      final config = AppConfig.fromJson({
+        'compactClickTarget': 'dashboard',
+      });
+
+      expect(config.compactClickTarget, CompactClickTarget.dashboard);
+      expect(config.toJson()['compactClickTarget'], 'dashboard');
+    });
   });
 
   group('snapshot storage hardening', () {

@@ -1,5 +1,6 @@
 enum AppDisplayMode {
   compact,
+  largeFloat,
   dashboard,
   heatmap,
   problems,

@@ -11,10 +11,12 @@ class RefreshLogsPage extends StatelessWidget {
     super.key,
     required this.logs,
     required this.onBack,
+    this.showBackButton = true,
   });
 
   final List<RefreshLogEntry> logs;
   final VoidCallback onBack;
+  final bool showBackButton;
 
   @override
   Widget build(BuildContext context) {
@@ -29,13 +31,15 @@ class RefreshLogsPage extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
               child: Row(
                 children: [
-                  IconButton(
-                    key: const ValueKey('refresh-logs-back-button'),
-                    tooltip: '返回',
-                    onPressed: onBack,
-                    icon: const Icon(Icons.arrow_back),
-                  ),
-                  const SizedBox(width: 4),
+                  if (showBackButton) ...[
+                    IconButton(
+                      key: const ValueKey('refresh-logs-back-button'),
+                      tooltip: '返回',
+                      onPressed: onBack,
+                      icon: const Icon(Icons.arrow_back),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
                   const Expanded(
                     child: Text(
                       '刷新日志',
@@ -49,7 +53,7 @@ class RefreshLogsPage extends StatelessWidget {
             ),
             Expanded(
               child: logs.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Text(
                         '暂无刷新记录',
                         style: TextStyle(color: textSecondaryColor),
@@ -100,7 +104,7 @@ class _RefreshLogCard extends StatelessWidget {
                   '${_ojName(log.ojId)} / ${log.username}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: textPrimaryColor,
                     fontWeight: FontWeight.w800,
                   ),
@@ -112,17 +116,17 @@ class _RefreshLogCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             '${dateKey(log.fetchedAt)} ${formatTime(log.fetchedAt)} · ${log.source}',
-            style: const TextStyle(color: textSecondaryColor, fontSize: 12),
+            style: TextStyle(color: textSecondaryColor, fontSize: 12),
           ),
           const SizedBox(height: 6),
           Text(
             _countText(log),
-            style: const TextStyle(color: textSecondaryColor, fontSize: 12),
+            style: TextStyle(color: textSecondaryColor, fontSize: 12),
           ),
           const SizedBox(height: 8),
           Text(
             log.message,
-            style: const TextStyle(color: textPrimaryColor),
+            style: TextStyle(color: textPrimaryColor),
           ),
         ],
       ),

@@ -111,7 +111,7 @@ class HeatmapGridState extends State<HeatmapGrid> {
               child: Text(
                 rangeText,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   color: textSecondaryColor,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -127,7 +127,7 @@ class HeatmapGridState extends State<HeatmapGrid> {
             ),
             Text(
               '${pageCount - _page}/$pageCount',
-              style: const TextStyle(color: textSecondaryColor, fontSize: 12),
+              style: TextStyle(color: textSecondaryColor, fontSize: 12),
             ),
             IconButton(
               tooltip: '更新',

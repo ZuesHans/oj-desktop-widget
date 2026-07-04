@@ -4,19 +4,19 @@ const supportedOjs = <OjMeta>[
   OjMeta(
     id: 'codeforces',
     name: 'Codeforces',
-    hint: 'handle',
+    hint: '用户名 / handle',
     profileBaseUrl: 'https://codeforces.com/profile/',
   ),
   OjMeta(
     id: 'leetcode',
     name: 'LeetCode',
-    hint: 'username',
+    hint: '用户名',
     profileBaseUrl: 'https://leetcode.com/',
   ),
   OjMeta(
     id: 'atcoder',
     name: 'AtCoder',
-    hint: 'username',
+    hint: '用户名',
     profileBaseUrl: 'https://atcoder.jp/users/',
   ),
   OjMeta(

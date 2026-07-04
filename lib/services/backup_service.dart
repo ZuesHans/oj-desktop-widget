@@ -132,28 +132,28 @@ String buildPortableBackupJson({
 ParsedPortableBackup parsePortableBackupJson(String jsonText) {
   final decoded = jsonDecode(jsonText);
   if (decoded is! Map) {
-    throw const FormatException('Backup JSON must be an object.');
+    throw const FormatException('备份 JSON 必须是对象。');
   }
   final data = Map<String, dynamic>.from(decoded);
   if (data['schemaVersion'] != 1) {
-    throw const FormatException('Unsupported backup schemaVersion.');
+    throw const FormatException('备份版本不受支持。');
   }
   if (data['app'] != 'oj_float') {
-    throw const FormatException('Backup app does not match oj_float.');
+    throw const FormatException('备份所属应用不匹配。');
   }
   if (data['exportType'] != 'portable_backup') {
-    throw const FormatException('Backup exportType is not portable_backup.');
+    throw const FormatException('备份类型不是便携备份。');
   }
   final exportedAt = data['exportedAt'];
   final parsedExportedAt =
       exportedAt is String ? DateTime.tryParse(exportedAt) : null;
   final rawConfig = data['config'];
   if (rawConfig is! Map) {
-    throw const FormatException('Backup config is missing or invalid.');
+    throw const FormatException('备份缺少配置或配置无效。');
   }
   final rawSnapshots = data['snapshots'];
   if (rawSnapshots is! List) {
-    throw const FormatException('Backup snapshots must be an array.');
+    throw const FormatException('备份快照必须是数组。');
   }
 
   final snapshots = <SolvedSnapshot>[];
@@ -176,7 +176,7 @@ ParsedPortableBackup parsePortableBackupJson(String jsonText) {
   final problems = <ProblemRecord>[];
   if (rawProblems != null) {
     if (rawProblems is! List) {
-      throw const FormatException('Backup problems must be an array.');
+      throw const FormatException('备份题单必须是数组。');
     }
     for (final item in rawProblems) {
       try {
@@ -200,7 +200,7 @@ ParsedPortableBackup parsePortableBackupJson(String jsonText) {
   final contests = <ContestRecord>[];
   if (rawContests != null) {
     if (rawContests is! List) {
-      throw const FormatException('Backup contests must be an array.');
+      throw const FormatException('备份比赛记录必须是数组。');
     }
     for (final item in rawContests) {
       try {
@@ -230,7 +230,7 @@ ParsedPortableBackup parsePortableBackupJson(String jsonText) {
   var teammates = const TeammateStoreData();
   if (rawTeammates != null) {
     if (rawTeammates is! Map) {
-      throw const FormatException('Backup teammates must be an object.');
+      throw const FormatException('备份队友数据必须是对象。');
     }
     teammates = TeammateStoreData.tryFromJson(
           Map<String, dynamic>.from(rawTeammates),
@@ -269,6 +269,10 @@ Map<String, Object?> buildPortableConfigJson(AppConfig config) {
     'alwaysOnTop': config.alwaysOnTop,
     'showInTaskbar': config.showInTaskbar,
     'closeToTray': config.closeToTray,
+    'dashboardModules':
+        config.dashboardModules.map((module) => module.id).toList(),
+    'colorTheme': config.colorTheme.id,
+    'compactClickTarget': config.compactClickTarget.id,
     'accounts': [
       for (final meta in supportedOjs)
         {
