@@ -4,6 +4,7 @@ import '../../core/oj_catalog.dart';
 import '../../core/time.dart';
 import '../../models/refresh_log_entry.dart';
 import '../app_theme.dart';
+import '../shared/app_surface_card.dart';
 import '../shared/pill.dart';
 
 class RefreshLogsPage extends StatelessWidget {
@@ -28,35 +29,77 @@ class RefreshLogsPage extends StatelessWidget {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-              child: Row(
-                children: [
-                  if (showBackButton) ...[
-                    IconButton(
-                      key: const ValueKey('refresh-logs-back-button'),
-                      tooltip: '返回',
-                      onPressed: onBack,
-                      icon: const Icon(Icons.arrow_back),
+              padding: const EdgeInsets.fromLTRB(
+                  appSpace4, 10, appSpace4, appSpace2),
+              child: AppSurfaceCard(
+                child: Row(
+                  children: [
+                    if (showBackButton) ...[
+                      IconButton(
+                        key: const ValueKey('refresh-logs-back-button'),
+                        tooltip: '返回',
+                        onPressed: onBack,
+                        icon: const Icon(Icons.arrow_back),
+                      ),
+                      const SizedBox(width: appSpace1),
+                    ],
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: accentColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(appRadiusControl),
+                        border: Border.all(
+                            color: accentColor.withValues(alpha: 0.2)),
+                      ),
+                      child:
+                          Icon(Icons.fact_check_outlined, color: accentColor),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: appSpace3),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '刷新日志',
+                            style: TextStyle(
+                              color: textPrimaryColor,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            logs.isEmpty ? '还没有刷新记录' : '保留最近刷新、备用和失败状态',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: textSecondaryColor, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: appSpace2),
+                    Pill(label: '最近 ${logs.length} 条'),
                   ],
-                  const Expanded(
-                    child: Text(
-                      '刷新日志',
-                      style:
-                          TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                  Pill(label: '最近 ${logs.length} 条'),
-                ],
+                ),
               ),
             ),
             Expanded(
               child: logs.isEmpty
-                  ? Center(
-                      child: Text(
-                        '暂无刷新记录',
-                        style: TextStyle(color: textSecondaryColor),
+                  ? const Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        appSpace4,
+                        0,
+                        appSpace4,
+                        appSpace4,
+                      ),
+                      child: Center(
+                        child: AppEmptyState(
+                          icon: Icons.fact_check_outlined,
+                          title: '暂无刷新记录',
+                          message: '完成一次刷新后，这里会显示来源、状态和数量变化。',
+                        ),
                       ),
                     )
                   : ListView.separated(
@@ -87,13 +130,7 @@ class _RefreshLogCard extends StatelessWidget {
       RefreshLogStatus.blocked => Colors.orange.shade800,
       RefreshLogStatus.failure => dangerColor,
     };
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
+    return AppSurfaceCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

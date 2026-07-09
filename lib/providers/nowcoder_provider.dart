@@ -11,7 +11,7 @@ class NowcoderProvider implements OjProvider {
   @override
   Future<OjProfile> fetchProfile(http.Client client, String username) async {
     final account = normalizeNowcoderUserId(username);
-    final profileUri = Uri.https('www.nowcoder.com', '/users/$account');
+    var profileUri = nowcoderProfileUri(account);
     Object? ojhuntError;
     try {
       final data = await readJson(
@@ -28,6 +28,10 @@ class NowcoderProvider implements OjProvider {
     }
 
     try {
+      if (!isNowcoderNumericUserId(account)) {
+        final resolvedId = await resolveNowcoderUserId(client, account);
+        profileUri = nowcoderProfileUri(resolvedId);
+      }
       final response =
           await client.get(profileUri, headers: defaultHeaders()).timeout(
                 const Duration(seconds: 18),
@@ -41,7 +45,8 @@ class NowcoderProvider implements OjProvider {
     } catch (error) {
       throw FetchException(
         '牛客获取失败：OJ Hunt 接口失败 ${normalizeError(ojhuntError)}；'
-        '主页解析失败 ${normalizeError(error)}',
+        '主页解析失败 ${normalizeError(error)}。'
+        '如果填写的是昵称，请改用牛客个人主页里的数字用户 ID',
       );
     }
   }
@@ -61,6 +66,45 @@ String normalizeNowcoderUserId(String value) {
     return uri.pathSegments[1];
   }
   return input;
+}
+
+bool isNowcoderNumericUserId(String value) => RegExp(r'^\d+$').hasMatch(value);
+
+Uri nowcoderProfileUri(String account) {
+  if (isNowcoderNumericUserId(account)) {
+    return Uri.https('www.nowcoder.com', '/users/$account');
+  }
+  return Uri.https('www.nowcoder.com', '/search/all', {'query': account});
+}
+
+Future<String> resolveNowcoderUserId(
+    http.Client client, String nickname) async {
+  final response = await client
+      .get(
+        Uri.https('www.nowcoder.com', '/search/all', {'query': nickname}),
+        headers: defaultHeaders(),
+      )
+      .timeout(const Duration(seconds: 18));
+  ensureOk(response);
+  final userId = parseNowcoderSearchUserId(nickname, response.body);
+  if (userId == null) {
+    throw FetchException('牛客昵称 "$nickname" 未能解析到精确用户，请填写数字用户 ID');
+  }
+  return userId;
+}
+
+String? parseNowcoderSearchUserId(String nickname, String body) {
+  final normalizedNickname = nickname.trim().toLowerCase();
+  final userBriefPattern = RegExp(
+    r'"userId"\s*:\s*(\d+)\s*,\s*"nickname"\s*:\s*"([^"]+)"',
+  );
+  for (final match in userBriefPattern.allMatches(body)) {
+    final foundNickname = match.group(2)?.trim().toLowerCase();
+    if (foundNickname == normalizedNickname) {
+      return match.group(1);
+    }
+  }
+  return null;
 }
 
 int parseNowcoderOjhuntSolvedCount(Map<String, dynamic> json) {

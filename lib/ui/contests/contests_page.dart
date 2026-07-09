@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/solved_totals.dart';
 import '../../models/contest_record.dart';
 import '../app_theme.dart';
+import '../shared/app_surface_card.dart';
 import '../shared/pill.dart';
 import 'contest_editor.dart';
 
@@ -45,34 +46,67 @@ class ContestsPage extends StatelessWidget {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-              child: Row(
-                children: [
-                  if (showBackButton) ...[
-                    IconButton(
-                      key: const ValueKey('contests-back-button'),
-                      tooltip: '返回',
-                      onPressed: onBack,
-                      icon: const Icon(Icons.arrow_back),
+              padding: const EdgeInsets.fromLTRB(
+                  appSpace4, 10, appSpace4, appSpace2),
+              child: AppSurfaceCard(
+                child: Row(
+                  children: [
+                    if (showBackButton) ...[
+                      IconButton(
+                        key: const ValueKey('contests-back-button'),
+                        tooltip: '返回',
+                        onPressed: onBack,
+                        icon: const Icon(Icons.arrow_back),
+                      ),
+                      const SizedBox(width: appSpace1),
+                    ],
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: accentColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(appRadiusControl),
+                        border: Border.all(
+                            color: accentColor.withValues(alpha: 0.2)),
+                      ),
+                      child:
+                          Icon(Icons.emoji_events_outlined, color: accentColor),
                     ),
-                    const SizedBox(width: 4),
-                  ],
-                  const Expanded(
-                    child: Text(
-                      '比赛记录',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
+                    const SizedBox(width: appSpace3),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '比赛记录',
+                            style: TextStyle(
+                              color: textPrimaryColor,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            contests.isEmpty
+                                ? '记录训练赛、校内赛和模拟赛排名'
+                                : '共 ${contests.length} 场 · 最近 #${latest!.rank}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: textSecondaryColor, fontSize: 12),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                  FilledButton.icon(
-                    key: const ValueKey('add-contest-button'),
-                    onPressed: () => _openEditor(context),
-                    icon: const Icon(Icons.add),
-                    label: const Text('新增'),
-                  ),
-                ],
+                    const SizedBox(width: appSpace2),
+                    FilledButton.icon(
+                      key: const ValueKey('add-contest-button'),
+                      onPressed: () => _openEditor(context),
+                      icon: const Icon(Icons.add),
+                      label: const Text('新增'),
+                    ),
+                  ],
+                ),
               ),
             ),
             Expanded(
@@ -165,13 +199,8 @@ class _ContestSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(appSpace3),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final width = constraints.maxWidth >= 520
@@ -224,7 +253,8 @@ class _SummaryTile extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: cardMutedColor,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(appRadiusControl),
+          border: Border.all(color: borderColor),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -276,13 +306,8 @@ class _RankChartCardState extends State<_RankChartCard> {
             _selectedIndex! >= widget.points.length
         ? null
         : widget.points[_selectedIndex!];
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(appSpace3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -377,7 +402,8 @@ class _SelectedContest extends StatelessWidget {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: cardMutedColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(appRadiusControl),
+        border: Border.all(color: borderColor),
       ),
       child: Wrap(
         spacing: 8,
@@ -416,13 +442,7 @@ class _ContestListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
+    return AppSurfaceCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -502,7 +522,8 @@ class _RankChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: accentColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(appRadiusPill),
+        border: Border.all(color: accentColor.withValues(alpha: 0.22)),
       ),
       child: Text(
         '#$rank',
@@ -520,18 +541,10 @@ class _EmptyContestList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 120,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
-      child: Text(
-        '还没有比赛记录，先新增一场训练赛吧。',
-        style: TextStyle(color: textSecondaryColor),
-      ),
+    return const AppEmptyState(
+      icon: Icons.emoji_events_outlined,
+      title: '还没有比赛记录',
+      message: '先新增一场训练赛，排名曲线会在至少 2 场后显示。',
     );
   }
 }

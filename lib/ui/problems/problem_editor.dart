@@ -64,7 +64,15 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       key: const ValueKey('problem-editor-dialog'),
-      title: Text(widget.initial == null ? '添加题目' : '编辑题目'),
+      titlePadding:
+          const EdgeInsets.fromLTRB(appSpace5, appSpace5, appSpace5, 0),
+      contentPadding:
+          const EdgeInsets.fromLTRB(appSpace5, appSpace3, appSpace5, appSpace3),
+      actionsPadding:
+          const EdgeInsets.fromLTRB(appSpace4, 0, appSpace4, appSpace4),
+      title: _ProblemEditorTitle(
+        title: widget.initial == null ? '添加题目' : '编辑题目',
+      ),
       content: SizedBox(
         width: 620,
         child: Form(
@@ -329,5 +337,42 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
       return '日期无效';
     }
     return null;
+  }
+}
+
+class _ProblemEditorTitle extends StatelessWidget {
+  const _ProblemEditorTitle({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: accentColor.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(appRadiusControl),
+            border: Border.all(color: accentColor.withValues(alpha: 0.2)),
+          ),
+          child: Icon(Icons.auto_stories_outlined, color: accentColor),
+        ),
+        const SizedBox(width: appSpace3),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: textPrimaryColor,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

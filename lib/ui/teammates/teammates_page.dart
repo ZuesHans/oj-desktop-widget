@@ -4,6 +4,7 @@ import '../../core/solved_totals.dart';
 import '../../core/time.dart';
 import '../../models/teammate.dart';
 import '../app_theme.dart';
+import '../shared/app_surface_card.dart';
 import '../shared/pill.dart';
 import 'teammate_editor.dart';
 
@@ -44,46 +45,76 @@ class TeammatesPage extends StatelessWidget {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-              child: Row(
-                children: [
-                  if (showBackButton) ...[
-                    IconButton(
-                      key: const ValueKey('teammates-back-button'),
-                      tooltip: '返回',
-                      onPressed: onBack,
-                      icon: const Icon(Icons.arrow_back),
+              padding: const EdgeInsets.fromLTRB(
+                  appSpace4, 10, appSpace4, appSpace2),
+              child: AppSurfaceCard(
+                child: Row(
+                  children: [
+                    if (showBackButton) ...[
+                      IconButton(
+                        key: const ValueKey('teammates-back-button'),
+                        tooltip: '返回',
+                        onPressed: onBack,
+                        icon: const Icon(Icons.arrow_back),
+                      ),
+                      const SizedBox(width: appSpace1),
+                    ],
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: accentColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(appRadiusControl),
+                        border: Border.all(
+                            color: accentColor.withValues(alpha: 0.2)),
+                      ),
+                      child: Icon(Icons.groups_2_outlined, color: accentColor),
                     ),
-                    const SizedBox(width: 4),
-                  ],
-                  const Expanded(
-                    child: Text(
-                      '队友观察',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
+                    const SizedBox(width: appSpace3),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '队友观察',
+                            style: TextStyle(
+                              color: textPrimaryColor,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '训练日统计 · ${data.profiles.length}/$maxTeammates 人',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: textSecondaryColor, fontSize: 12),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                  IconButton(
-                    key: const ValueKey('refresh-teammates-button'),
-                    tooltip: '刷新队友',
-                    onPressed: refreshing ? null : () => _refreshAll(context),
-                    icon: refreshing
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.refresh),
-                  ),
-                  const SizedBox(width: 6),
-                  FilledButton.icon(
-                    key: const ValueKey('add-teammate-button'),
-                    onPressed: canAdd ? () => _openEditor(context) : null,
-                    icon: const Icon(Icons.add),
-                    label: const Text('添加'),
-                  ),
-                ],
+                    const SizedBox(width: appSpace2),
+                    IconButton(
+                      key: const ValueKey('refresh-teammates-button'),
+                      tooltip: '刷新队友',
+                      onPressed: refreshing ? null : () => _refreshAll(context),
+                      icon: refreshing
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.refresh),
+                    ),
+                    const SizedBox(width: appSpace2),
+                    FilledButton.icon(
+                      key: const ValueKey('add-teammate-button'),
+                      onPressed: canAdd ? () => _openEditor(context) : null,
+                      icon: const Icon(Icons.add),
+                      label: const Text('添加'),
+                    ),
+                  ],
+                ),
               ),
             ),
             Expanded(
@@ -218,13 +249,8 @@ class _TrainingDayNote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(appSpace3),
       child: Row(
         children: [
           Icon(Icons.schedule, color: accentColor),
@@ -263,7 +289,11 @@ class _TeammateList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (data.profiles.isEmpty) {
-      return const _EmptyCard(text: '还没有队友，先添加一个公开账号吧。');
+      return const AppEmptyState(
+        icon: Icons.groups_2_outlined,
+        title: '还没有队友',
+        message: '还没有队友，先添加一个公开账号吧。',
+      );
     }
     final today = trainingDateFor(DateTime.now());
     return Column(
@@ -305,13 +335,7 @@ class _TeammateCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final errors = record?.errors ?? const <String, String>{};
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
+    return AppSurfaceCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -404,13 +428,8 @@ class _RankingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(appSpace3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -456,13 +475,8 @@ class _RecentRankingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasRecords = rankings.any((ranking) => ranking.entries.isNotEmpty);
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(appSpace3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -508,7 +522,8 @@ class _DailyRankingGroup extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: cardMutedColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(appRadiusControl),
+        border: Border.all(color: borderColor),
       ),
       child: Padding(
         padding: const EdgeInsets.all(10),
@@ -630,7 +645,8 @@ class _DeltaChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: accentColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(appRadiusPill),
+        border: Border.all(color: accentColor.withValues(alpha: 0.22)),
       ),
       child: Text(
         '今日 +$delta',
@@ -638,29 +654,6 @@ class _DeltaChip extends StatelessWidget {
           color: accentColor,
           fontWeight: FontWeight.w800,
         ),
-      ),
-    );
-  }
-}
-
-class _EmptyCard extends StatelessWidget {
-  const _EmptyCard({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 112,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(color: textSecondaryColor),
       ),
     );
   }

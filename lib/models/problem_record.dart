@@ -220,6 +220,7 @@ ProblemPlatform? parseProblemPlatform(Object? value) {
     case 'lg':
     case 'luogu':
     case '洛谷':
+    // Keep old mojibake aliases readable only as import compatibility.
     case '娲涜胺':
       return ProblemPlatform.lg;
     case 'poj':
@@ -229,6 +230,7 @@ ProblemPlatform? parseProblemPlatform(Object? value) {
     case 'nc':
     case 'nowcoder':
     case '牛客':
+    // Keep old mojibake aliases readable only as import compatibility.
     case '鐗涘':
       return ProblemPlatform.nc;
     case 'spoj':
@@ -239,6 +241,7 @@ ProblemPlatform? parseProblemPlatform(Object? value) {
     case 'leetcode.cn':
       return ProblemPlatform.lccn;
     case 'other':
+    // Keep old mojibake aliases readable only as import compatibility.
     case '鍏朵粬':
       return ProblemPlatform.other;
   }

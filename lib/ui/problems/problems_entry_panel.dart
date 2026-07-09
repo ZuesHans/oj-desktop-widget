@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/problem_record.dart';
 import '../app_theme.dart';
+import '../shared/app_surface_card.dart';
 
 class ProblemsEntryPanel extends StatelessWidget {
   const ProblemsEntryPanel({
@@ -25,13 +26,7 @@ class ProblemsEntryPanel extends StatelessWidget {
     final subtitle = todo == 0
         ? '已 AC $accepted · 共 ${problems.length}'
         : '待处理 $todo · 已 AC $accepted · 共 ${problems.length}';
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
+    return AppSurfaceCard(
       child: Row(
         children: [
           Container(
@@ -40,7 +35,7 @@ class ProblemsEntryPanel extends StatelessWidget {
             decoration: BoxDecoration(
               color: (todo == 0 ? accentColor : dangerColor)
                   .withValues(alpha: 0.11),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(appRadiusControl),
               border: Border.all(
                 color: (todo == 0 ? accentColor : dangerColor)
                     .withValues(alpha: 0.18),
@@ -51,7 +46,7 @@ class ProblemsEntryPanel extends StatelessWidget {
               color: todo == 0 ? accentColor : dangerColor,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: appSpace3),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -72,6 +67,7 @@ class ProblemsEntryPanel extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(width: appSpace2),
           FilledButton.tonalIcon(
             key: const ValueKey('problems-entry-button'),
             onPressed: onOpen,

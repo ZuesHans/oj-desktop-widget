@@ -4,6 +4,7 @@ import '../../core/solved_totals.dart';
 import '../../models/problem_record.dart';
 import '../../services/problem_book_service.dart';
 import '../app_theme.dart';
+import '../shared/app_surface_card.dart';
 import '../shared/pill.dart';
 import 'problem_editor.dart';
 
@@ -184,10 +185,24 @@ class _ProblemsPageState extends State<ProblemsPage> {
             ),
             Expanded(
               child: visible.isEmpty
-                  ? Center(
-                      child: Text(
-                        '还没有题目，先添加一个链接或手动录入。',
-                        style: TextStyle(color: textSecondaryColor),
+                  ? Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        appSpace4,
+                        0,
+                        appSpace4,
+                        appSpace4,
+                      ),
+                      child: Center(
+                        child: AppEmptyState(
+                          icon: Icons.auto_stories_outlined,
+                          title: '还没有题目',
+                          message: '先添加一个链接或手动录入。',
+                          action: FilledButton.icon(
+                            onPressed: () => _openEditor(context),
+                            icon: const Icon(Icons.add),
+                            label: const Text('添加'),
+                          ),
+                        ),
                       ),
                     )
                   : LayoutBuilder(
@@ -353,98 +368,97 @@ class _ProblemsHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              if (showBackButton) ...[
-                IconButton(
-                  key: const ValueKey('problems-back-button'),
-                  tooltip: '返回',
-                  onPressed: onBack,
-                  icon: const Icon(Icons.arrow_back),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(appSpace4, 10, appSpace4, 10),
+      child: AppSurfaceCard(
+        padding: const EdgeInsets.fromLTRB(appSpace3, appSpace3, appSpace3, 10),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                if (showBackButton) ...[
+                  IconButton(
+                    key: const ValueKey('problems-back-button'),
+                    tooltip: '返回',
+                    onPressed: onBack,
+                    icon: const Icon(Icons.arrow_back),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border:
+                        Border.all(color: accentColor.withValues(alpha: 0.2)),
+                  ),
+                  child: Icon(Icons.auto_stories_outlined, color: accentColor),
                 ),
-                const SizedBox(width: 4),
-              ],
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: accentColor.withValues(alpha: 0.2)),
-                ),
-                child: Icon(Icons.auto_stories_outlined, color: accentColor),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '补题 / 错题本',
-                      style: TextStyle(
-                        color: textPrimaryColor,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
+                const SizedBox(width: appSpace3),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '补题 / 错题本',
+                        style: TextStyle(
+                          color: textPrimaryColor,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      pending == 0 ? '今天没有欠账，很清爽。' : '还剩 $pending 题待处理',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: textSecondaryColor, fontSize: 12),
-                    ),
-                  ],
+                      const SizedBox(height: 2),
+                      Text(
+                        pending == 0 ? '今天没有欠账，很清爽。' : '还剩 $pending 题待处理',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            TextStyle(color: textSecondaryColor, fontSize: 12),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                key: const ValueKey('add-problem-button'),
-                onPressed: onAdd,
-                icon: const Icon(Icons.add),
-                label: const Text('添加'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _SummaryMetric(
-                label: '全部',
-                value: total,
-                color: textPrimaryColor,
-              ),
-              const SizedBox(width: 8),
-              _SummaryMetric(
-                label: '待处理',
-                value: pending,
-                color: dangerColor,
-              ),
-              const SizedBox(width: 8),
-              _SummaryMetric(
-                label: '复盘中',
-                value: review,
-                color: _problemStatusColor(ProblemStatus.REVIEW),
-              ),
-              const SizedBox(width: 8),
-              _SummaryMetric(
-                label: '已通过',
-                value: accepted,
-                color: accentColor,
-              ),
-            ],
-          ),
-        ],
+                const SizedBox(width: appSpace2),
+                FilledButton.icon(
+                  key: const ValueKey('add-problem-button'),
+                  onPressed: onAdd,
+                  icon: const Icon(Icons.add),
+                  label: const Text('添加'),
+                ),
+              ],
+            ),
+            const SizedBox(height: appSpace3),
+            Row(
+              children: [
+                _SummaryMetric(
+                  label: '全部',
+                  value: total,
+                  color: textPrimaryColor,
+                ),
+                const SizedBox(width: appSpace2),
+                _SummaryMetric(
+                  label: '待处理',
+                  value: pending,
+                  color: dangerColor,
+                ),
+                const SizedBox(width: appSpace2),
+                _SummaryMetric(
+                  label: '复盘中',
+                  value: review,
+                  color: _problemStatusColor(ProblemStatus.REVIEW),
+                ),
+                const SizedBox(width: appSpace2),
+                _SummaryMetric(
+                  label: '已通过',
+                  value: accepted,
+                  color: accentColor,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -465,10 +479,13 @@ class _SummaryMetric extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+          horizontal: appSpace3,
+          vertical: appSpace2,
+        ),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(appRadiusControl),
           border: Border.all(color: color.withValues(alpha: 0.16)),
         ),
         child: Row(

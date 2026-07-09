@@ -20,7 +20,6 @@ void main() {
       alwaysOnTop: false,
       showInTaskbar: false,
       closeToTray: false,
-      colorTheme: AppColorTheme.dark,
       sync: const SyncConfig(
         enabled: true,
         endpointUrl: 'https://example.com/api/oj-sync',
@@ -34,7 +33,6 @@ void main() {
     expect(loaded.alwaysOnTop, isFalse);
     expect(loaded.showInTaskbar, isFalse);
     expect(loaded.closeToTray, isFalse);
-    expect(loaded.colorTheme, AppColorTheme.dark);
     expect(loaded.sync.enabled, isTrue);
     expect(loaded.sync.endpointUrl, 'https://example.com/api/oj-sync');
     expect(loaded.toJson().toString(), isNot(contains('secret-token')));
@@ -60,18 +58,6 @@ void main() {
     expect(find.byKey(const ValueKey('sync-endpoint-field')), findsOneWidget);
     expect(find.byKey(const ValueKey('sync-token-field')), findsOneWidget);
     expect(find.text('网页钩子同步'), findsOneWidget);
-    expect(find.byKey(const ValueKey('color-theme-field')), findsOneWidget);
-    expect(find.text('配色主题'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('compact-click-target-field')),
-      findsOneWidget,
-    );
-    expect(find.text('小浮窗点击后进入'), findsOneWidget);
-    expect(find.text('大浮窗显示模块'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('dashboard-module-down-summary')),
-      findsOneWidget,
-    );
   });
 
   test('startup plugin failure does not block saving other settings', () async {
@@ -142,8 +128,6 @@ AppConfig _config({
   bool alwaysOnTop = true,
   bool showInTaskbar = true,
   bool closeToTray = true,
-  AppColorTheme colorTheme = AppColorTheme.classic,
-  CompactClickTarget compactClickTarget = CompactClickTarget.largeFloat,
   String username = 'alice',
   bool enabled = true,
   SyncConfig sync = const SyncConfig(),
@@ -154,8 +138,6 @@ AppConfig _config({
     alwaysOnTop: alwaysOnTop,
     showInTaskbar: showInTaskbar,
     closeToTray: closeToTray,
-    colorTheme: colorTheme,
-    compactClickTarget: compactClickTarget,
     sync: sync,
     accounts: {
       for (final meta in supportedOjs)

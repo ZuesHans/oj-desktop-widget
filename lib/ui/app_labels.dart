@@ -1,7 +1,4 @@
-import 'package:flutter/material.dart';
-
 import '../app/app_display_mode.dart';
-import '../models/app_config.dart';
 import '../services/sync_service.dart';
 
 class AppLabels {
@@ -37,36 +34,13 @@ class AppLabels {
   static String modeLabel(AppDisplayMode mode) {
     return switch (mode) {
       AppDisplayMode.compact => '小浮窗',
-      AppDisplayMode.largeFloat => '大浮窗',
+      AppDisplayMode.largeFloat => '快捷浮窗',
       AppDisplayMode.dashboard => 'Dashboard',
       AppDisplayMode.heatmap => '热力图',
       AppDisplayMode.problems => '补题',
       AppDisplayMode.refreshLogs => '刷新日志',
       AppDisplayMode.contests => '训练赛',
       AppDisplayMode.teammates => '队友',
-    };
-  }
-
-  static String dashboardModuleLabel(DashboardModule module) {
-    return switch (module) {
-      DashboardModule.summary => '总览',
-      DashboardModule.heatmap => '热力图',
-      DashboardModule.problems => '补题',
-      DashboardModule.refreshLogs => '刷新日志',
-      DashboardModule.contests => '训练赛',
-      DashboardModule.teammates => '队友',
-      DashboardModule.ojAccounts => 'OJ 账号',
-      DashboardModule.daily => '每日总结',
-    };
-  }
-
-  static String colorThemeLabel(AppColorTheme theme) {
-    return switch (theme) {
-      AppColorTheme.classic => '默认绿',
-      AppColorTheme.ocean => '海风蓝',
-      AppColorTheme.rose => '玫瑰粉',
-      AppColorTheme.dark => '深色',
-      AppColorTheme.candy => '彩蛋',
     };
   }
 
@@ -82,17 +56,4 @@ class AppLabels {
         return '$target 同步失败：${result.message}';
     }
   }
-}
-
-IconData dashboardModuleIcon(DashboardModule module) {
-  return switch (module) {
-    DashboardModule.summary => Icons.query_stats,
-    DashboardModule.heatmap => Icons.calendar_view_week,
-    DashboardModule.problems => Icons.bookmark_border,
-    DashboardModule.refreshLogs => Icons.history,
-    DashboardModule.contests => Icons.emoji_events_outlined,
-    DashboardModule.teammates => Icons.groups_2_outlined,
-    DashboardModule.ojAccounts => Icons.account_circle_outlined,
-    DashboardModule.daily => Icons.today_outlined,
-  };
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/oj_catalog.dart';
 import '../../models/app_config.dart';
+import '../app_theme.dart';
 
 class SettingsDialog extends StatefulWidget {
   const SettingsDialog({
@@ -39,9 +40,6 @@ class _SettingsDialogState extends State<SettingsDialog> {
   late bool _alwaysOnTop;
   late bool _showInTaskbar;
   late bool _closeToTray;
-  late AppColorTheme _colorTheme;
-  late CompactClickTarget _compactClickTarget;
-  late List<DashboardModule> _dashboardModules;
   late bool _syncEnabled;
   late bool _syncDailyStats;
   late bool _syncProblems;
@@ -71,9 +69,6 @@ class _SettingsDialogState extends State<SettingsDialog> {
     _alwaysOnTop = widget.config.alwaysOnTop;
     _showInTaskbar = widget.config.showInTaskbar;
     _closeToTray = widget.config.closeToTray;
-    _colorTheme = widget.config.colorTheme;
-    _compactClickTarget = widget.config.compactClickTarget;
-    _dashboardModules = [...widget.config.dashboardModules];
     _syncEnabled = widget.config.sync.enabled;
     _syncDailyStats = widget.config.sync.syncDailyStats;
     _syncProblems = widget.config.sync.syncProblems;
@@ -95,7 +90,49 @@ class _SettingsDialogState extends State<SettingsDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('设置'),
+      titlePadding:
+          const EdgeInsets.fromLTRB(appSpace5, appSpace5, appSpace5, 0),
+      contentPadding:
+          const EdgeInsets.fromLTRB(appSpace5, appSpace3, appSpace5, appSpace3),
+      actionsPadding:
+          const EdgeInsets.fromLTRB(appSpace4, 0, appSpace4, appSpace4),
+      title: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(appRadiusControl),
+              border: Border.all(color: accentColor.withValues(alpha: 0.2)),
+            ),
+            child: Icon(Icons.tune, color: accentColor),
+          ),
+          const SizedBox(width: appSpace3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '设置',
+                  style: TextStyle(
+                    color: textPrimaryColor,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '账号、窗口和同步',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: textSecondaryColor, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
       content: SizedBox(
         width: 460,
         child: SingleChildScrollView(
@@ -154,111 +191,18 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   setState(() => _closeToTray = value);
                 },
               ),
-              DropdownButtonFormField<AppColorTheme>(
-                key: const ValueKey('color-theme-field'),
-                initialValue: _colorTheme,
-                decoration: const InputDecoration(
-                  labelText: '配色主题',
-                  isDense: true,
-                ),
-                items: [
-                  for (final theme in AppColorTheme.values)
-                    DropdownMenuItem(
-                      value: theme,
-                      child: Text(_colorThemeLabel(theme)),
-                    ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _colorTheme = value);
-                  }
-                },
+              const SizedBox(height: appSpace4),
+              const _SettingsSectionHeader(
+                icon: Icons.sync_outlined,
+                title: '网页钩子同步',
+                subtitle: '默认关闭，只发送已选择的公开字段',
               ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<CompactClickTarget>(
-                key: const ValueKey('compact-click-target-field'),
-                initialValue: _compactClickTarget,
-                decoration: const InputDecoration(
-                  labelText: '小浮窗点击后进入',
-                  isDense: true,
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: CompactClickTarget.largeFloat,
-                    child: Text('大浮窗'),
-                  ),
-                  DropdownMenuItem(
-                    value: CompactClickTarget.dashboard,
-                    child: Text('Dashboard'),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _compactClickTarget = value);
-                  }
-                },
-              ),
-              const Divider(height: 24),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '大浮窗显示模块',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-              const SizedBox(height: 6),
-              for (final module in defaultDashboardModules)
-                CheckboxListTile(
-                  key: ValueKey('dashboard-module-enabled-${module.id}'),
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  secondary: Icon(_dashboardModuleIcon(module), size: 20),
-                  title: Text(_dashboardModuleLabel(module)),
-                  value: _dashboardModules.contains(module),
-                  onChanged: (value) => _setDashboardModuleEnabled(
-                    module,
-                    value ?? true,
-                  ),
-                ),
-              if (_dashboardModules.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '显示顺序',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-              for (final item in _dashboardModules.indexed)
-                _DashboardModuleOrderTile(
-                  key: ValueKey('dashboard-module-${item.$2.id}'),
-                  module: item.$2,
-                  isFirst: item.$1 == 0,
-                  isLast: item.$1 == _dashboardModules.length - 1,
-                  onMoveUp: () => _moveDashboardModule(item.$1, -1),
-                  onMoveDown: () => _moveDashboardModule(item.$1, 1),
-                ),
-              if (_dashboardModules.isEmpty)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '大浮窗暂不显示模块，只保留顶部操作。',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              const Divider(height: 24),
+              const SizedBox(height: appSpace2),
               SwitchListTile(
                 key: const ValueKey('sync-enabled-switch'),
                 contentPadding: EdgeInsets.zero,
-                title: const Text('网页钩子同步'),
-                subtitle: const Text('默认关闭，只发送已选择的字段。'),
+                title: const Text('启用网页钩子同步'),
+                subtitle: const Text('保存后按同步配置发送公开投影。'),
                 value: _syncEnabled,
                 onChanged: (value) {
                   setState(() => _syncEnabled = value);
@@ -332,7 +276,13 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   style: TextStyle(fontSize: 12),
                 ),
               ),
-              const Divider(height: 24),
+              const SizedBox(height: appSpace4),
+              const _SettingsSectionHeader(
+                icon: Icons.account_circle_outlined,
+                title: 'OJ 账号',
+                subtitle: '启用需要统计的平台，并填写公开用户名或 ID',
+              ),
+              const SizedBox(height: appSpace2),
               ...supportedOjs.map((meta) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
@@ -383,33 +333,6 @@ class _SettingsDialogState extends State<SettingsDialog> {
     );
   }
 
-  void _moveDashboardModule(int index, int delta) {
-    final nextIndex = index + delta;
-    if (nextIndex < 0 || nextIndex >= _dashboardModules.length) {
-      return;
-    }
-    setState(() {
-      final modules = [..._dashboardModules];
-      final module = modules.removeAt(index);
-      modules.insert(nextIndex, module);
-      _dashboardModules = modules;
-    });
-  }
-
-  void _setDashboardModuleEnabled(DashboardModule module, bool enabled) {
-    setState(() {
-      final modules = [..._dashboardModules];
-      if (enabled) {
-        if (!modules.contains(module)) {
-          modules.add(module);
-        }
-      } else {
-        modules.remove(module);
-      }
-      _dashboardModules = modules;
-    });
-  }
-
   SettingsDialogResult _buildResult({bool syncNow = false}) {
     final accounts = {
       for (final meta in supportedOjs)
@@ -424,9 +347,6 @@ class _SettingsDialogState extends State<SettingsDialog> {
       config: AppConfig(
         refreshIntervalMinutes: _intervalMinutes.clamp(15, 1440).toInt(),
         accounts: accounts,
-        dashboardModules: List.unmodifiable(_dashboardModules),
-        colorTheme: _colorTheme,
-        compactClickTarget: _compactClickTarget,
         launchAtStartup: _launchAtStartup,
         alwaysOnTop: _alwaysOnTop,
         showInTaskbar: _showInTaskbar,
@@ -447,85 +367,54 @@ class _SettingsDialogState extends State<SettingsDialog> {
   }
 }
 
-String _colorThemeLabel(AppColorTheme theme) {
-  return switch (theme) {
-    AppColorTheme.classic => '默认绿',
-    AppColorTheme.ocean => '海风蓝',
-    AppColorTheme.rose => '玫瑰粉',
-    AppColorTheme.dark => '深色',
-    AppColorTheme.candy => '彩蛋',
-  };
-}
-
-class _DashboardModuleOrderTile extends StatelessWidget {
-  const _DashboardModuleOrderTile({
-    super.key,
-    required this.module,
-    required this.isFirst,
-    required this.isLast,
-    required this.onMoveUp,
-    required this.onMoveDown,
+class _SettingsSectionHeader extends StatelessWidget {
+  const _SettingsSectionHeader({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
   });
 
-  final DashboardModule module;
-  final bool isFirst;
-  final bool isLast;
-  final VoidCallback onMoveUp;
-  final VoidCallback onMoveDown;
+  final IconData icon;
+  final String title;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(_dashboardModuleIcon(module), size: 20),
-      title: Text(_dashboardModuleLabel(module)),
-      trailing: SizedBox(
-        width: 96,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            IconButton(
-              key: ValueKey('dashboard-module-up-${module.id}'),
-              tooltip: '上移',
-              onPressed: isFirst ? null : onMoveUp,
-              icon: const Icon(Icons.arrow_upward, size: 18),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(appSpace3),
+      decoration: BoxDecoration(
+        color: cardMutedColor,
+        borderRadius: BorderRadius.circular(appRadiusControl),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: accentColor, size: 20),
+          const SizedBox(width: appSpace2),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: textPrimaryColor,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: textSecondaryColor, fontSize: 12),
+                ),
+              ],
             ),
-            IconButton(
-              key: ValueKey('dashboard-module-down-${module.id}'),
-              tooltip: '下移',
-              onPressed: isLast ? null : onMoveDown,
-              icon: const Icon(Icons.arrow_downward, size: 18),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
-}
-
-String _dashboardModuleLabel(DashboardModule module) {
-  return switch (module) {
-    DashboardModule.summary => '总览',
-    DashboardModule.heatmap => '热力图',
-    DashboardModule.problems => '题单',
-    DashboardModule.refreshLogs => '刷新日志',
-    DashboardModule.contests => '训练赛',
-    DashboardModule.teammates => '队友',
-    DashboardModule.ojAccounts => 'OJ 账号',
-    DashboardModule.daily => '每日总结',
-  };
-}
-
-IconData _dashboardModuleIcon(DashboardModule module) {
-  return switch (module) {
-    DashboardModule.summary => Icons.query_stats,
-    DashboardModule.heatmap => Icons.calendar_view_week,
-    DashboardModule.problems => Icons.bookmark_border,
-    DashboardModule.refreshLogs => Icons.history,
-    DashboardModule.contests => Icons.emoji_events_outlined,
-    DashboardModule.teammates => Icons.groups_2_outlined,
-    DashboardModule.ojAccounts => Icons.account_circle_outlined,
-    DashboardModule.daily => Icons.today_outlined,
-  };
 }

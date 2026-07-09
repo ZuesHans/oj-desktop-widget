@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../models/app_config.dart';
+import '../models/app_config.dart' show AppColorTheme;
 
 const compactWindowSize = Size(340, 154);
 const compactMinimumWindowSize = Size(300, 132);
@@ -10,6 +10,24 @@ const dashboardWindowSize = Size(960, 680);
 const dashboardMinimumWindowSize = Size(760, 520);
 const heatmapWindowSize = Size(560, 560);
 const heatmapMinimumWindowSize = Size(440, 420);
+
+const appRadiusControl = 8.0;
+const appRadiusCompact = 20.0;
+const appRadiusPill = 999.0;
+
+const appSpace1 = 4.0;
+const appSpace2 = 8.0;
+const appSpace3 = 12.0;
+const appSpace4 = 14.0;
+const appSpace5 = 18.0;
+const appSpace6 = 24.0;
+
+const appCardPadding = EdgeInsets.all(appSpace4);
+const appControlPadding = EdgeInsets.symmetric(
+  horizontal: appSpace3,
+  vertical: 10,
+);
+const appPillPadding = EdgeInsets.symmetric(horizontal: appSpace2, vertical: 3);
 
 class AppPalette {
   const AppPalette({
@@ -47,18 +65,18 @@ class AppPalette {
 
 const _classicPalette = AppPalette(
   brightness: Brightness.light,
-  surface: Color(0xFFF6F7F4),
+  surface: Color(0xFFF5F7FA),
   card: Color(0xFFFFFFFF),
-  cardMuted: Color(0xFFF4F6F3),
-  border: Color(0xFFE1E4DE),
-  textPrimary: Color(0xFF17211D),
-  textSecondary: Color(0xFF64706A),
-  accent: Color(0xFF2F6F4E),
-  danger: Color(0xFFB3261E),
-  compactSurface: Color(0xF2F9FBF8),
-  compactLabel: Color(0xFF42655C),
-  compactText: Color(0xFF10231E),
-  compactShadow: Color(0x26000000),
+  cardMuted: Color(0xFFEEF3F8),
+  border: Color(0xFFDDE5EE),
+  textPrimary: Color(0xFF17202A),
+  textSecondary: Color(0xFF607080),
+  accent: Color(0xFF2563EB),
+  danger: Color(0xFFD14343),
+  compactSurface: Color(0xF7FFFFFF),
+  compactLabel: Color(0xFF476173),
+  compactText: Color(0xFF142132),
+  compactShadow: Color(0x240F172A),
   heatmapLevels: [
     Color(0xFFEFF3EF),
     Color(0xFF9BE9A8),
@@ -214,10 +232,10 @@ ThemeData buildAppTheme([AppColorTheme colorTheme = AppColorTheme.classic]) {
   applyAppColorTheme(colorTheme);
   final palette = appPaletteFor(colorTheme);
   final controlShape = RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(8),
+    borderRadius: BorderRadius.circular(appRadiusControl),
   );
   final inputBorder = OutlineInputBorder(
-    borderRadius: BorderRadius.circular(8),
+    borderRadius: BorderRadius.circular(appRadiusControl),
     borderSide: BorderSide(color: palette.border),
   );
   final colorScheme = ColorScheme.fromSeed(
@@ -264,7 +282,7 @@ ThemeData buildAppTheme([AppColorTheme colorTheme = AppColorTheme.classic]) {
       filled: true,
       fillColor: palette.card,
       isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      contentPadding: appControlPadding,
       border: inputBorder,
       enabledBorder: inputBorder,
       focusedBorder: inputBorder.copyWith(
@@ -275,7 +293,7 @@ ThemeData buildAppTheme([AppColorTheme colorTheme = AppColorTheme.classic]) {
     ),
     listTileTheme: base.listTileTheme.copyWith(
       dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+      contentPadding: const EdgeInsets.symmetric(horizontal: appSpace2),
       iconColor: palette.textSecondary,
       textColor: palette.textPrimary,
     ),
@@ -293,7 +311,9 @@ ThemeData buildAppTheme([AppColorTheme colorTheme = AppColorTheme.classic]) {
     popupMenuTheme: base.popupMenuTheme.copyWith(
       color: palette.card,
       textStyle: textTheme.bodyMedium?.copyWith(color: palette.textPrimary),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(appRadiusControl),
+      ),
     ),
     dividerTheme: DividerThemeData(color: palette.border),
     iconTheme: base.iconTheme.copyWith(color: palette.textPrimary),
@@ -308,7 +328,7 @@ ThemeData buildAppTheme([AppColorTheme colorTheme = AppColorTheme.classic]) {
       style: TextButton.styleFrom(
         textStyle: textTheme.labelLarge,
         shape: controlShape,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: appControlPadding,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
     ),
@@ -316,7 +336,7 @@ ThemeData buildAppTheme([AppColorTheme colorTheme = AppColorTheme.classic]) {
       style: FilledButton.styleFrom(
         textStyle: textTheme.labelLarge,
         shape: controlShape,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: appControlPadding,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
     ),
@@ -324,7 +344,7 @@ ThemeData buildAppTheme([AppColorTheme colorTheme = AppColorTheme.classic]) {
       style: OutlinedButton.styleFrom(
         textStyle: textTheme.labelLarge,
         shape: controlShape,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: appControlPadding,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
     ),
@@ -332,7 +352,7 @@ ThemeData buildAppTheme([AppColorTheme colorTheme = AppColorTheme.classic]) {
       style: ElevatedButton.styleFrom(
         textStyle: textTheme.labelLarge,
         shape: controlShape,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: appControlPadding,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
     ),

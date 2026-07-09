@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../app_theme.dart';
+
 class WindowHeader extends StatelessWidget {
   const WindowHeader({
     super.key,
@@ -27,15 +29,47 @@ class WindowHeader extends StatelessWidget {
       child: Container(
         height: 58,
         padding: const EdgeInsets.symmetric(horizontal: 12),
-        color: Theme.of(context).colorScheme.surface,
+        decoration: BoxDecoration(
+          color: cardColor,
+          border: Border(bottom: BorderSide(color: borderColor)),
+        ),
         child: Row(
           children: [
-            const Icon(Icons.bubble_chart_outlined),
+            Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.11),
+                borderRadius: BorderRadius.circular(appRadiusControl),
+              ),
+              child: Icon(
+                Icons.bubble_chart_outlined,
+                color: accentColor,
+                size: 19,
+              ),
+            ),
             const SizedBox(width: 8),
-            const Expanded(
-              child: Text(
-                'OJ 悬浮窗',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'OJ Float',
+                    style: TextStyle(
+                      color: textPrimaryColor,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Text(
+                    '刷题统计与训练复盘',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: textSecondaryColor, fontSize: 11),
+                  ),
+                ],
               ),
             ),
             IconButton(
