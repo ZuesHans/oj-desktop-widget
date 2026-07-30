@@ -15,8 +15,10 @@ import '../models/problem_record.dart';
 import '../models/refresh_log_entry.dart';
 import '../models/solved_snapshot.dart';
 import '../models/teammate.dart';
+import '../models/training.dart';
 import '../platform/startup_service.dart';
 import 'backup_service.dart';
+import 'browser_import_service.dart';
 import 'contest_record_service.dart';
 import 'daily_summary_service.dart';
 import 'local_store.dart';
@@ -25,6 +27,7 @@ import 'refresh_service.dart';
 import 'sync_secret_store.dart';
 import 'sync_service.dart';
 import 'teammate_service.dart';
+import 'training_service.dart';
 
 class OjController extends ChangeNotifier {
   OjController({
@@ -36,6 +39,7 @@ class OjController extends ChangeNotifier {
     TeammateService? teammateService,
     SyncService? syncService,
     SyncSecretStore? syncSecretStore,
+    TrainingService? trainingService,
   })  : problemBookService =
             problemBookService ?? ProblemBookService(client: http.Client()),
         contestRecordService =
@@ -44,7 +48,8 @@ class OjController extends ChangeNotifier {
             TeammateService(
                 client: http.Client(), providers: service.providers),
         syncService = syncService ?? SyncService(client: http.Client()),
-        syncSecretStore = syncSecretStore ?? SecureSyncSecretStore();
+        syncSecretStore = syncSecretStore ?? SecureSyncSecretStore(),
+        trainingService = trainingService ?? const TrainingService();
 
   final LocalStore storage;
   final RefreshService service;
@@ -54,6 +59,7 @@ class OjController extends ChangeNotifier {
   final TeammateService teammateService;
   final SyncService syncService;
   final SyncSecretStore syncSecretStore;
+  final TrainingService trainingService;
   OjState state = OjState.initial();
   bool refreshing = false;
   bool refreshingTeammates = false;
@@ -62,12 +68,18 @@ class OjController extends ChangeNotifier {
   Timer? _timer;
 
   Future<void> init() async {
+    await storage.recoverPendingProblemTrainingTransaction();
     final config = await storage.loadConfig();
     final snapshots = await storage.loadSnapshots();
     final refreshLogs = await storage.loadRefreshLogs();
-    final problems = await storage.loadProblems();
+    var problems = await storage.loadProblems();
     final contests = await storage.loadContests();
     final teammates = await storage.loadTeammates();
+    var training = await storage.loadTraining();
+    training = trainingService.migrateLegacyAttempts(problems, training);
+    problems = trainingService.normalizeLegacyProblems(problems);
+    training = trainingService.normalizeTrainingData(training);
+    await storage.saveProblemsAndTraining(problems, training);
     state = state.copyWith(
       config: config,
       snapshots: snapshots,
@@ -75,7 +87,15 @@ class OjController extends ChangeNotifier {
       problems: problems,
       contests: contests,
       teammates: teammates,
+      training: training,
     );
+    try {
+      await startupService.setEnabled(
+        config.closeToTray && config.launchAtStartup,
+      );
+    } catch (error) {
+      debugPrint('Failed to synchronize startup registration: $error');
+    }
     _recomputeSummaries();
     _schedule();
     notifyListeners();
@@ -83,25 +103,23 @@ class OjController extends ChangeNotifier {
     await maybeAutoRefreshTeammates();
   }
 
-  Future<void> saveConfig(
-    AppConfig config, {
-    bool syncAfterRefresh = true,
-  }) async {
-    await storage.saveConfig(config);
-    state = state.copyWith(config: config);
+  Future<void> saveConfig(AppConfig config) async {
+    final normalized =
+        config.closeToTray ? config : config.copyWith(launchAtStartup: false);
+    await storage.saveConfig(normalized);
+    state = state.copyWith(config: normalized);
     _schedule();
     notifyListeners();
     Object? startupError;
     try {
       final startupUpdated =
-          await startupService.setEnabled(config.launchAtStartup);
+          await startupService.setEnabled(normalized.launchAtStartup);
       if (!startupUpdated) {
         startupError = FetchException('登录时启动设置更新失败。');
       }
     } catch (error) {
       startupError = error;
     }
-    await refresh(syncAfterRefresh: syncAfterRefresh);
     if (startupError != null) {
       throw FetchException(normalizeError(startupError));
     }
@@ -117,6 +135,7 @@ class OjController extends ChangeNotifier {
     final previousProblems = state.problems;
     final previousContests = state.contests;
     final previousTeammates = state.teammates;
+    final previousTraining = state.training;
     final previousRefreshLogs = state.refreshLogs;
     final safetyBackup = await exportOjData(
       config: state.config,
@@ -124,14 +143,26 @@ class OjController extends ChangeNotifier {
       problems: state.problems,
       contests: state.contests,
       teammates: state.teammates,
+      training: state.training,
       directory: safetyBackupDirectory,
       prefix: 'oj_float_pre_import_backup',
       writeDailySummary: false,
     );
     try {
+      var importedTraining = trainingService.migrateLegacyAttempts(
+        imported.problems,
+        imported.training,
+      );
+      final importedProblems =
+          trainingService.normalizeLegacyProblems(imported.problems);
+      importedTraining =
+          trainingService.normalizeTrainingData(importedTraining);
       await storage.saveConfig(imported.config);
       await storage.replaceSnapshots(imported.snapshots);
-      await storage.replaceProblems(imported.problems);
+      await storage.saveProblemsAndTraining(
+        importedProblems,
+        importedTraining,
+      );
       await storage.replaceContests(imported.contests);
       await storage.replaceTeammates(imported.teammates);
       await storage.saveRefreshLogs(const []);
@@ -139,7 +170,10 @@ class OjController extends ChangeNotifier {
       try {
         await storage.saveConfig(previousConfig);
         await storage.replaceSnapshots(previousSnapshots);
-        await storage.replaceProblems(previousProblems);
+        await storage.saveProblemsAndTraining(
+          previousProblems,
+          previousTraining,
+        );
         await storage.replaceContests(previousContests);
         await storage.replaceTeammates(previousTeammates);
         await storage.saveRefreshLogs(previousRefreshLogs);
@@ -160,6 +194,7 @@ class OjController extends ChangeNotifier {
       problems: await storage.loadProblems(),
       contests: await storage.loadContests(),
       teammates: await storage.loadTeammates(),
+      training: await storage.loadTraining(),
       latest: const {},
     );
     _recomputeSummaries();
@@ -186,13 +221,13 @@ class OjController extends ChangeNotifier {
     try {
       final results = await service.refresh(state.config);
       final guarded = _applyRefreshGuard(results, state.snapshots);
-      final snapshots = [
+      final snapshots = retainRecentSnapshots([
         ...state.snapshots,
         ...guarded.results.values
             .expand((items) => items)
             .where((result) => result.status == FetchStatus.success)
             .map(SolvedSnapshot.fromResult),
-      ];
+      ]);
       final refreshLogs = _trimRefreshLogs([
         ...guarded.logs,
         ...state.refreshLogs,
@@ -424,11 +459,217 @@ class OjController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<BrowserProblemImportResult> importBrowserProblem(
+    BrowserProblemImport input,
+  ) async {
+    final uri = normalizeProblemUri(input.url);
+    final platform =
+        parseProblemPlatform(input.platform) ?? detectProblemPlatform(uri);
+    final externalId = input.externalId.isEmpty
+        ? extractProblemExternalId(uri, platform)
+        : input.externalId;
+    final now = DateTime.now();
+    final candidate = ProblemRecord.create(
+      title: input.title.isEmpty
+          ? fallbackProblemTitle(uri, platform)
+          : input.title,
+      url: uri.toString(),
+      platform: platform,
+      workflowStatus: ProblemWorkflowStatus.backlog,
+      tags: input.tags,
+      difficulty: input.difficulty,
+      externalId: externalId,
+      now: now,
+    );
+    ProblemRecord? existing;
+    for (final problem in state.problems) {
+      if (canonicalProblemKey(problem) == canonicalProblemKey(candidate)) {
+        existing = problem;
+        break;
+      }
+    }
+    final saved = existing == null
+        ? candidate
+        : existing.copyWith(
+            title: input.title.isEmpty ? existing.title : input.title,
+            url: uri.toString(),
+            platform: platform,
+            tags: {...existing.tags, ...input.tags}.toList(),
+            difficulty: input.difficulty.isEmpty
+                ? existing.difficulty
+                : input.difficulty,
+            externalId: externalId.isEmpty ? existing.externalId : externalId,
+            updatedAt: now,
+          );
+    await saveProblem(saved);
+    return BrowserProblemImportResult(
+      created: existing == null,
+      problemId: saved.id,
+    );
+  }
+
   Future<void> deleteProblem(String id) async {
-    final problems = problemBookService.remove(state.problems, id);
+    final problem = _problemById(id);
+    if (problem == null) {
+      return;
+    }
+    final problems = problemBookService.upsert(
+      state.problems,
+      problem.copyWith(
+        workflowStatus: ProblemWorkflowStatus.archived,
+        archivedAt: DateTime.now(),
+        clearNextReviewAt: true,
+      ),
+    );
     await storage.saveProblems(problems);
     state = state.copyWith(problems: problems);
     notifyListeners();
+  }
+
+  Future<void> restoreProblem(String id) async {
+    final problem = _problemById(id);
+    if (problem == null) {
+      return;
+    }
+    await saveProblem(
+      problem.copyWith(
+        workflowStatus: ProblemWorkflowStatus.backlog,
+        clearArchivedAt: true,
+      ),
+    );
+  }
+
+  Future<void> permanentlyDeleteProblem(String id) async {
+    final problems = problemBookService.remove(state.problems, id);
+    final training =
+        trainingService.removeProblemReferences(state.training, id);
+    await storage.saveProblemsAndTraining(problems, training);
+    state = state.copyWith(problems: problems, training: training);
+    notifyListeners();
+  }
+
+  Future<void> addProblemsToSchedule(
+    Iterable<String> problemIds,
+    String trainingDate,
+  ) async {
+    final training = trainingService.addTasks(
+      state.training,
+      problemIds,
+      trainingDate: trainingDate,
+    );
+    await storage.saveTraining(training);
+    state = state.copyWith(training: training);
+    notifyListeners();
+  }
+
+  Future<void> moveTrainingTask(String taskId, String trainingDate) async {
+    final training =
+        trainingService.moveTask(state.training, taskId, trainingDate);
+    await storage.saveTraining(training);
+    state = state.copyWith(training: training);
+    notifyListeners();
+  }
+
+  Future<void> removeTrainingTask(String taskId) async {
+    final training = trainingService.removeTask(state.training, taskId);
+    await storage.saveTraining(training);
+    state = state.copyWith(training: training);
+    notifyListeners();
+  }
+
+  Future<void> startTraining(
+    String problemId, {
+    TrainingAttemptOrigin origin = TrainingAttemptOrigin.manual,
+    String? taskId,
+  }) async {
+    final training = trainingService.startAttempt(
+      state.training,
+      problemId,
+      origin: origin,
+      taskId: taskId,
+    );
+    await storage.saveTraining(training);
+    state = state.copyWith(training: training);
+    notifyListeners();
+  }
+
+  Future<void> pauseTraining() async {
+    final training = trainingService.pauseAttempt(state.training);
+    await storage.saveTraining(training);
+    state = state.copyWith(training: training);
+    notifyListeners();
+  }
+
+  Future<void> resumeTraining() async {
+    final training = trainingService.resumeAttempt(state.training);
+    await storage.saveTraining(training);
+    state = state.copyWith(training: training);
+    notifyListeners();
+  }
+
+  Future<void> cancelTraining() async {
+    final training = trainingService.cancelAttempt(state.training);
+    await storage.saveTraining(training);
+    state = state.copyWith(training: training);
+    notifyListeners();
+  }
+
+  Future<TrainingAttempt> finishTraining({
+    required AttemptResult result,
+    AssistanceLevel assistance = AssistanceLevel.none,
+    List<MistakeCategory> mistakes = const [],
+    String reflection = '',
+    String? favoriteListId,
+  }) async {
+    final active = state.training.activeAttempt;
+    if (active == null) {
+      throw FetchException('没有进行中的训练。');
+    }
+    final problem = state.problems.firstWhere(
+      (item) => item.id == active.problemId,
+      orElse: () => throw FetchException('进行中的题目已不存在。'),
+    );
+    final finished = trainingService.finishAttempt(
+      data: state.training,
+      problem: problem,
+      result: result,
+      assistance: assistance,
+      mistakes: mistakes,
+      reflection: reflection,
+    );
+    final problems = problemBookService.upsert(
+      state.problems,
+      finished.problem,
+    );
+    final training = favoriteListId == null
+        ? finished.data
+        : trainingService.addProblemToList(
+            finished.data,
+            favoriteListId,
+            problem.id,
+          );
+    await storage.saveProblemsAndTraining(problems, training);
+    state = state.copyWith(problems: problems, training: training);
+    notifyListeners();
+    return finished.attempt;
+  }
+
+  Future<void> saveTrainingList(TrainingList list) async {
+    final training = trainingService.upsertList(state.training, list);
+    await storage.saveTraining(training);
+    state = state.copyWith(training: training);
+    notifyListeners();
+  }
+
+  Future<void> deleteTrainingList(String id) async {
+    final training = trainingService.removeList(state.training, id);
+    await storage.saveTraining(training);
+    state = state.copyWith(training: training);
+    notifyListeners();
+  }
+
+  TrainingAnalytics trainingAnalytics() {
+    return trainingService.analytics(state.training, state.problems);
   }
 
   Future<void> saveContest(ContestRecord contest) async {
@@ -515,8 +756,20 @@ class OjController extends ChangeNotifier {
   Map<String, int> todayDeltaByAccountFor(String ojId) =>
       state.todaySummary.accountDeltas[ojId] ?? const {};
 
+  Map<String, DailyActivityValue> todayActivityByAccountFor(String ojId) =>
+      state.todaySummary.accountActivities[ojId] ?? const {};
+
+  ProblemRecord? _problemById(String id) {
+    for (final problem in state.problems) {
+      if (problem.id == id) {
+        return problem;
+      }
+    }
+    return null;
+  }
+
   void _recomputeSummaries() {
-    final today = dateKey(DateTime.now());
+    final today = trainingDateFor(DateTime.now());
     state = state.copyWith(
         todaySummary: DailySummary.fromSnapshots(today, state.snapshots));
   }

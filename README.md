@@ -1,15 +1,15 @@
 # OJ Float
 
-OJ Float 是一个 Windows 桌面悬浮训练面板，用来集中查看多个 Online Judge 账号的刷题进度、今日增量、补题记录、比赛记录、队友观察和刷新日志。
+OJ Float 是一个 Windows 桌面训练客户端，用来集中查看多个 Online Judge 账号的刷题进度、今日增量、补题记录、比赛记录、队友观察和刷新日志。
 
-当前预发行版本：`v0.1.3beta`
+当前预发行版本：`v0.2.0-beta`
 
 ## 下载
 
 请在 GitHub Releases 下载最新 Windows x64 免安装包：
 
 ```text
-oj-desktop-widget-v0.1.3beta-windows-x64.zip
+oj-desktop-widget-v0.2.0-beta-windows-x64.zip
 ```
 
 使用方式：
@@ -22,31 +22,35 @@ oj-desktop-widget-v0.1.3beta-windows-x64.zip
 
 ## 这一版有什么变化
 
-`v0.1.3beta` 是一次偏产品化的前端大修：
+`v0.2.0-beta` 将产品从多级悬浮窗收敛为标准 Windows 桌面客户端：
 
-- 小窗、浮窗和 Dashboard 的职责重新划分：小窗只保留总通过数、今日增量和高频按钮；大浮窗用于快速查看状态；Dashboard 承担完整管理工作台。
-- Dashboard 新增左侧导航和总览页，集中展示今日训练、账号状态、热力图入口、题单、比赛、队友、日志和设置。
-- 统一卡片、按钮、标签、颜色主题和窗口标题栏，减少“拼起来的 demo 感”。
-- 补题、比赛、队友、刷新日志、热力图等页面做了密度和视觉节奏优化。
-- 小窗修复了固定窗口高度下的 RenderFlex overflow 黄黑条问题。
-- 牛客刷新增强了兜底逻辑：OJ Hunt 失败后会尝试把昵称解析为牛客数字用户 ID；解析不到时会提示使用个人主页里的数字 ID。
-- 新增 Windows Ninja release 构建脚本，绕过部分 Visual Studio 2026 / MSBuild HostX86 环境下的构建卡死问题。
+- 正常启动直接进入完整 Dashboard，使用原生标题栏、任务栏、缩放和最大化。
+- 默认关闭即退出；用户可在设置中主动开启关闭到托盘和登录时静默启动。
+- 设置集中到 Dashboard 正式页面，支持显式保存、保存并同步和未保存离开确认。
+- 移除紧凑窗、大浮窗、窗口置顶、隐藏任务栏和窗口尺寸切换。
+- 新增 Windows 单实例保护；再次启动会恢复并聚焦已有窗口。
+- 配置升级到版本 2，同时兼容旧配置和旧版便携备份。
+- 内存、磁盘、刷新和备份中的历史快照统一保留最近 6000 条。
 
 ## 功能
 
 - 支持 Codeforces、LeetCode、AtCoder、洛谷、牛客。
 - 支持多个账号统计、手动刷新和自动刷新。
 - 支持每日增量、连续记录、热力图和刷新日志。
-- 支持补题 / 错题本，记录题目链接、平台、状态、标签、备注和题解分析。
+- 支持补题 / 错题本，使用待安排、训练中、待复习、已掌握和已归档工作流。
+- 支持逐次训练记录、自动计时、暂停恢复、错误分类、辅助程度和复盘心得。
+- 支持按任意日期手动安排训练、可筛选选题、自定义/专题/比赛题单、默认收藏夹和训练分析。
+- 支持 Edge / Chrome 扩展一键导入当前题目，按平台题号和规范化 URL 自动去重。
 - 支持训练赛记录、排名曲线和复盘信息。
 - 支持队友观察，按训练日统计近期刷题增量。
-- 支持小型置顶悬浮窗、系统托盘、开机启动、关闭到托盘。
+- 使用原生 Windows 客户端窗口，支持任务栏、缩放、最小化和最大化。
+- 支持可选系统托盘、关闭到托盘和登录时静默启动，默认均关闭。
 - 支持数据备份导出和导入。
 - 支持可选 Webhook 同步，用于把公开训练投影同步到个人网站。
 
 ## 首次使用
 
-首次打开后进入 Dashboard 的账号设置，填写各 OJ 的公开用户名或用户 ID。
+首次打开后从 Dashboard 左侧导航进入设置，填写各 OJ 的公开用户名或用户 ID。
 
 - Codeforces：填写公开 handle。
 - LeetCode：填写公开 username。
@@ -60,6 +64,7 @@ oj-desktop-widget-v0.1.3beta-windows-x64.zip
 
 - 默认所有数据只保存在本机应用目录。
 - 应用不会上传密码、Cookie 或 OJ Token。
+- 浏览器扩展不申请 Cookie 权限，只把当前题目的公开页面元数据发送到 `127.0.0.1`。
 - 备份文件不包含同步令牌（Token）。
 - Webhook 同步是可选功能，默认关闭。
 - Webhook 默认不发送 OJ 用户名和账号级增量。
@@ -82,6 +87,10 @@ oj-desktop-widget-v0.1.3beta-windows-x64.zip
 
 同步站点要求 HTTPS；只有 `localhost` HTTP 允许用于本地开发。
 
+## 浏览器导入
+
+桌面客户端启动后会在 `127.0.0.1:27121` 运行本地导入服务。进入“设置 > 浏览器导入”获取随机配对令牌，然后按 [扩展安装说明](browser_extension/README.md) 在 Edge 或 Chrome 中加载本地扩展。
+
 ## 备份与迁移
 
 跨设备迁移时，请使用应用内的备份 JSON。
@@ -92,7 +101,7 @@ oj-desktop-widget-v0.1.3beta-windows-x64.zip
 4. 在新电脑打开 OJ Float。
 5. 点击 Import Backup（导入备份）。
 6. 选择复制过来的备份 JSON。
-7. 应用会用备份中的配置、快照、题单、训练赛和队友数据替换当前本地数据。
+7. 应用会用备份中的配置、快照、题目、训练过程、题单、比赛和队友数据替换当前本地数据。
 
 导入前，应用会自动创建一份安全备份：
 
@@ -119,7 +128,7 @@ flutter run -d windows
 常规检查：
 
 ```powershell
-dart analyze lib test
+flutter analyze
 flutter test
 ```
 
@@ -142,7 +151,7 @@ build\windows\ninja\runner
 发布前建议执行：
 
 ```powershell
-dart analyze lib test
+flutter analyze
 flutter test
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_windows_release_ninja.ps1
 ```

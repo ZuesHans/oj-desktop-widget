@@ -35,21 +35,44 @@ query userSessionProgress(\$username: String!) {
         )
         .timeout(const Duration(seconds: 18));
     ensureOk(response);
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final matchedUser = data['data']?['matchedUser'];
+    late final Object? decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } on FormatException {
+      throw FetchException('LeetCode 返回格式变化');
+    }
+    if (decoded is! Map) {
+      throw FetchException('LeetCode 返回格式变化');
+    }
+    final data = decoded['data'];
+    if (data is! Map) {
+      throw FetchException('LeetCode 返回格式变化');
+    }
+    final matchedUser = data['matchedUser'];
     if (matchedUser == null) {
       throw FetchException('LeetCode 用户不存在或不可公开访问');
     }
-    final list = matchedUser['submitStatsGlobal']?['acSubmissionNum'];
+    if (matchedUser is! Map) {
+      throw FetchException('LeetCode 返回格式变化');
+    }
+    final submitStats = matchedUser['submitStatsGlobal'];
+    final list = submitStats is Map ? submitStats['acSubmissionNum'] : null;
     if (list is! List) {
       throw FetchException('LeetCode 返回格式变化');
     }
-    final all = list.cast<Map<String, dynamic>>().firstWhere(
-          (item) => item['difficulty'] == 'All',
-          orElse: () => {'count': 0},
-        );
+    Map? all;
+    for (final item in list) {
+      if (item is Map && item['difficulty'] == 'All') {
+        all = item;
+        break;
+      }
+    }
+    final count = all?['count'];
+    if (count is! int) {
+      throw FetchException('LeetCode 返回格式变化');
+    }
     return OjProfile(
-      solvedCount: all['count'] as int? ?? 0,
+      solvedCount: count,
       profileUrl: 'https://leetcode.com/$username/',
       source: 'leetcode_graphql',
     );

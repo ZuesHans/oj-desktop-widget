@@ -29,7 +29,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
   late final TextEditingController _noteController;
   late final TextEditingController _analysisController;
   late ProblemPlatform _platform;
-  late ProblemStatus _status;
+  late ProblemWorkflowStatus _status;
   bool _parsing = false;
   String? _parseMessage;
 
@@ -46,7 +46,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
     _noteController = TextEditingController(text: initial?.note ?? '');
     _analysisController = TextEditingController(text: initial?.analysis ?? '');
     _platform = initial?.platform ?? ProblemPlatform.other;
-    _status = initial?.status ?? ProblemStatus.TODO;
+    _status = initial?.workflowStatus ?? ProblemWorkflowStatus.backlog;
   }
 
   @override
@@ -163,7 +163,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
                         ),
                         SizedBox(
                           width: itemWidth,
-                          child: DropdownButtonFormField<ProblemStatus>(
+                          child: DropdownButtonFormField<ProblemWorkflowStatus>(
                             isExpanded: true,
                             key: const ValueKey('problem-status-field'),
                             initialValue: _status,
@@ -172,14 +172,16 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
                               border: OutlineInputBorder(),
                             ),
                             items: [
-                              for (final status in ProblemStatus.values)
+                              for (final status in ProblemWorkflowStatus.values)
                                 DropdownMenuItem(
                                   value: status,
-                                  child: Text(problemStatusLabel(status)),
+                                  child:
+                                      Text(problemWorkflowStatusLabel(status)),
                                 ),
                             ],
                             onChanged: (value) => setState(
-                              () => _status = value ?? ProblemStatus.TODO,
+                              () => _status =
+                                  value ?? ProblemWorkflowStatus.backlog,
                             ),
                           ),
                         ),
@@ -299,7 +301,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
             title: _titleController.text,
             url: _urlController.text,
             platform: _platform,
-            status: _status,
+            workflowStatus: _status,
             tags: normalizeProblemTags(_tagsController.text.split(',')),
             date: _dateController.text.trim(),
             note: _noteController.text,
@@ -310,7 +312,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
             title: _titleController.text,
             url: _urlController.text,
             platform: _platform,
-            status: _status,
+            workflowStatus: _status,
             tags: normalizeProblemTags(_tagsController.text.split(',')),
             date: _dateController.text.trim(),
             note: _noteController.text,

@@ -10,18 +10,22 @@ class SolvedSnapshot {
     required this.status,
     this.solvedCount,
     this.error,
+    this.dailyAcceptedCount,
+    this.dailyActivityAccuracy = DailyActivityAccuracy.unknown,
   });
 
   factory SolvedSnapshot.fromResult(FetchResult result) {
     final fetchedAt = result.fetchedAt ?? DateTime.now();
     return SolvedSnapshot(
-      date: dateKey(fetchedAt),
+      date: trainingDateFor(fetchedAt),
       fetchedAt: fetchedAt,
       ojId: result.ojId,
       username: result.username,
       status: result.status,
       solvedCount: result.solvedCount,
       error: result.error,
+      dailyAcceptedCount: result.dailyAcceptedCount,
+      dailyActivityAccuracy: result.dailyActivityAccuracy,
     );
   }
 
@@ -41,6 +45,8 @@ class SolvedSnapshot {
     final status = json['status'];
     final solvedCount = json['solvedCount'];
     final error = json['error'];
+    final dailyAcceptedCount = json['dailyAcceptedCount'];
+    final dailyActivityAccuracy = json['dailyActivityAccuracy'];
 
     if (date is! String || !_isValidDateKey(date)) {
       return null;
@@ -71,6 +77,10 @@ class SolvedSnapshot {
     if (error != null && error is! String) {
       return null;
     }
+    if (dailyAcceptedCount != null &&
+        (dailyAcceptedCount is! int || dailyAcceptedCount < 0)) {
+      return null;
+    }
 
     return SolvedSnapshot(
       date: date,
@@ -80,6 +90,10 @@ class SolvedSnapshot {
       status: parsedStatus,
       solvedCount: solvedCount as int?,
       error: error as String?,
+      dailyAcceptedCount: dailyAcceptedCount as int?,
+      dailyActivityAccuracy:
+          _parseDailyActivityAccuracy(dailyActivityAccuracy) ??
+              DailyActivityAccuracy.unknown,
     );
   }
 
@@ -87,6 +101,18 @@ class SolvedSnapshot {
     for (final status in FetchStatus.values) {
       if (status.name == value) {
         return status;
+      }
+    }
+    return null;
+  }
+
+  static DailyActivityAccuracy? _parseDailyActivityAccuracy(Object? value) {
+    if (value is! String) {
+      return null;
+    }
+    for (final accuracy in DailyActivityAccuracy.values) {
+      if (accuracy.name == value) {
+        return accuracy;
       }
     }
     return null;
@@ -111,6 +137,8 @@ class SolvedSnapshot {
   final FetchStatus status;
   final int? solvedCount;
   final String? error;
+  final int? dailyAcceptedCount;
+  final DailyActivityAccuracy dailyActivityAccuracy;
 
   Map<String, dynamic> toJson() => {
         'date': date,
@@ -120,5 +148,7 @@ class SolvedSnapshot {
         'status': status.name,
         'solvedCount': solvedCount,
         'error': error,
+        'dailyAcceptedCount': dailyAcceptedCount,
+        'dailyActivityAccuracy': dailyActivityAccuracy.name,
       };
 }

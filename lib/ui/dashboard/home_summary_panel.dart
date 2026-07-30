@@ -84,7 +84,7 @@ class HomeSummaryPanel extends StatelessWidget {
                   const SizedBox(width: 10),
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: Pill(label: '今日 +${viewModel.todayDelta}'),
+                    child: Pill(label: '今日 ${viewModel.todayDeltaLabel}'),
                   ),
                 ],
               ),
@@ -327,6 +327,7 @@ IconData _toneIcon(HomeCardTone tone) {
 
 IconData _actionIcon(HomeActionTarget target) {
   return switch (target) {
+    HomeActionTarget.training => Icons.timer_outlined,
     HomeActionTarget.heatmap => Icons.calendar_view_week,
     HomeActionTarget.problems => Icons.bookmark_border,
     HomeActionTarget.refreshLogs => Icons.history,

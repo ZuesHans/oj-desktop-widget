@@ -2,14 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../models/app_config.dart' show AppColorTheme;
 
-const compactWindowSize = Size(340, 154);
-const compactMinimumWindowSize = Size(300, 132);
-const largeFloatWindowSize = Size(380, 540);
-const largeFloatMinimumWindowSize = Size(330, 440);
-const dashboardWindowSize = Size(960, 680);
-const dashboardMinimumWindowSize = Size(760, 520);
-const heatmapWindowSize = Size(560, 560);
-const heatmapMinimumWindowSize = Size(440, 420);
+const appWindowSize = Size(1120, 760);
+const appMinimumWindowSize = Size(900, 620);
 
 const appRadiusControl = 8.0;
 const appRadiusCompact = 20.0;
@@ -40,10 +34,6 @@ class AppPalette {
     required this.textSecondary,
     required this.accent,
     required this.danger,
-    required this.compactSurface,
-    required this.compactLabel,
-    required this.compactText,
-    required this.compactShadow,
     required this.heatmapLevels,
   });
 
@@ -56,10 +46,6 @@ class AppPalette {
   final Color textSecondary;
   final Color accent;
   final Color danger;
-  final Color compactSurface;
-  final Color compactLabel;
-  final Color compactText;
-  final Color compactShadow;
   final List<Color> heatmapLevels;
 }
 
@@ -73,10 +59,6 @@ const _classicPalette = AppPalette(
   textSecondary: Color(0xFF607080),
   accent: Color(0xFF2563EB),
   danger: Color(0xFFD14343),
-  compactSurface: Color(0xF7FFFFFF),
-  compactLabel: Color(0xFF476173),
-  compactText: Color(0xFF142132),
-  compactShadow: Color(0x240F172A),
   heatmapLevels: [
     Color(0xFFEFF3EF),
     Color(0xFF9BE9A8),
@@ -96,10 +78,6 @@ const _oceanPalette = AppPalette(
   textSecondary: Color(0xFF5E7077),
   accent: Color(0xFF197B8A),
   danger: Color(0xFFC43D4B),
-  compactSurface: Color(0xF2F4FBFD),
-  compactLabel: Color(0xFF2F7280),
-  compactText: Color(0xFF0E2D35),
-  compactShadow: Color(0x24072E36),
   heatmapLevels: [
     Color(0xFFE7F1F4),
     Color(0xFFB8E3EA),
@@ -119,10 +97,6 @@ const _rosePalette = AppPalette(
   textSecondary: Color(0xFF75656A),
   accent: Color(0xFFA33F62),
   danger: Color(0xFFB3261E),
-  compactSurface: Color(0xF2FFF7FA),
-  compactLabel: Color(0xFF9B4967),
-  compactText: Color(0xFF34161F),
-  compactShadow: Color(0x26000000),
   heatmapLevels: [
     Color(0xFFF5E9EE),
     Color(0xFFF4B8CB),
@@ -142,10 +116,6 @@ const _darkPalette = AppPalette(
   textSecondary: Color(0xFFA7B2AD),
   accent: Color(0xFF77C69A),
   danger: Color(0xFFFF8A80),
-  compactSurface: Color(0xF01A2026),
-  compactLabel: Color(0xFF93D7AF),
-  compactText: Color(0xFFF5FFF8),
-  compactShadow: Color(0x66000000),
   heatmapLevels: [
     Color(0xFF20262C),
     Color(0xFF1F4E38),
@@ -165,10 +135,6 @@ const _candyPalette = AppPalette(
   textSecondary: Color(0xFF69767D),
   accent: Color(0xFF31A9D8),
   danger: Color(0xFFC23B61),
-  compactSurface: Color(0xF8FFFFFF),
-  compactLabel: Color(0xFFE9789E),
-  compactText: Color(0xFF23323A),
-  compactShadow: Color(0x240A6A8C),
   heatmapLevels: [
     Color(0xFFFFEFF5),
     Color(0xFFF5A9B8),
@@ -196,10 +162,6 @@ var textPrimaryColor = _classicPalette.textPrimary;
 var textSecondaryColor = _classicPalette.textSecondary;
 var accentColor = _classicPalette.accent;
 var dangerColor = _classicPalette.danger;
-var compactSurfaceColor = _classicPalette.compactSurface;
-var compactLabelColor = _classicPalette.compactLabel;
-var compactTextColor = _classicPalette.compactText;
-var compactShadowColor = _classicPalette.compactShadow;
 var heatmapLevelColors = _classicPalette.heatmapLevels;
 
 void applyAppColorTheme(AppColorTheme theme) {
@@ -212,10 +174,6 @@ void applyAppColorTheme(AppColorTheme theme) {
   textSecondaryColor = palette.textSecondary;
   accentColor = palette.accent;
   dangerColor = palette.danger;
-  compactSurfaceColor = palette.compactSurface;
-  compactLabelColor = palette.compactLabel;
-  compactTextColor = palette.compactText;
-  compactShadowColor = palette.compactShadow;
   heatmapLevelColors = palette.heatmapLevels;
 }
 

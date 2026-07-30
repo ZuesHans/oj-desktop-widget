@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.2.0-beta - 2026-07-26
+
+- Replaced compact, floating, and feature-window modes with one resizable Windows Dashboard client.
+- Restored native title bar, taskbar, minimize, maximize, and close behavior with a 1120x760 default and 900x620 minimum window.
+- Made close-to-tray and silent startup explicit opt-in lifecycle settings; normal close exits by default.
+- Added unsaved-settings protection for navigation, native close, tray hiding, and tray exit.
+- Added named-mutex single-instance behavior that restores and focuses an existing window.
+- Added config v2 migration while retaining the `oj_float` data, backup, executable, and sync identities.
+- Unified snapshot retention at the latest 6000 rows for load, refresh, import, export, memory, and disk.
+- Migrated the obsolete floating-window tests and added client lifecycle, migration, startup, and data-boundary coverage.
+- Replaced automatic review queues with user-managed schedules for any date, a shared filtered problem picker, list-based favorites, and precise task-bound timing.
+- Simplified attempt records to results, assistance, mistake categories, reflections, and automatic elapsed time while preserving compatible legacy imports.
+- Added a recoverable write-ahead transaction for problem and training updates so interrupted saves roll forward consistently on the next launch.
+
 ## v0.1.3beta - 2026-07-10
 
 - Reworked the frontend into a clearer product structure: compact widget, large float, and full Dashboard now have distinct responsibilities.

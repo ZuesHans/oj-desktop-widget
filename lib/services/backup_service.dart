@@ -11,7 +11,9 @@ import '../models/fetch_result.dart';
 import '../models/problem_record.dart';
 import '../models/solved_snapshot.dart';
 import '../models/teammate.dart';
+import '../models/training.dart';
 import 'daily_summary_service.dart';
+import 'local_store.dart';
 
 class ExportResult {
   const ExportResult({
@@ -38,6 +40,7 @@ class ParsedPortableBackup {
     required this.problems,
     required this.contests,
     required this.teammates,
+    required this.training,
   });
 
   final AppConfig config;
@@ -45,6 +48,7 @@ class ParsedPortableBackup {
   final List<ProblemRecord> problems;
   final List<ContestRecord> contests;
   final TeammateStoreData teammates;
+  final TrainingStoreData training;
 }
 
 Future<ExportResult> exportOjData({
@@ -53,6 +57,7 @@ Future<ExportResult> exportOjData({
   List<ProblemRecord> problems = const [],
   List<ContestRecord> contests = const [],
   TeammateStoreData teammates = const TeammateStoreData(),
+  TrainingStoreData training = const TrainingStoreData(),
   DateTime? now,
   Directory? directory,
   String prefix = 'oj_float_backup',
@@ -78,6 +83,7 @@ Future<ExportResult> exportOjData({
       problems: problems,
       contests: contests,
       teammates: teammates,
+      training: training,
       exportedAt: exportTime,
     ),
   );
@@ -111,20 +117,24 @@ String buildPortableBackupJson({
   List<ProblemRecord> problems = const [],
   List<ContestRecord> contests = const [],
   TeammateStoreData teammates = const TeammateStoreData(),
+  TrainingStoreData training = const TrainingStoreData(),
   required DateTime exportedAt,
 }) {
+  final retainedSnapshots = retainRecentSnapshots(snapshots);
   return const JsonEncoder.withIndent('  ').convert(
     {
-      'schemaVersion': 1,
+      'schemaVersion': 2,
       'app': 'oj_float',
       'exportType': 'portable_backup',
       'exportedAt': exportedAt.toIso8601String(),
       'config': buildPortableConfigJson(config),
-      'snapshots': snapshots.map((snapshot) => snapshot.toJson()).toList(),
+      'snapshots':
+          retainedSnapshots.map((snapshot) => snapshot.toJson()).toList(),
       'problems': problems.map((problem) => problem.toStorageJson()).toList(),
       'contests': contests.map((contest) => contest.toStorageJson()).toList(),
       'teammates': trimTeammateStoreData(teammates, now: exportedAt).toJson(),
-      'dailyStats': buildDailyStatsJson(snapshots),
+      'training': training.toJson(),
+      'dailyStats': buildDailyStatsJson(retainedSnapshots),
     },
   );
 }
@@ -135,7 +145,8 @@ ParsedPortableBackup parsePortableBackupJson(String jsonText) {
     throw const FormatException('备份 JSON 必须是对象。');
   }
   final data = Map<String, dynamic>.from(decoded);
-  if (data['schemaVersion'] != 1) {
+  final schemaVersion = data['schemaVersion'];
+  if (schemaVersion != 1 && schemaVersion != 2) {
     throw const FormatException('备份版本不受支持。');
   }
   if (data['app'] != 'oj_float') {
@@ -242,12 +253,25 @@ ParsedPortableBackup parsePortableBackupJson(String jsonText) {
     );
   }
 
+  var training = const TrainingStoreData();
+  final rawTraining = data['training'];
+  if (rawTraining != null) {
+    if (rawTraining is! Map) {
+      throw const FormatException('备份训练数据必须是对象。');
+    }
+    training = TrainingStoreData.tryFromJson(
+          Map<String, dynamic>.from(rawTraining),
+        ) ??
+        const TrainingStoreData();
+  }
+
   return ParsedPortableBackup(
     config: AppConfig.fromPortableJson(Map<String, dynamic>.from(rawConfig)),
-    snapshots: List.unmodifiable(snapshots),
+    snapshots: retainRecentSnapshots(snapshots),
     problems: List.unmodifiable(problems),
     contests: List.unmodifiable(contests),
     teammates: teammates,
+    training: training,
   );
 }
 
@@ -265,14 +289,9 @@ DateTime _latestTeammateDate(TeammateStoreData teammates) {
 Map<String, Object?> buildPortableConfigJson(AppConfig config) {
   return {
     'refreshIntervalMinutes': config.refreshIntervalMinutes,
-    'launchAtStartup': config.launchAtStartup,
-    'alwaysOnTop': config.alwaysOnTop,
-    'showInTaskbar': config.showInTaskbar,
-    'closeToTray': config.closeToTray,
     'dashboardModules':
         config.dashboardModules.map((module) => module.id).toList(),
     'colorTheme': config.colorTheme.id,
-    'compactClickTarget': config.compactClickTarget.id,
     'accounts': [
       for (final meta in supportedOjs)
         {

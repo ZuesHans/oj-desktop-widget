@@ -1,0 +1,64 @@
+:root {
+  color-scheme: light;
+  font-family: "Segoe UI", sans-serif;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: #f6f7f9;
+  color: #17202a;
+}
+
+main {
+  padding: 16px;
+}
+
+h1 {
+  margin: 0 0 14px;
+  font-size: 18px;
+}
+
+label {
+  display: block;
+  margin-bottom: 6px;
+  color: #52606d;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+input,
+button {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 38px;
+  border-radius: 6px;
+  font: inherit;
+}
+
+input {
+  border: 1px solid #c7ced6;
+  background: #ffffff;
+  padding: 8px 10px;
+}
+
+button {
+  margin-top: 10px;
+  border: 0;
+  background: #167d68;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+#status {
+  min-height: 18px;
+  margin: 10px 0 0;
+  color: #52606d;
+  font-size: 12px;
+}

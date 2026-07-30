@@ -4,6 +4,7 @@ import '../../core/solved_totals.dart';
 import '../../models/app_config.dart';
 import '../../models/fetch_result.dart';
 import '../../models/oj_meta.dart';
+import '../../services/daily_summary_service.dart';
 import '../app_theme.dart';
 
 class OjTile extends StatelessWidget {
@@ -13,14 +14,14 @@ class OjTile extends StatelessWidget {
     required this.config,
     required this.results,
     required this.today,
-    required this.accountToday,
+    required this.accountActivity,
   });
 
   final OjMeta meta;
   final OjAccountConfig? config;
   final List<FetchResult> results;
   final int today;
-  final Map<String, int> accountToday;
+  final Map<String, DailyActivityValue> accountActivity;
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +41,20 @@ class OjTile extends StatelessWidget {
     };
     final pendingUsernames =
         usernames.where((username) => !shownUsernames.contains(username));
+    final platformAccuracy = accountActivity.values.any(
+      (value) => value.accuracy == DailyActivityAccuracy.unknown,
+    )
+        ? DailyActivityAccuracy.unknown
+        : accountActivity.values.any(
+            (value) => value.accuracy == DailyActivityAccuracy.estimated,
+          )
+            ? DailyActivityAccuracy.estimated
+            : DailyActivityAccuracy.exact;
+    final todayText = switch (platformAccuracy) {
+      DailyActivityAccuracy.exact => '今日 +$today',
+      DailyActivityAccuracy.estimated => '今日约 +$today',
+      DailyActivityAccuracy.unknown => '今日未知',
+    };
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -76,7 +91,7 @@ class OjTile extends StatelessWidget {
                 ...results.map(
                   (result) => _AccountResultLine(
                     result: result,
-                    today: accountToday[result.username] ?? 0,
+                    activity: accountActivity[result.username],
                   ),
                 ),
                 ...pendingUsernames.map(
@@ -94,7 +109,7 @@ class OjTile extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                   )),
               Text(
-                '今日 +$today',
+                todayText,
                 style: TextStyle(color: textSecondaryColor, fontSize: 12),
               ),
             ],
@@ -106,16 +121,21 @@ class OjTile extends StatelessWidget {
 }
 
 class _AccountResultLine extends StatelessWidget {
-  const _AccountResultLine({required this.result, required this.today});
+  const _AccountResultLine({required this.result, required this.activity});
 
   final FetchResult result;
-  final int today;
+  final DailyActivityValue? activity;
 
   @override
   Widget build(BuildContext context) {
     final retained = retainedSolvedCountForResult(result);
+    final todayText = switch (activity?.accuracy) {
+      DailyActivityAccuracy.exact => '+${activity?.count ?? 0}',
+      DailyActivityAccuracy.estimated => '约 +${activity?.count ?? 0}',
+      DailyActivityAccuracy.unknown || null => '今日未知',
+    };
     final statusText = switch (result.status) {
-      FetchStatus.success => '${result.solvedCount ?? 0} (+$today)',
+      FetchStatus.success => '${result.solvedCount ?? 0} ($todayText)',
       FetchStatus.failure => retained == null ? '失败' : '$retained (保留)',
       FetchStatus.idle => '等待刷新',
     };

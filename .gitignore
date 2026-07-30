@@ -33,6 +33,7 @@ migrate_working_dir/
 /build/
 /dist/
 /coverage/
+/.omo/
 
 # Symbolication related
 app.*.symbols

@@ -14,6 +14,8 @@ class OjProfile {
 
 enum FetchStatus { idle, success, failure }
 
+enum DailyActivityAccuracy { exact, estimated, unknown }
+
 class FetchResult {
   const FetchResult({
     required this.ojId,
@@ -26,6 +28,8 @@ class FetchResult {
     this.error,
     this.source = 'unknown',
     this.previousSolvedCount,
+    this.dailyAcceptedCount,
+    this.dailyActivityAccuracy = DailyActivityAccuracy.unknown,
   });
 
   factory FetchResult.success({
@@ -37,6 +41,8 @@ class FetchResult {
     String? profileUrl,
     String source = 'unknown',
     int? previousSolvedCount,
+    int? dailyAcceptedCount,
+    DailyActivityAccuracy dailyActivityAccuracy = DailyActivityAccuracy.unknown,
   }) {
     return FetchResult(
       ojId: ojId,
@@ -48,6 +54,8 @@ class FetchResult {
       fetchedAt: fetchedAt,
       source: source,
       previousSolvedCount: previousSolvedCount,
+      dailyAcceptedCount: dailyAcceptedCount,
+      dailyActivityAccuracy: dailyActivityAccuracy,
     );
   }
 
@@ -81,6 +89,8 @@ class FetchResult {
   final String? error;
   final String source;
   final int? previousSolvedCount;
+  final int? dailyAcceptedCount;
+  final DailyActivityAccuracy dailyActivityAccuracy;
   final DateTime? fetchedAt;
 
   FetchResult copyWith({
@@ -91,6 +101,8 @@ class FetchResult {
     String? error,
     String? source,
     int? previousSolvedCount,
+    int? dailyAcceptedCount,
+    DailyActivityAccuracy? dailyActivityAccuracy,
   }) {
     return FetchResult(
       ojId: ojId,
@@ -103,6 +115,9 @@ class FetchResult {
       error: error ?? this.error,
       source: source ?? this.source,
       previousSolvedCount: previousSolvedCount ?? this.previousSolvedCount,
+      dailyAcceptedCount: dailyAcceptedCount ?? this.dailyAcceptedCount,
+      dailyActivityAccuracy:
+          dailyActivityAccuracy ?? this.dailyActivityAccuracy,
     );
   }
 }

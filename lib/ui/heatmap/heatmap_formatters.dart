@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../models/fetch_result.dart';
 import '../../services/heatmap_service.dart';
 import '../app_theme.dart';
 
@@ -117,7 +118,11 @@ class _HeatmapCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: '${day.date}: +${day.delta}',
+      message: switch (day.accuracy) {
+        DailyActivityAccuracy.exact => '${day.date}: +${day.delta}',
+        DailyActivityAccuracy.estimated => '${day.date}: 约 +${day.delta}',
+        DailyActivityAccuracy.unknown => '${day.date}: 数据未知',
+      },
       child: Container(
         width: 12,
         height: 12,

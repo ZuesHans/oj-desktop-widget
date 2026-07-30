@@ -17,6 +17,9 @@ class ProblemsPage extends StatefulWidget {
     required this.onSave,
     required this.onDelete,
     required this.onOpenProblem,
+    this.onRestore,
+    this.onPermanentDelete,
+    this.onStartTraining,
     this.showBackButton = true,
   });
 
@@ -26,6 +29,9 @@ class ProblemsPage extends StatefulWidget {
   final Future<void> Function(ProblemRecord problem) onSave;
   final Future<void> Function(String id) onDelete;
   final Future<void> Function(ProblemRecord problem) onOpenProblem;
+  final Future<void> Function(String id)? onRestore;
+  final Future<void> Function(String id)? onPermanentDelete;
+  final Future<void> Function(ProblemRecord problem)? onStartTraining;
   final bool showBackButton;
 
   @override
@@ -34,7 +40,7 @@ class ProblemsPage extends StatefulWidget {
 
 class _ProblemsPageState extends State<ProblemsPage> {
   final TextEditingController _queryController = TextEditingController();
-  ProblemStatus? _statusFilter;
+  ProblemWorkflowStatus? _statusFilter;
   ProblemPlatform? _platformFilter;
   String? _tagFilter;
   String _query = '';
@@ -50,7 +56,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
     final visible = filterProblems(
       widget.problems,
       query: _query,
-      status: _statusFilter,
+      workflowStatus: _statusFilter,
       platform: _platformFilter,
       tag: _tagFilter,
     );
@@ -59,11 +65,18 @@ class _ProblemsPageState extends State<ProblemsPage> {
       platform: _platformFilter,
     );
     final pending = widget.problems
-        .where((problem) => problem.status != ProblemStatus.AC)
+        .where((problem) =>
+            problem.workflowStatus == ProblemWorkflowStatus.backlog ||
+            problem.workflowStatus == ProblemWorkflowStatus.active ||
+            problem.workflowStatus == ProblemWorkflowStatus.review)
         .length;
-    final accepted = widget.problems.length - pending;
+    final accepted = widget.problems
+        .where((problem) =>
+            problem.workflowStatus == ProblemWorkflowStatus.mastered)
+        .length;
     final review = widget.problems
-        .where((problem) => problem.status == ProblemStatus.REVIEW)
+        .where(
+            (problem) => problem.workflowStatus == ProblemWorkflowStatus.review)
         .length;
     return Scaffold(
       backgroundColor: appSurfaceColor,
@@ -99,7 +112,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
                   Row(
                     children: [
                       Expanded(
-                        child: DropdownButtonFormField<ProblemStatus?>(
+                        child: DropdownButtonFormField<ProblemWorkflowStatus?>(
                           isExpanded: true,
                           key: const ValueKey('problem-status-filter'),
                           initialValue: _statusFilter,
@@ -107,14 +120,14 @@ class _ProblemsPageState extends State<ProblemsPage> {
                             labelText: '状态',
                           ),
                           items: [
-                            const DropdownMenuItem<ProblemStatus?>(
+                            const DropdownMenuItem<ProblemWorkflowStatus?>(
                               value: null,
                               child: Text('全部状态'),
                             ),
-                            for (final status in ProblemStatus.values)
-                              DropdownMenuItem<ProblemStatus?>(
+                            for (final status in ProblemWorkflowStatus.values)
+                              DropdownMenuItem<ProblemWorkflowStatus?>(
                                 value: status,
-                                child: Text(problemStatusLabel(status)),
+                                child: Text(problemWorkflowStatusLabel(status)),
                               ),
                           ],
                           onChanged: (value) =>
@@ -234,6 +247,15 @@ class _ProblemsPageState extends State<ProblemsPage> {
                             onDelete: () => _delete(context, visible[index]),
                             onOpenProblem: () =>
                                 _openProblem(context, visible[index]),
+                            onRestore: widget.onRestore == null
+                                ? null
+                                : () => _restore(context, visible[index]),
+                            onStartTraining: widget.onStartTraining == null
+                                ? null
+                                : () => _startTraining(
+                                      context,
+                                      visible[index],
+                                    ),
                           ),
                         );
                       },
@@ -280,12 +302,17 @@ class _ProblemsPageState extends State<ProblemsPage> {
   Future<void> _changeStatus(
     BuildContext context,
     ProblemRecord problem,
-    ProblemStatus status,
+    ProblemWorkflowStatus status,
   ) async {
-    if (problem.status == status) {
+    if (problem.workflowStatus == status) {
       return;
     }
-    final updated = problem.copyWith(status: status);
+    final updated = problem.copyWith(
+      workflowStatus: status,
+      archivedAt:
+          status == ProblemWorkflowStatus.archived ? DateTime.now() : null,
+      clearArchivedAt: status != ProblemWorkflowStatus.archived,
+    );
     await widget.onSave(updated);
     if (!context.mounted) {
       return;
@@ -294,7 +321,8 @@ class _ProblemsPageState extends State<ProblemsPage> {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text('${problem.title} 已改为${problemStatusLabel(status)}'),
+          content:
+              Text('${problem.title} 已改为${problemWorkflowStatusLabel(status)}'),
         ),
       );
   }
@@ -304,8 +332,79 @@ class _ProblemsPageState extends State<ProblemsPage> {
     if (!context.mounted) {
       return;
     }
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('${problem.title} 已归档'),
+          action: widget.onRestore == null
+              ? null
+              : SnackBarAction(
+                  label: '撤销',
+                  onPressed: () => widget.onRestore!(problem.id),
+                ),
+        ),
+      );
+  }
+
+  Future<void> _restore(BuildContext context, ProblemRecord problem) async {
+    await widget.onRestore?.call(problem.id);
+    if (!context.mounted) {
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${problem.title} 已删除')),
+      SnackBar(content: Text('${problem.title} 已恢复到待安排')),
+    );
+  }
+
+  Future<void> _startTraining(
+    BuildContext context,
+    ProblemRecord problem,
+  ) async {
+    try {
+      await widget.onStartTraining?.call(problem);
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('开始训练失败：${normalizeError(error)}')),
+      );
+    }
+  }
+
+  Future<void> _permanentlyDelete(
+    BuildContext context,
+    ProblemRecord problem,
+  ) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('永久删除题目？'),
+            content: Text('将同时清理「${problem.title}」的队列和题单引用，此操作无法撤销。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('永久删除'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed) {
+      return;
+    }
+    await widget.onPermanentDelete?.call(problem.id);
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${problem.title} 已永久删除')),
     );
   }
 
@@ -342,6 +441,30 @@ class _ProblemsPageState extends State<ProblemsPage> {
           Navigator.pop(context);
           _changeStatus(context, problem, status);
         },
+        onStartTraining: widget.onStartTraining == null
+            ? null
+            : () {
+                Navigator.pop(context);
+                _startTraining(context, problem);
+              },
+        onArchiveOrRestore:
+            problem.workflowStatus == ProblemWorkflowStatus.archived
+                ? (widget.onRestore == null
+                    ? null
+                    : () {
+                        Navigator.pop(context);
+                        _restore(context, problem);
+                      })
+                : () {
+                    Navigator.pop(context);
+                    _delete(context, problem);
+                  },
+        onPermanentDelete: widget.onPermanentDelete == null
+            ? null
+            : () {
+                Navigator.pop(context);
+                _permanentlyDelete(context, problem);
+              },
       ),
     );
   }
@@ -447,7 +570,7 @@ class _ProblemsHeader extends StatelessWidget {
                 _SummaryMetric(
                   label: '复盘中',
                   value: review,
-                  color: _problemStatusColor(ProblemStatus.REVIEW),
+                  color: _problemStatusColor(ProblemWorkflowStatus.review),
                 ),
                 const SizedBox(width: appSpace2),
                 _SummaryMetric(
@@ -525,18 +648,22 @@ class _ProblemListItem extends StatelessWidget {
     required this.onStatusChanged,
     required this.onDelete,
     required this.onOpenProblem,
+    this.onRestore,
+    this.onStartTraining,
   });
 
   final ProblemRecord problem;
   final VoidCallback onView;
   final VoidCallback onEdit;
-  final ValueChanged<ProblemStatus> onStatusChanged;
+  final ValueChanged<ProblemWorkflowStatus> onStatusChanged;
   final VoidCallback onDelete;
   final VoidCallback onOpenProblem;
+  final VoidCallback? onRestore;
+  final VoidCallback? onStartTraining;
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = _problemStatusColor(problem.status);
+    final statusColor = _problemStatusColor(problem.workflowStatus);
     final preview = problem.analysis.isNotEmpty
         ? '题解：${problem.analysis}'
         : problem.note.isNotEmpty
@@ -579,7 +706,7 @@ class _ProblemListItem extends StatelessWidget {
                       const SizedBox(width: 8),
                       _ProblemStatusMenu(
                         problemId: problem.id,
-                        status: problem.status,
+                        status: problem.workflowStatus,
                         onChanged: onStatusChanged,
                       ),
                     ],
@@ -646,6 +773,15 @@ class _ProblemListItem extends StatelessWidget {
                         icon: Icons.open_in_new,
                       ),
                       _CompactActionButton(
+                        key: ValueKey('start-training-${problem.id}'),
+                        tooltip: '开始训练',
+                        onPressed: problem.workflowStatus ==
+                                ProblemWorkflowStatus.archived
+                            ? null
+                            : onStartTraining,
+                        icon: Icons.play_arrow,
+                      ),
+                      _CompactActionButton(
                         key: ValueKey('edit-problem-${problem.id}'),
                         tooltip: '编辑',
                         onPressed: onEdit,
@@ -653,17 +789,29 @@ class _ProblemListItem extends StatelessWidget {
                       ),
                       _CompactActionButton(
                         key: ValueKey('mark-ac-problem-${problem.id}'),
-                        tooltip: '勾选为已通过',
-                        onPressed: problem.status == ProblemStatus.AC
+                        tooltip: '标记为已掌握',
+                        onPressed: problem.workflowStatus ==
+                                ProblemWorkflowStatus.mastered
                             ? null
-                            : () => onStatusChanged(ProblemStatus.AC),
+                            : () => onStatusChanged(
+                                  ProblemWorkflowStatus.mastered,
+                                ),
                         icon: Icons.check_circle_outline,
                       ),
                       _CompactActionButton(
                         key: ValueKey('delete-problem-${problem.id}'),
-                        tooltip: '删除',
-                        onPressed: onDelete,
-                        icon: Icons.delete_outline,
+                        tooltip: problem.workflowStatus ==
+                                ProblemWorkflowStatus.archived
+                            ? '恢复'
+                            : '归档',
+                        onPressed: problem.workflowStatus ==
+                                ProblemWorkflowStatus.archived
+                            ? onRestore
+                            : onDelete,
+                        icon: problem.workflowStatus ==
+                                ProblemWorkflowStatus.archived
+                            ? Icons.unarchive_outlined
+                            : Icons.archive_outlined,
                       ),
                     ],
                   ),
@@ -730,12 +878,18 @@ class _ProblemDetailsDialog extends StatelessWidget {
     required this.onEdit,
     required this.onOpenProblem,
     required this.onStatusChanged,
+    this.onStartTraining,
+    this.onArchiveOrRestore,
+    this.onPermanentDelete,
   });
 
   final ProblemRecord problem;
   final VoidCallback onEdit;
   final VoidCallback onOpenProblem;
-  final ValueChanged<ProblemStatus> onStatusChanged;
+  final ValueChanged<ProblemWorkflowStatus> onStatusChanged;
+  final VoidCallback? onStartTraining;
+  final VoidCallback? onArchiveOrRestore;
+  final VoidCallback? onPermanentDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -755,7 +909,7 @@ class _ProblemDetailsDialog extends StatelessWidget {
           const SizedBox(width: 10),
           _ProblemStatusMenu(
             problemId: '${problem.id}-details',
-            status: problem.status,
+            status: problem.workflowStatus,
             onChanged: onStatusChanged,
           ),
         ],
@@ -795,6 +949,32 @@ class _ProblemDetailsDialog extends StatelessWidget {
         ),
       ),
       actions: [
+        if (onPermanentDelete != null)
+          IconButton(
+            key: ValueKey('permanent-delete-problem-${problem.id}'),
+            tooltip: '永久删除',
+            onPressed: onPermanentDelete,
+            icon: const Icon(Icons.delete_forever_outlined),
+          ),
+        if (onArchiveOrRestore != null)
+          IconButton(
+            tooltip: problem.workflowStatus == ProblemWorkflowStatus.archived
+                ? '恢复'
+                : '归档',
+            onPressed: onArchiveOrRestore,
+            icon: Icon(
+              problem.workflowStatus == ProblemWorkflowStatus.archived
+                  ? Icons.unarchive_outlined
+                  : Icons.archive_outlined,
+            ),
+          ),
+        if (onStartTraining != null &&
+            problem.workflowStatus != ProblemWorkflowStatus.archived)
+          TextButton.icon(
+            onPressed: onStartTraining,
+            icon: const Icon(Icons.play_arrow),
+            label: const Text('开始训练'),
+          ),
         TextButton.icon(
           onPressed: onOpenProblem,
           icon: const Icon(Icons.open_in_new),
@@ -924,18 +1104,18 @@ class _ProblemStatusMenu extends StatelessWidget {
   });
 
   final String problemId;
-  final ProblemStatus status;
-  final ValueChanged<ProblemStatus> onChanged;
+  final ProblemWorkflowStatus status;
+  final ValueChanged<ProblemWorkflowStatus> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final color = _problemStatusColor(status);
-    return PopupMenuButton<ProblemStatus>(
+    return PopupMenuButton<ProblemWorkflowStatus>(
       key: ValueKey('problem-status-menu-$problemId'),
       tooltip: '切换状态',
       onSelected: onChanged,
       itemBuilder: (context) => [
-        for (final item in ProblemStatus.values)
+        for (final item in ProblemWorkflowStatus.values)
           PopupMenuItem(
             key: ValueKey('problem-status-option-$problemId-${item.name}'),
             value: item,
@@ -951,7 +1131,7 @@ class _ProblemStatusMenu extends StatelessWidget {
                       : textSecondaryColor,
                 ),
                 const SizedBox(width: 8),
-                Text(problemStatusLabel(item)),
+                Text(problemWorkflowStatusLabel(item)),
               ],
             ),
           ),
@@ -967,15 +1147,17 @@ class _ProblemStatusMenu extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              status == ProblemStatus.AC
+              status == ProblemWorkflowStatus.mastered
                   ? Icons.check_circle
-                  : Icons.radio_button_unchecked,
+                  : status == ProblemWorkflowStatus.archived
+                      ? Icons.archive_outlined
+                      : Icons.radio_button_unchecked,
               size: 14,
               color: color,
             ),
             const SizedBox(width: 4),
             Text(
-              problemStatusLabel(status),
+              problemWorkflowStatusLabel(status),
               style: TextStyle(
                 color: color,
                 fontSize: 12,
@@ -989,11 +1171,12 @@ class _ProblemStatusMenu extends StatelessWidget {
   }
 }
 
-Color _problemStatusColor(ProblemStatus status) {
+Color _problemStatusColor(ProblemWorkflowStatus status) {
   return switch (status) {
-    ProblemStatus.AC => accentColor,
-    ProblemStatus.REVIEW => const Color(0xFF8A6F19),
-    ProblemStatus.TODO => textSecondaryColor,
-    ProblemStatus.WA || ProblemStatus.TLE || ProblemStatus.RE => dangerColor,
+    ProblemWorkflowStatus.mastered => accentColor,
+    ProblemWorkflowStatus.review => const Color(0xFF8A6F19),
+    ProblemWorkflowStatus.backlog => textSecondaryColor,
+    ProblemWorkflowStatus.active => dangerColor,
+    ProblemWorkflowStatus.archived => const Color(0xFF667085),
   };
 }

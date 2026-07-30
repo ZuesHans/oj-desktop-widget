@@ -187,6 +187,27 @@ class TeammatesPage extends StatelessWidget {
   }
 
   Future<void> _delete(BuildContext context, TeammateProfile profile) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('删除队友？'),
+            content: Text('确认删除「${profile.nickname}」及其本地历史记录？'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('删除'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed) {
+      return;
+    }
     await onDelete(profile.id);
     if (!context.mounted) {
       return;

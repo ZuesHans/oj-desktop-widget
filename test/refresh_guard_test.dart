@@ -141,6 +141,50 @@ void main() {
       await directory.delete(recursive: true);
     }
   });
+
+  test('refresh keeps memory and disk at the latest 6000 snapshots', () async {
+    final directory = await Directory.systemTemp.createTemp('refresh_guard_');
+    final store = LocalStore(supportDirectory: directory);
+    final base = DateTime.parse('2025-01-01T00:00:00');
+    final controller = _controller(
+      store,
+      _SequenceProvider([
+        const OjProfile(
+          solvedCount: 6000,
+          profileUrl: 'https://example.test/a',
+          source: 'primary',
+        ),
+      ]),
+    );
+
+    try {
+      await store.saveConfig(_config('alice'));
+      await store.replaceSnapshots([
+        for (var i = 0; i < maxStoredSnapshots; i++)
+          SolvedSnapshot(
+            date: '2025-01-01',
+            fetchedAt: base.add(Duration(minutes: i)),
+            ojId: 'codeforces',
+            username: 'alice',
+            status: FetchStatus.success,
+            solvedCount: i,
+          ),
+      ]);
+
+      await controller.init();
+      final persisted = await store.loadSnapshots();
+
+      expect(controller.state.snapshots, hasLength(maxStoredSnapshots));
+      expect(controller.state.snapshots.first.solvedCount, 1);
+      expect(controller.state.snapshots.last.solvedCount, 6000);
+      expect(persisted, hasLength(maxStoredSnapshots));
+      expect(persisted.first.solvedCount, 1);
+      expect(persisted.last.solvedCount, 6000);
+    } finally {
+      controller.dispose();
+      await directory.delete(recursive: true);
+    }
+  });
 }
 
 OjController _controller(LocalStore store, OjProvider provider) {

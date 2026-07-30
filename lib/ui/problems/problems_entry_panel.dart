@@ -18,11 +18,14 @@ class ProblemsEntryPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final todo = problems
         .where((problem) =>
-            problem.status == ProblemStatus.TODO ||
-            problem.status == ProblemStatus.REVIEW)
+            problem.workflowStatus == ProblemWorkflowStatus.backlog ||
+            problem.workflowStatus == ProblemWorkflowStatus.active ||
+            problem.workflowStatus == ProblemWorkflowStatus.review)
         .length;
-    final accepted =
-        problems.where((problem) => problem.status == ProblemStatus.AC).length;
+    final accepted = problems
+        .where((problem) =>
+            problem.workflowStatus == ProblemWorkflowStatus.mastered)
+        .length;
     final subtitle = todo == 0
         ? '已 AC $accepted · 共 ${problems.length}'
         : '待处理 $todo · 已 AC $accepted · 共 ${problems.length}';

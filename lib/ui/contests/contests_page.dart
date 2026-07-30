@@ -174,6 +174,27 @@ class ContestsPage extends StatelessWidget {
   }
 
   Future<void> _delete(BuildContext context, ContestRecord contest) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('删除比赛记录？'),
+            content: Text('确认删除「${contest.title}」？此操作无法撤销。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('删除'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed) {
+      return;
+    }
     await onDelete(contest.id);
     if (!context.mounted) {
       return;

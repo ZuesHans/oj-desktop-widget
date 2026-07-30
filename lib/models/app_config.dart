@@ -4,6 +4,7 @@ import '../core/oj_catalog.dart';
 
 const defaultDashboardModules = <DashboardModule>[
   DashboardModule.summary,
+  DashboardModule.training,
   DashboardModule.heatmap,
   DashboardModule.problems,
   DashboardModule.refreshLogs,
@@ -13,8 +14,11 @@ const defaultDashboardModules = <DashboardModule>[
   DashboardModule.daily,
 ];
 
+const currentAppConfigVersion = 2;
+
 enum DashboardModule {
   summary('summary'),
+  training('training'),
   heatmap('heatmap'),
   problems('problems'),
   refreshLogs('refreshLogs'),
@@ -40,40 +44,26 @@ enum AppColorTheme {
   final String id;
 }
 
-enum CompactClickTarget {
-  largeFloat('largeFloat'),
-  dashboard('dashboard');
-
-  const CompactClickTarget(this.id);
-
-  final String id;
-}
-
 class AppConfig {
   const AppConfig({
     required this.refreshIntervalMinutes,
     required this.accounts,
+    this.configVersion = currentAppConfigVersion,
     this.dashboardModules = defaultDashboardModules,
     this.colorTheme = AppColorTheme.classic,
-    this.compactClickTarget = CompactClickTarget.largeFloat,
     this.sync = const SyncConfig(),
     this.launchAtStartup = false,
-    this.alwaysOnTop = true,
-    this.showInTaskbar = true,
-    this.closeToTray = true,
+    this.closeToTray = false,
   });
 
   factory AppConfig.defaults() {
     return AppConfig(
       refreshIntervalMinutes: 60,
       launchAtStartup: false,
-      alwaysOnTop: true,
-      showInTaskbar: true,
-      closeToTray: true,
+      closeToTray: false,
       sync: const SyncConfig(),
       dashboardModules: defaultDashboardModules,
       colorTheme: AppColorTheme.classic,
-      compactClickTarget: CompactClickTarget.largeFloat,
       accounts: {
         for (final meta in supportedOjs)
           meta.id: const OjAccountConfig(usernames: [], enabled: false),
@@ -83,25 +73,24 @@ class AppConfig {
 
   factory AppConfig.fromJson(Map<String, dynamic> json) {
     final rawAccounts = json['accounts'];
+    final storedVersion =
+        json['configVersion'] is int ? json['configVersion'] as int : 1;
+    final isLegacyFloatingConfig = storedVersion < currentAppConfigVersion;
     return AppConfig(
+      configVersion: currentAppConfigVersion,
       refreshIntervalMinutes: _parseRefreshInterval(
         json['refreshIntervalMinutes'],
       ),
-      launchAtStartup: json['launchAtStartup'] is bool
-          ? json['launchAtStartup'] as bool
+      launchAtStartup:
+          !isLegacyFloatingConfig && json['launchAtStartup'] is bool
+              ? json['launchAtStartup'] as bool
+              : false,
+      closeToTray: !isLegacyFloatingConfig && json['closeToTray'] is bool
+          ? json['closeToTray'] as bool
           : false,
-      alwaysOnTop:
-          json['alwaysOnTop'] is bool ? json['alwaysOnTop'] as bool : true,
-      showInTaskbar:
-          json['showInTaskbar'] is bool ? json['showInTaskbar'] as bool : true,
-      closeToTray:
-          json['closeToTray'] is bool ? json['closeToTray'] as bool : true,
       sync: SyncConfig.fromJson(json['sync']),
       dashboardModules: _parseDashboardModules(json['dashboardModules']),
       colorTheme: _parseColorTheme(json['colorTheme']),
-      compactClickTarget: _parseCompactClickTarget(
-        json['compactClickTarget'],
-      ),
       accounts: {
         for (final meta in supportedOjs)
           meta.id: _parseAccountConfig(
@@ -135,24 +124,15 @@ class AppConfig {
       accounts[ojId] = OjAccountConfig.fromJson(accountJson);
     }
     return AppConfig(
+      configVersion: currentAppConfigVersion,
       refreshIntervalMinutes: _parseRefreshInterval(
         json['refreshIntervalMinutes'],
       ),
-      launchAtStartup: json['launchAtStartup'] is bool
-          ? json['launchAtStartup'] as bool
-          : false,
-      alwaysOnTop:
-          json['alwaysOnTop'] is bool ? json['alwaysOnTop'] as bool : true,
-      showInTaskbar:
-          json['showInTaskbar'] is bool ? json['showInTaskbar'] as bool : true,
-      closeToTray:
-          json['closeToTray'] is bool ? json['closeToTray'] as bool : true,
+      launchAtStartup: false,
+      closeToTray: false,
       sync: const SyncConfig(),
       dashboardModules: _parseDashboardModules(json['dashboardModules']),
       colorTheme: _parseColorTheme(json['colorTheme']),
-      compactClickTarget: _parseCompactClickTarget(
-        json['compactClickTarget'],
-      ),
       accounts: accounts,
     );
   }
@@ -215,65 +195,46 @@ class AppConfig {
     return AppColorTheme.classic;
   }
 
-  static CompactClickTarget _parseCompactClickTarget(Object? value) {
-    if (value is String) {
-      for (final target in CompactClickTarget.values) {
-        if (target.id == value) {
-          return target;
-        }
-      }
-    }
-    return CompactClickTarget.largeFloat;
-  }
-
+  final int configVersion;
   final int refreshIntervalMinutes;
   final Map<String, OjAccountConfig> accounts;
   final List<DashboardModule> dashboardModules;
   final AppColorTheme colorTheme;
-  final CompactClickTarget compactClickTarget;
   final bool launchAtStartup;
-  final bool alwaysOnTop;
-  final bool showInTaskbar;
   final bool closeToTray;
   final SyncConfig sync;
 
   AppConfig copyWith({
+    int? configVersion,
     int? refreshIntervalMinutes,
     Map<String, OjAccountConfig>? accounts,
     List<DashboardModule>? dashboardModules,
     AppColorTheme? colorTheme,
-    CompactClickTarget? compactClickTarget,
     bool? launchAtStartup,
-    bool? alwaysOnTop,
-    bool? showInTaskbar,
     bool? closeToTray,
     SyncConfig? sync,
   }) {
     return AppConfig(
+      configVersion: configVersion ?? this.configVersion,
       refreshIntervalMinutes:
           refreshIntervalMinutes ?? this.refreshIntervalMinutes,
       accounts: accounts ?? this.accounts,
       dashboardModules: dashboardModules ?? this.dashboardModules,
       colorTheme: colorTheme ?? this.colorTheme,
-      compactClickTarget: compactClickTarget ?? this.compactClickTarget,
       launchAtStartup: launchAtStartup ?? this.launchAtStartup,
-      alwaysOnTop: alwaysOnTop ?? this.alwaysOnTop,
-      showInTaskbar: showInTaskbar ?? this.showInTaskbar,
       closeToTray: closeToTray ?? this.closeToTray,
       sync: sync ?? this.sync,
     );
   }
 
   Map<String, dynamic> toJson() => {
+        'configVersion': currentAppConfigVersion,
         'refreshIntervalMinutes': refreshIntervalMinutes,
         'launchAtStartup': launchAtStartup,
-        'alwaysOnTop': alwaysOnTop,
-        'showInTaskbar': showInTaskbar,
         'closeToTray': closeToTray,
         'dashboardModules':
             dashboardModules.map((module) => module.id).toList(),
         'colorTheme': colorTheme.id,
-        'compactClickTarget': compactClickTarget.id,
         'sync': sync.toJson(),
         'accounts': {
           for (final entry in accounts.entries) entry.key: entry.value.toJson(),

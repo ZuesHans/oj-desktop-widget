@@ -136,6 +136,7 @@ void main() {
     final second = _problem(
       id: 'b',
       title: 'Greedy',
+      url: 'https://codeforces.com/problemset/problem/1799/B',
       status: ProblemStatus.WA,
       tags: const ['贪心'],
       updatedAt: DateTime.parse('2026-06-21T09:00:00'),
@@ -202,6 +203,203 @@ void main() {
       'Website Title',
       'Website Only',
     ]);
+  });
+
+  test('canonical keys unify alternate URLs and ignore query or slash', () {
+    final contest = _problem(
+      id: 'contest',
+      url: 'https://codeforces.com/contest/1799/problem/A?locale=en',
+    );
+    final problemset = _problem(
+      id: 'problemset',
+      url: 'https://codeforces.com/problemset/problem/1799/A/',
+    );
+    final genericA = _problem(
+      id: 'generic-a',
+      url: 'https://example.com/problem/1/?source=edge',
+    );
+    final genericB = _problem(
+      id: 'generic-b',
+      url: 'https://example.com/problem/1',
+    );
+
+    expect(canonicalProblemKey(contest), canonicalProblemKey(problemset));
+    expect(canonicalProblemKey(genericA), canonicalProblemKey(genericB));
+  });
+
+  test('upsert merges repeated browser imports into the local record', () {
+    final service = ProblemBookService(
+      client: MockClient((_) async => http.Response('', 404)),
+    );
+    addTearDown(service.dispose);
+    final local = _problem(
+      id: 'local',
+      title: 'Original',
+      url: 'https://codeforces.com/contest/1799/problem/A',
+      tags: const ['greedy'],
+    );
+    final imported = _problem(
+      id: 'browser',
+      title: 'Imported',
+      url: 'https://codeforces.com/problemset/problem/1799/A?x=1',
+      tags: const ['implementation'],
+      updatedAt: DateTime.parse('2026-06-22T12:00:00'),
+    );
+
+    final merged = service.upsert([local], imported);
+
+    expect(merged, hasLength(1));
+    expect(merged.single.id, 'local');
+    expect(merged.single.title, 'Imported');
+    expect(merged.single.tags, containsAll(['greedy', 'implementation']));
+  });
+
+  test('problem URI normalization rejects local protocols', () {
+    expect(
+      () => normalizeProblemUri('file:///C:/secret.txt'),
+      throwsA(isA<FetchException>()),
+    );
+    expect(
+      () => normalizeProblemUri('javascript:alert(1)'),
+      throwsA(isA<FetchException>()),
+    );
+  });
+
+  test('problem filtering supports workflow and platform', () {
+    final backlog = _problem(
+      id: 'backlog',
+      url: 'https://codeforces.com/problemset/problem/1/A',
+      status: ProblemStatus.TODO,
+    );
+    final mastered = _problem(
+      id: 'mastered',
+      url: 'https://codeforces.com/problemset/problem/2/A',
+      status: ProblemStatus.AC,
+    );
+
+    expect(
+      filterProblems(
+        [backlog, mastered],
+        workflowStatus: ProblemWorkflowStatus.backlog,
+        platform: ProblemPlatform.cf,
+      ).map((item) => item.id),
+      ['backlog'],
+    );
+    expect(
+      filterProblems([backlog], platform: ProblemPlatform.lg),
+      isEmpty,
+    );
+  });
+
+  test('external IDs cover supported platform URL shapes', () {
+    final cases = <(String, ProblemPlatform, String)>[
+      (
+        'https://atcoder.jp/contests/abc300/tasks/abc300_a',
+        ProblemPlatform.atcoder,
+        'abc300_a',
+      ),
+      ('https://www.luogu.com.cn/problem/P1001', ProblemPlatform.lg, 'P1001'),
+      (
+        'https://ac.nowcoder.com/acm/problem/12345',
+        ProblemPlatform.nc,
+        '12345',
+      ),
+      (
+        'https://leetcode.cn/problems/two-sum/',
+        ProblemPlatform.lccn,
+        'two-sum',
+      ),
+      (
+        'https://acm.hdu.edu.cn/showproblem.php?pid=1000',
+        ProblemPlatform.hd,
+        '1000',
+      ),
+      ('http://poj.org/problem?id=1000', ProblemPlatform.poj, '1000'),
+      ('https://example.com/problem/1', ProblemPlatform.other, ''),
+    ];
+
+    for (final (url, platform, expected) in cases) {
+      expect(extractProblemExternalId(Uri.parse(url), platform), expected);
+    }
+  });
+
+  test('canonical key prefers explicit external ID', () {
+    final problem = ProblemRecord.create(
+      id: 'external',
+      title: 'External',
+      url: 'https://example.com/anything?x=1',
+      platform: ProblemPlatform.other,
+      externalId: ' ABC-1 ',
+      now: DateTime(2026, 7, 27),
+    );
+
+    expect(canonicalProblemKey(problem), 'other:abc-1');
+  });
+
+  test('fallback titles cover all supported platforms', () {
+    final cases = <(ProblemPlatform, String, String)>[
+      (ProblemPlatform.nc, 'https://ac.nowcoder.com/acm/problem/12', '牛客 12'),
+      (
+        ProblemPlatform.atcoder,
+        'https://atcoder.jp/contests/abc/tasks/abc_a',
+        'AtCoder abc_a',
+      ),
+      (
+        ProblemPlatform.hd,
+        'https://acm.hdu.edu.cn/showproblem.php?pid=1000',
+        'HDU 1000',
+      ),
+      (ProblemPlatform.poj, 'http://poj.org/problem?id=1000', 'POJ 1000'),
+      (ProblemPlatform.uva, 'https://onlinejudge.org/problem/36', 'UVA 36'),
+      (ProblemPlatform.spoj, 'https://spoj.com/problems/TEST/', 'SPOJ TEST'),
+      (
+        ProblemPlatform.lccn,
+        'https://leetcode.cn/problems/two-sum/',
+        'LeetCode two-sum',
+      ),
+      (ProblemPlatform.other, 'https://example.com/problem/1', '1'),
+    ];
+
+    for (final (platform, url, expected) in cases) {
+      expect(fallbackProblemTitle(Uri.parse(url), platform), expected);
+    }
+  });
+
+  test('generic and Luogu injection title parsers handle page variants', () {
+    expect(
+      parseGenericProblemTitle('<html><h1>  Generic   Title </h1></html>'),
+      'Generic Title',
+    );
+    final payload = jsonEncode({
+      'currentData': {
+        'problem': {'title': 'P1001 A+B Problem'},
+      },
+    });
+    final encoded = jsonEncode(payload);
+    expect(
+      parseLuoguProblemTitle(
+          '<script>window._feInjection = JSON.parse($encoded)</script>'),
+      'P1001 A+B Problem',
+    );
+  });
+
+  test('parseLink falls back after page fetch failure', () async {
+    final service = ProblemBookService(
+      client: MockClient((_) async => http.Response('down', 503)),
+    );
+    addTearDown(service.dispose);
+
+    final parsed = await service.parseLink(
+      'atcoder.jp/contests/abc300/tasks/abc300_a#statement',
+    );
+
+    expect(parsed.title, 'AtCoder abc300_a');
+    expect(parsed.externalId, 'abc300_a');
+    expect(parsed.url, isNot(contains('#')));
+  });
+
+  test('empty problem URL is rejected', () {
+    expect(() => normalizeProblemUri('  '), throwsA(isA<FetchException>()));
   });
 
   test('tag stats count total and pending problems', () {

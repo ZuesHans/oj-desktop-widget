@@ -48,9 +48,27 @@ void main() {
 
   test('schemaVersion mismatch is rejected', () {
     expect(
-      () => parsePortableBackupJson(_backupJson(schemaVersion: 2)),
+      () => parsePortableBackupJson(_backupJson(schemaVersion: 3)),
       throwsFormatException,
     );
+  });
+
+  test('schemaVersion 2 restores training data while v1 stays compatible', () {
+    final v1 = parsePortableBackupJson(_backupJson(schemaVersion: 1));
+    final active = ActiveTrainingAttempt.create(
+      problemId: 'p1',
+      origin: TrainingAttemptOrigin.browserImport,
+      now: DateTime(2026, 7, 27, 8),
+    );
+    final v2 = parsePortableBackupJson(
+      _backupJson(
+        schemaVersion: 2,
+        training: TrainingStoreData(activeAttempt: active).toJson(),
+      ),
+    );
+
+    expect(v1.training.activeAttempt, isNull);
+    expect(v2.training.activeAttempt?.problemId, 'p1');
   });
 
   test('app mismatch is rejected', () {
@@ -110,6 +128,25 @@ void main() {
 
     expect(backup.snapshots, hasLength(1));
     expect(backup.snapshots.single.username, 'alice');
+  });
+
+  test('old backup import keeps only the latest 6000 snapshots', () {
+    final base = DateTime.parse('2026-01-01T00:00:00');
+    final backup = parsePortableBackupJson(
+      _backupJson(
+        snapshots: [
+          for (var i = 6004; i >= 0; i--)
+            {
+              ..._snapshotJson('2026-01-01', 'alice', i),
+              'fetchedAt': base.add(Duration(minutes: i)).toIso8601String(),
+            },
+        ],
+      ),
+    );
+
+    expect(backup.snapshots, hasLength(maxStoredSnapshots));
+    expect(backup.snapshots.first.solvedCount, 5);
+    expect(backup.snapshots.last.solvedCount, 6004);
   });
 
   test('import replaces config and snapshots after safety backup', () async {
@@ -242,6 +279,7 @@ String _backupJson({
   List<Object?> dailyStats = const [],
   List<Object?>? problems,
   List<Object?>? contests,
+  Map<String, dynamic>? training,
 }) {
   return jsonEncode({
     'schemaVersion': schemaVersion,
@@ -252,6 +290,7 @@ String _backupJson({
     'snapshots': snapshots,
     if (problems != null) 'problems': problems,
     if (contests != null) 'contests': contests,
+    if (training != null) 'training': training,
     'dailyStats': dailyStats,
   });
 }

@@ -12,11 +12,17 @@ class ParsedProblemLink {
     required this.title,
     required this.url,
     required this.platform,
+    this.externalId = '',
+    this.difficulty = '',
+    this.tags = const [],
   });
 
   final String title;
   final String url;
   final ProblemPlatform platform;
+  final String externalId;
+  final String difficulty;
+  final List<String> tags;
 }
 
 class ProblemBookService {
@@ -31,8 +37,13 @@ class ProblemBookService {
     final updated = <ProblemRecord>[];
     var replaced = false;
     for (final item in problems) {
-      if (item.id == problem.id) {
-        updated.add(problem);
+      if (item.id == problem.id ||
+          canonicalProblemKey(item) == canonicalProblemKey(problem)) {
+        updated.add(
+          item.id == problem.id
+              ? problem
+              : _mergeDuplicateProblem(item, problem),
+        );
         replaced = true;
       } else {
         updated.add(item);
@@ -58,14 +69,16 @@ class ProblemBookService {
       final index = merged.indexWhere(
         (item) =>
             item.id == problem.id ||
-            _normalizedUrl(item.url) == _normalizedUrl(problem.url),
+            canonicalProblemKey(item) == canonicalProblemKey(problem),
       );
       if (index < 0) {
         merged.add(problem);
         continue;
       }
       if (problem.updatedAt.isAfter(merged[index].updatedAt)) {
-        merged[index] = problem;
+        merged[index] = merged[index].id == problem.id
+            ? problem
+            : _mergeDuplicateProblem(merged[index], problem);
       }
     }
     merged.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
@@ -76,6 +89,7 @@ class ProblemBookService {
     List<ProblemRecord> problems, {
     String query = '',
     ProblemStatus? status,
+    ProblemWorkflowStatus? workflowStatus,
     ProblemPlatform? platform,
     String? tag,
   }) {
@@ -83,6 +97,7 @@ class ProblemBookService {
       problems,
       query: query,
       status: status,
+      workflowStatus: workflowStatus,
       platform: platform,
       tag: tag,
     );
@@ -107,6 +122,7 @@ class ProblemBookService {
       title: title,
       url: uri.toString(),
       platform: platform,
+      externalId: extractProblemExternalId(uri, platform),
     );
   }
 
@@ -129,6 +145,7 @@ List<ProblemRecord> filterProblems(
   List<ProblemRecord> problems, {
   String query = '',
   ProblemStatus? status,
+  ProblemWorkflowStatus? workflowStatus,
   ProblemPlatform? platform,
   String? tag,
 }) {
@@ -136,6 +153,9 @@ List<ProblemRecord> filterProblems(
   final normalizedTag = tag?.trim().toLowerCase();
   return List.unmodifiable(problems.where((problem) {
     if (status != null && problem.status != status) {
+      return false;
+    }
+    if (workflowStatus != null && problem.workflowStatus != workflowStatus) {
       return false;
     }
     if (platform != null && problem.platform != platform) {
@@ -176,7 +196,8 @@ List<ProblemTagStat> buildProblemTagStats(
         () => _MutableProblemTagStat(tag),
       );
       stat.total += 1;
-      if (problem.status != ProblemStatus.AC) {
+      if (problem.workflowStatus != ProblemWorkflowStatus.mastered &&
+          problem.workflowStatus != ProblemWorkflowStatus.archived) {
         stat.pending += 1;
       }
     }
@@ -212,10 +233,6 @@ class _MutableProblemTagStat {
   int pending = 0;
 }
 
-String _normalizedUrl(String value) {
-  return value.trim().toLowerCase();
-}
-
 Uri normalizeProblemUri(String input) {
   final value = input.trim();
   if (value.isEmpty) {
@@ -226,7 +243,97 @@ Uri normalizeProblemUri(String input) {
   if (uri == null || uri.host.trim().isEmpty) {
     throw FetchException('题目链接格式不正确');
   }
-  return uri;
+  if (uri.scheme != 'http' && uri.scheme != 'https') {
+    throw FetchException('题目链接只支持 HTTP 或 HTTPS');
+  }
+  return uri.removeFragment();
+}
+
+String canonicalProblemKey(ProblemRecord problem) {
+  final uri = Uri.tryParse(problem.url);
+  if (problem.externalId.trim().isNotEmpty) {
+    return '${problem.platform.name}:${problem.externalId.trim().toLowerCase()}';
+  }
+  if (uri == null) {
+    return '${problem.platform.name}:${problem.url.trim().toLowerCase()}';
+  }
+  final externalId = extractProblemExternalId(uri, problem.platform);
+  if (externalId.isNotEmpty) {
+    return '${problem.platform.name}:${externalId.toLowerCase()}';
+  }
+  final path = uri.path.replaceAll(RegExp(r'/+$'), '').toLowerCase();
+  return '${problem.platform.name}:${uri.host.toLowerCase()}$path';
+}
+
+String extractProblemExternalId(Uri uri, ProblemPlatform platform) {
+  final segments = uri.pathSegments.where((item) => item.isNotEmpty).toList();
+  switch (platform) {
+    case ProblemPlatform.cf:
+      final contest = segments.indexOf('contest');
+      final problem = segments.indexOf('problem');
+      if (contest >= 0 && problem > contest && problem + 1 < segments.length) {
+        return '${segments[contest + 1]}:${segments[problem + 1]}';
+      }
+      final problemset = segments.indexOf('problemset');
+      if (problemset >= 0 &&
+          problemset + 3 < segments.length &&
+          segments[problemset + 1] == 'problem') {
+        return '${segments[problemset + 2]}:${segments[problemset + 3]}';
+      }
+      break;
+    case ProblemPlatform.atcoder:
+      final tasks = segments.indexOf('tasks');
+      if (tasks >= 0 && tasks + 1 < segments.length) {
+        return segments[tasks + 1];
+      }
+      break;
+    case ProblemPlatform.lg:
+      final problem = segments.indexOf('problem');
+      if (problem >= 0 && problem + 1 < segments.length) {
+        return segments[problem + 1];
+      }
+      break;
+    case ProblemPlatform.nc:
+      final problem = segments.indexOf('problem');
+      if (problem >= 0 && problem + 1 < segments.length) {
+        return segments[problem + 1];
+      }
+      break;
+    case ProblemPlatform.lccn:
+      final problems = segments.indexOf('problems');
+      if (problems >= 0 && problems + 1 < segments.length) {
+        return segments[problems + 1];
+      }
+      break;
+    case ProblemPlatform.hd:
+      return uri.queryParameters['pid'] ?? '';
+    case ProblemPlatform.poj:
+      return uri.queryParameters['id'] ?? '';
+    case ProblemPlatform.uva || ProblemPlatform.spoj || ProblemPlatform.other:
+      break;
+  }
+  return '';
+}
+
+ProblemRecord _mergeDuplicateProblem(
+  ProblemRecord existing,
+  ProblemRecord incoming,
+) {
+  return existing.copyWith(
+    title: incoming.title.isEmpty ? existing.title : incoming.title,
+    url: incoming.url,
+    platform: incoming.platform,
+    tags: {...existing.tags, ...incoming.tags}.toList(),
+    difficulty:
+        incoming.difficulty.isEmpty ? existing.difficulty : incoming.difficulty,
+    externalId:
+        incoming.externalId.isEmpty ? existing.externalId : incoming.externalId,
+    note: incoming.note.isEmpty ? existing.note : incoming.note,
+    analysis: incoming.analysis.isEmpty ? existing.analysis : incoming.analysis,
+    updatedAt: incoming.updatedAt.isAfter(existing.updatedAt)
+        ? incoming.updatedAt
+        : existing.updatedAt,
+  );
 }
 
 ProblemPlatform detectProblemPlatform(Uri uri) {

@@ -32,7 +32,13 @@ void main() {
       config: const SyncConfig(enabled: true),
       snapshots: [
         _snapshot('2026-06-22', 'demo_user', 10, hour: 8),
-        _snapshot('2026-06-22', 'demo_user', 15, hour: 20),
+        _snapshot(
+          '2026-06-22',
+          'demo_user',
+          15,
+          hour: 20,
+          dailyAcceptedCount: 5,
+        ),
       ],
       problems: [_problem()],
       now: DateTime.parse('2026-06-23T15:00:00'),
@@ -228,6 +234,7 @@ SolvedSnapshot _snapshot(
   String username,
   int solvedCount, {
   int hour = 8,
+  int? dailyAcceptedCount,
 }) {
   return SolvedSnapshot(
     date: date,
@@ -238,5 +245,9 @@ SolvedSnapshot _snapshot(
     username: username,
     status: FetchStatus.success,
     solvedCount: solvedCount,
+    dailyAcceptedCount: dailyAcceptedCount,
+    dailyActivityAccuracy: dailyAcceptedCount == null
+        ? DailyActivityAccuracy.unknown
+        : DailyActivityAccuracy.exact,
   );
 }

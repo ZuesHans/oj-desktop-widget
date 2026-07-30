@@ -12,9 +12,6 @@ void main() {
 
   Future<void> openDashboardShell(WidgetTester tester) async {
     await tester.pumpWidget(buildTestApp());
-    await tester.tap(find.byKey(const ValueKey('compact-widget')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('open-dashboard-button')));
     await tester.pumpAndSettle();
   }
 
@@ -43,52 +40,21 @@ void main() {
     }
   }
 
-  testWidgets('app starts in compact floating mode', (tester) async {
-    await tester.pumpWidget(buildTestApp());
-
-    expect(find.text('总通过'), findsOneWidget);
-    expect(find.textContaining('今日'), findsOneWidget);
-    expect(find.byKey(const ValueKey('compact-widget')), findsOneWidget);
-    expect(find.text('OJ Float'), findsNothing);
-    expect(find.text('Codeforces'), findsNothing);
-  });
-
-  testWidgets('compact mode opens and closes the large float', (tester) async {
-    await tester.pumpWidget(buildTestApp());
-
-    await tester.tap(find.byKey(const ValueKey('compact-widget')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('OJ Float'), findsOneWidget);
-    expect(find.byKey(const ValueKey('open-dashboard-button')), findsOneWidget);
-    expect(find.byKey(const ValueKey('refresh-logs-entry-button')),
-        findsOneWidget);
-    expect(find.byKey(const ValueKey('compact-mode-button')), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('compact-mode-button')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('总通过'), findsOneWidget);
-    expect(find.textContaining('今日'), findsOneWidget);
-    expect(find.text('OJ Float'), findsNothing);
-    expect(find.text('Codeforces'), findsNothing);
-  });
-
-  testWidgets('large float opens dashboard with left navigation',
-      (tester) async {
-    await tester.pumpWidget(buildTestApp());
-
-    await tester.tap(find.byKey(const ValueKey('compact-widget')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('open-dashboard-button')));
-    await tester.pumpAndSettle();
+  testWidgets('app starts directly in the desktop dashboard', (tester) async {
+    await openDashboardShell(tester);
 
     expect(find.byKey(const ValueKey('dashboard-shell')), findsOneWidget);
     expect(find.byKey(const ValueKey('dashboard-nav')), findsOneWidget);
+    expect(find.byKey(const ValueKey('app-toolbar')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-summary-panel')), findsOneWidget);
-    expect(
-        find.byKey(const ValueKey('home-empty-account-state')), findsOneWidget);
-    expect(find.text('今日训练'), findsOneWidget);
+    expect(find.byKey(const ValueKey('compact-widget')), findsNothing);
+    expect(find.byKey(const ValueKey('compact-mode-button')), findsNothing);
+    expect(find.text('今日训练'), findsWidgets);
+  });
+
+  testWidgets('desktop dashboard navigates to feature and settings pages',
+      (tester) async {
+    await openDashboardShell(tester);
 
     await tester.tap(find.byKey(const ValueKey('dashboard-nav-problems')));
     await tester.pumpAndSettle();
@@ -103,40 +69,7 @@ void main() {
       find.byKey(const ValueKey('dashboard-section-settings')),
       findsOneWidget,
     );
-    expect(find.textContaining('常用窗口选项'), findsOneWidget);
-  });
-
-  testWidgets('large float preserves shell and module entry keys',
-      (tester) async {
-    await tester.pumpWidget(buildTestApp());
-
-    await tester.tap(find.byKey(const ValueKey('compact-widget')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('OJ Float'), findsOneWidget);
-    expect(find.byKey(const ValueKey('compact-mode-button')), findsOneWidget);
-    expect(find.byKey(const ValueKey('dashboard-exit-button')), findsOneWidget);
-    expect(find.byKey(const ValueKey('open-dashboard-button')), findsOneWidget);
-    expect(find.byKey(const ValueKey('large-float-modules')), findsOneWidget);
-    expect(find.byKey(const ValueKey('heatmap-entry-button')), findsOneWidget);
-    expect(find.byKey(const ValueKey('problems-entry-button')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('refresh-logs-entry-button')),
-      findsOneWidget,
-    );
-    expect(find.byKey(const ValueKey('contests-entry-button')), findsNothing);
-    expect(find.byKey(const ValueKey('teammates-entry-button')), findsNothing);
-    expect(find.byKey(const ValueKey('export-data-button')), findsOneWidget);
-    expect(find.byKey(const ValueKey('import-backup-button')), findsOneWidget);
-
-    expect(
-      tester.getTopLeft(find.byKey(const ValueKey('problems-entry-button'))).dy,
-      lessThan(
-        tester
-            .getTopLeft(find.byKey(const ValueKey('refresh-logs-entry-button')))
-            .dy,
-      ),
-    );
+    expect(find.byKey(const ValueKey('settings-save-button')), findsOneWidget);
   });
 
   testWidgets('dashboard shell exposes nav keys and summary home panel',
@@ -153,11 +86,10 @@ void main() {
       find.byKey(const ValueKey('home-empty-account-state')),
       findsOneWidget,
     );
-    expect(find.text('今日训练'), findsOneWidget);
+    expect(find.text('今日训练'), findsWidgets);
   });
 
-  testWidgets('dashboard settings exposes existing window controls',
-      (tester) async {
+  testWidgets('settings exposes client lifecycle controls', (tester) async {
     await openDashboardShell(tester);
     await tapDashboardNav(tester, 'settings');
 
@@ -165,15 +97,15 @@ void main() {
       find.byKey(const ValueKey('dashboard-section-settings')),
       findsOneWidget,
     );
-    expect(find.textContaining('常用窗口选项'), findsOneWidget);
     expect(find.text('登录时启动'), findsOneWidget);
-    expect(find.text('窗口置顶'), findsOneWidget);
-    expect(find.text('在任务栏显示'), findsOneWidget);
-    expect(find.text('关闭时隐藏到托盘'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('dashboard-open-full-settings-button')),
-      findsOneWidget,
+    expect(find.text('关闭窗口时留在托盘'), findsOneWidget);
+    expect(find.text('窗口置顶'), findsNothing);
+    expect(find.text('在任务栏显示'), findsNothing);
+    expect(find.byKey(const ValueKey('settings-save-button')), findsOneWidget);
+    final startupSwitch = tester.widget<SwitchListTile>(
+      find.byKey(const ValueKey('launch-at-startup-switch')),
     );
+    expect(startupSwitch.onChanged, isNull);
   });
 
   testWidgets('dashboard nav reaches feature pages without back buttons',
@@ -213,12 +145,7 @@ void main() {
 
   testWidgets('dashboard summary action cards open feature sections',
       (tester) async {
-    await tester.pumpWidget(buildTestApp());
-
-    await tester.tap(find.byKey(const ValueKey('compact-widget')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('open-dashboard-button')));
-    await tester.pumpAndSettle();
+    await openDashboardShell(tester);
 
     final problemsAction = find.byKey(const ValueKey('home-action-problems'));
     await Scrollable.ensureVisible(
@@ -233,89 +160,36 @@ void main() {
     expect(find.byKey(const ValueKey('problems-back-button')), findsNothing);
   });
 
-  testWidgets('compact mode keeps a manual refresh entry', (tester) async {
-    await tester.pumpWidget(buildTestApp());
+  testWidgets('toolbar keeps a global manual refresh entry', (tester) async {
+    await openDashboardShell(tester);
 
-    expect(find.byKey(const ValueKey('compact-widget')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('toolbar-refresh-button')),
+      findsOneWidget,
+    );
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
-  testWidgets('large float shows a heatmap entry', (tester) async {
-    await tester.pumpWidget(buildTestApp());
-
-    await tester.tap(find.byKey(const ValueKey('compact-widget')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('热力图'), findsOneWidget);
-    expect(find.byKey(const ValueKey('heatmap-entry-button')), findsOneWidget);
-    expect(find.byKey(const ValueKey('export-data-button')), findsOneWidget);
-    expect(find.byKey(const ValueKey('import-backup-button')), findsOneWidget);
-  });
-
-  testWidgets('large float stays focused on high-frequency entries',
+  testWidgets('settings enables startup only after tray mode is enabled',
       (tester) async {
-    await tester.pumpWidget(buildTestApp());
+    await openDashboardShell(tester);
+    await tapDashboardNav(tester, 'settings');
 
-    await tester.tap(find.byKey(const ValueKey('compact-widget')));
+    await tester.tap(find.byKey(const ValueKey('close-to-tray-switch')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('heatmap-entry-button')), findsOneWidget);
-    expect(find.byKey(const ValueKey('problems-entry-button')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('refresh-logs-entry-button')),
-      findsOneWidget,
+    final startupSwitch = tester.widget<SwitchListTile>(
+      find.byKey(const ValueKey('launch-at-startup-switch')),
     );
-    expect(find.byKey(const ValueKey('teammates-entry-button')), findsNothing);
-    expect(find.byKey(const ValueKey('contests-entry-button')), findsNothing);
-  });
+    expect(startupSwitch.onChanged, isNotNull);
 
-  testWidgets('heatmap entry opens the heatmap page', (tester) async {
-    await tester.pumpWidget(buildTestApp());
-
-    await tester.tap(find.byKey(const ValueKey('compact-widget')));
+    await tester.tap(find.byKey(const ValueKey('dashboard-nav-summary')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('heatmap-entry-button')));
+    expect(find.text('放弃未保存的更改？'), findsOneWidget);
+
+    await tester.tap(find.text('放弃更改'));
     await tester.pumpAndSettle();
-
-    expect(find.byKey(const ValueKey('heatmap-page')), findsOneWidget);
-    expect(find.byKey(const ValueKey('heatmap-back-button')), findsOneWidget);
-    expect(find.text('当前连续'), findsOneWidget);
-    expect(find.byTooltip('更早'), findsOneWidget);
-    expect(find.byTooltip('更新'), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('heatmap-back-button')));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const ValueKey('heatmap-page')), findsNothing);
-    expect(find.byKey(const ValueKey('heatmap-entry-button')), findsOneWidget);
-  });
-
-  testWidgets('large float opens problems page', (tester) async {
-    await tester.pumpWidget(buildTestApp());
-
-    await tester.tap(find.byKey(const ValueKey('compact-widget')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('problems-entry-button')));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const ValueKey('problems-page')), findsOneWidget);
-    expect(find.byKey(const ValueKey('add-problem-button')), findsOneWidget);
-  });
-
-  testWidgets('large float opens refresh logs page', (tester) async {
-    await tester.pumpWidget(buildTestApp());
-
-    await tester.tap(find.byKey(const ValueKey('compact-widget')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('refresh-logs-entry-button')));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const ValueKey('refresh-logs-page')), findsOneWidget);
-    expect(find.text('暂无刷新记录'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('refresh-logs-back-button')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('home-summary-panel')), findsOneWidget);
   });
 
   testWidgets('teammates entry opens empty teammates page', (tester) async {
@@ -441,21 +315,21 @@ void main() {
       ),
     );
 
-    expect(find.text('待做'), findsOneWidget);
+    expect(find.text('待安排'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('mark-ac-problem-p1')));
     await tester.pumpAndSettle();
 
-    expect(saved.single.status, ProblemStatus.AC);
-    expect(find.textContaining('已改为已通过'), findsOneWidget);
+    expect(saved.single.workflowStatus, ProblemWorkflowStatus.mastered);
+    expect(find.textContaining('已改为已掌握'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('problem-status-menu-p1')));
     await tester.pumpAndSettle();
     await tester
-        .tap(find.byKey(const ValueKey('problem-status-option-p1-REVIEW')));
+        .tap(find.byKey(const ValueKey('problem-status-option-p1-review')));
     await tester.pumpAndSettle();
 
-    expect(saved.last.status, ProblemStatus.REVIEW);
-    expect(find.textContaining('已改为复盘中'), findsOneWidget);
+    expect(saved.last.workflowStatus, ProblemWorkflowStatus.review);
+    expect(find.textContaining('已改为待复习'), findsOneWidget);
   });
 
   testWidgets('problems page uses compact cards with a details dialog',

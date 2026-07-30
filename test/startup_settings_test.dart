@@ -17,9 +17,7 @@ void main() {
     final store = LocalStore();
     final config = _config(
       launchAtStartup: true,
-      alwaysOnTop: false,
-      showInTaskbar: false,
-      closeToTray: false,
+      closeToTray: true,
       sync: const SyncConfig(
         enabled: true,
         endpointUrl: 'https://example.com/api/oj-sync',
@@ -30,9 +28,7 @@ void main() {
     final loaded = await store.loadConfig();
 
     expect(loaded.launchAtStartup, isTrue);
-    expect(loaded.alwaysOnTop, isFalse);
-    expect(loaded.showInTaskbar, isFalse);
-    expect(loaded.closeToTray, isFalse);
+    expect(loaded.closeToTray, isTrue);
     expect(loaded.sync.enabled, isTrue);
     expect(loaded.sync.endpointUrl, 'https://example.com/api/oj-sync');
     expect(loaded.toJson().toString(), isNot(contains('secret-token')));
@@ -42,7 +38,11 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: SettingsDialog(config: _config(launchAtStartup: true)),
+          body: SettingsPage(
+            config: _config(launchAtStartup: true),
+            initialSyncToken: '',
+            onSave: (_) async {},
+          ),
         ),
       ),
     );
@@ -50,9 +50,8 @@ void main() {
     expect(
         find.byKey(const ValueKey('launch-at-startup-switch')), findsOneWidget);
     expect(find.text('登录时启动'), findsOneWidget);
-    expect(find.byKey(const ValueKey('always-on-top-switch')), findsOneWidget);
-    expect(
-        find.byKey(const ValueKey('show-in-taskbar-switch')), findsOneWidget);
+    expect(find.byKey(const ValueKey('always-on-top-switch')), findsNothing);
+    expect(find.byKey(const ValueKey('show-in-taskbar-switch')), findsNothing);
     expect(find.byKey(const ValueKey('close-to-tray-switch')), findsOneWidget);
     expect(find.byKey(const ValueKey('sync-enabled-switch')), findsOneWidget);
     expect(find.byKey(const ValueKey('sync-endpoint-field')), findsOneWidget);
@@ -72,6 +71,7 @@ void main() {
     );
     final config = _config(
       launchAtStartup: true,
+      closeToTray: true,
       username: 'saved-user',
       enabled: false,
     );
@@ -102,6 +102,7 @@ void main() {
     );
     final config = _config(
       launchAtStartup: true,
+      closeToTray: true,
       username: 'saved-after-false',
       enabled: false,
     );
@@ -121,12 +122,65 @@ void main() {
       controller.dispose();
     }
   });
+
+  test('disabling tray mode also disables startup registration', () async {
+    final directory = await Directory.systemTemp.createTemp('oj_float_test_');
+    final startupService = _RecordingStartupService();
+    final controller = OjController(
+      storage: LocalStore(supportDirectory: directory),
+      service: RefreshService(client: http.Client(), providers: const {}),
+      startupService: startupService,
+      syncSecretStore: MemorySyncSecretStore(),
+    );
+
+    try {
+      await controller.saveConfig(
+        _config(launchAtStartup: true, closeToTray: false),
+      );
+
+      expect(controller.state.config.launchAtStartup, isFalse);
+      expect(startupService.calls, [false]);
+    } finally {
+      controller.dispose();
+      await directory.delete(recursive: true);
+    }
+  });
+
+  test('startup argument hides only when both lifecycle switches are enabled',
+      () {
+    expect(
+      shouldStartHidden(
+        const ['--startup'],
+        _config(launchAtStartup: true, closeToTray: true),
+      ),
+      isTrue,
+    );
+    expect(
+      shouldStartHidden(
+        const ['--startup'],
+        _config(launchAtStartup: false, closeToTray: true),
+      ),
+      isFalse,
+    );
+    expect(
+      shouldStartHidden(
+        const ['--startup'],
+        _config(launchAtStartup: true, closeToTray: false),
+      ),
+      isFalse,
+    );
+    expect(
+      shouldStartHidden(
+        const [],
+        _config(launchAtStartup: true, closeToTray: true),
+      ),
+      isFalse,
+    );
+  });
 }
 
 AppConfig _config({
   bool launchAtStartup = false,
-  bool alwaysOnTop = true,
-  bool showInTaskbar = true,
   bool closeToTray = true,
   String username = 'alice',
   bool enabled = true,
@@ -135,8 +189,6 @@ AppConfig _config({
   return AppConfig(
     refreshIntervalMinutes: 45,
     launchAtStartup: launchAtStartup,
-    alwaysOnTop: alwaysOnTop,
-    showInTaskbar: showInTaskbar,
     closeToTray: closeToTray,
     sync: sync,
     accounts: {
@@ -165,5 +217,15 @@ class _FalseStartupService implements StartupService {
   Future<bool> setEnabled(bool enabled) async {
     calls.add(enabled);
     return false;
+  }
+}
+
+class _RecordingStartupService implements StartupService {
+  final calls = <bool>[];
+
+  @override
+  Future<bool> setEnabled(bool enabled) async {
+    calls.add(enabled);
+    return true;
   }
 }

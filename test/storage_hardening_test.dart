@@ -9,6 +9,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 const _configKey = 'app_config_v1';
 const _snapshotsFile = 'snapshots_v1.json';
 const _refreshLogsFile = 'refresh_logs_v1.json';
+const _problemsFile = 'problems_v1.json';
+const _trainingFile = 'training_v1.json';
+const _problemTrainingTransactionFile = 'problem_training_transaction_v1.json';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -107,23 +110,96 @@ void main() {
       expect(config.dashboardModules, hasLength(2));
     });
 
-    test('missing dashboard modules use default large float modules', () {
+    test('missing dashboard modules use default client modules', () {
       final config = AppConfig.fromJson({});
 
       expect(config.dashboardModules.toSet(), defaultDashboardModules.toSet());
     });
 
-    test('compact click target is parsed and persisted', () {
-      final config = AppConfig.fromJson({
-        'compactClickTarget': 'dashboard',
+    test('legacy floating config migrates once and preserves business data',
+        () async {
+      SharedPreferences.setMockInitialValues({
+        _configKey: jsonEncode({
+          'refreshIntervalMinutes': 45,
+          'launchAtStartup': true,
+          'closeToTray': true,
+          'alwaysOnTop': true,
+          'showInTaskbar': false,
+          'compactClickTarget': 'dashboard',
+          'colorTheme': 'ocean',
+          'dashboardModules': ['teammates', 'heatmap'],
+          'sync': {
+            'enabled': true,
+            'endpointUrl': 'https://example.com/sync',
+          },
+          'accounts': {
+            'codeforces': {
+              'usernames': ['alice', 'bob'],
+              'enabled': true,
+            },
+          },
+        }),
       });
 
-      expect(config.compactClickTarget, CompactClickTarget.dashboard);
-      expect(config.toJson()['compactClickTarget'], 'dashboard');
+      final store = LocalStore();
+      final migrated = await store.loadConfig();
+
+      expect(migrated.configVersion, currentAppConfigVersion);
+      expect(migrated.closeToTray, isFalse);
+      expect(migrated.launchAtStartup, isFalse);
+      expect(migrated.refreshIntervalMinutes, 45);
+      expect(migrated.colorTheme, AppColorTheme.ocean);
+      expect(migrated.dashboardModules, [
+        DashboardModule.teammates,
+        DashboardModule.heatmap,
+      ]);
+      expect(migrated.sync.enabled, isTrue);
+      expect(migrated.accounts['codeforces']!.usernames, ['alice', 'bob']);
+
+      final prefs = await SharedPreferences.getInstance();
+      final persisted =
+          jsonDecode(prefs.getString(_configKey)!) as Map<String, dynamic>;
+      expect(persisted['configVersion'], currentAppConfigVersion);
+      expect(persisted.containsKey('alwaysOnTop'), isFalse);
+      expect(persisted.containsKey('showInTaskbar'), isFalse);
+      expect(persisted.containsKey('compactClickTarget'), isFalse);
+
+      await store.saveConfig(
+        migrated.copyWith(closeToTray: true, launchAtStartup: true),
+      );
+      final reloaded = await store.loadConfig();
+      expect(reloaded.closeToTray, isTrue);
+      expect(reloaded.launchAtStartup, isTrue);
     });
   });
 
   group('snapshot storage hardening', () {
+    test('damaged primary file recovers the previous atomic backup', () async {
+      final directory = await Directory.systemTemp.createTemp('oj_float_test_');
+      final file =
+          File('${directory.path}${Platform.pathSeparator}$_snapshotsFile');
+      try {
+        final store = LocalStore(supportDirectory: directory);
+        final first = SolvedSnapshot.fromJson(_validSnapshot());
+        final second = SolvedSnapshot.fromJson({
+          ..._validSnapshot(),
+          'solvedCount': 99,
+          'fetchedAt': '2026-06-15T09:00:00.000',
+        });
+        await store.saveSnapshots([first]);
+        await store.saveSnapshots([second]);
+        await file.writeAsString('{damaged');
+
+        final recovered = await store.loadSnapshots();
+
+        expect(recovered.single.solvedCount, 42);
+        expect(jsonDecode(await file.readAsString()), isA<List<dynamic>>());
+        expect(File('${file.path}.tmp').existsSync(), isFalse);
+      } finally {
+        await directory.delete(recursive: true);
+      }
+    });
+
     test('damaged snapshot file falls back to an empty list', () async {
       final directory = await Directory.systemTemp.createTemp('oj_float_test_');
       try {
@@ -187,6 +263,36 @@ void main() {
       expect(snapshots, hasLength(1));
       expect(snapshots.single.username, '');
     });
+
+    test('loading trims memory and disk to the latest 6000 snapshots',
+        () async {
+      final directory = await Directory.systemTemp.createTemp('oj_float_test_');
+      final file =
+          File('${directory.path}${Platform.pathSeparator}$_snapshotsFile');
+      final base = DateTime.parse('2026-01-01T00:00:00');
+      try {
+        await file.writeAsString(jsonEncode([
+          for (var i = 6004; i >= 0; i--)
+            {
+              ..._validSnapshot(),
+              'fetchedAt': base.add(Duration(minutes: i)).toIso8601String(),
+              'solvedCount': i,
+            },
+        ]));
+
+        final snapshots =
+            await LocalStore(supportDirectory: directory).loadSnapshots();
+        final persisted =
+            jsonDecode(await file.readAsString()) as List<dynamic>;
+
+        expect(snapshots, hasLength(maxStoredSnapshots));
+        expect(snapshots.first.solvedCount, 5);
+        expect(snapshots.last.solvedCount, 6004);
+        expect(persisted, hasLength(maxStoredSnapshots));
+      } finally {
+        await directory.delete(recursive: true);
+      }
+    });
   });
 
   group('refresh log storage hardening', () {
@@ -233,6 +339,138 @@ void main() {
         await directory.delete(recursive: true);
       }
     });
+  });
+
+  test('training store persists an active timer', () async {
+    final directory = await Directory.systemTemp.createTemp('oj_float_test_');
+    try {
+      final store = LocalStore(supportDirectory: directory);
+      final active = ActiveTrainingAttempt.create(
+        problemId: 'p1',
+        origin: TrainingAttemptOrigin.manual,
+        now: DateTime(2026, 7, 27, 8),
+      );
+      await store.saveTraining(TrainingStoreData(activeAttempt: active));
+
+      final loaded = await store.loadTraining();
+
+      expect(loaded.activeAttempt?.problemId, 'p1');
+      expect(loaded.activeAttempt?.startedAt, DateTime(2026, 7, 27, 8));
+    } finally {
+      await directory.delete(recursive: true);
+    }
+  });
+
+  test('problem and training transaction commits both files', () async {
+    final directory = await Directory.systemTemp.createTemp('oj_float_test_');
+    final transaction = File(
+      '${directory.path}${Platform.pathSeparator}'
+      '$_problemTrainingTransactionFile',
+    );
+    try {
+      final store = LocalStore(supportDirectory: directory);
+      final endedAt = DateTime(2026, 7, 27, 8, 10);
+      final problem = _trainingProblem(
+        workflowStatus: ProblemWorkflowStatus.mastered,
+      );
+      final training = TrainingStoreData(
+        attempts: [
+          TrainingAttempt.create(
+            id: 'a1',
+            problemId: problem.id,
+            origin: TrainingAttemptOrigin.manual,
+            startedAt: endedAt.subtract(const Duration(minutes: 10)),
+            endedAt: endedAt,
+            durationSeconds: 600,
+            result: AttemptResult.ac,
+          ),
+        ],
+      );
+
+      await store.saveProblemsAndTraining([problem], training);
+
+      expect((await store.loadProblems()).single.workflowStatus,
+          ProblemWorkflowStatus.mastered);
+      expect((await store.loadTraining()).attempts.single.id, 'a1');
+      expect(await transaction.exists(), isFalse);
+      expect(await File('${transaction.path}.bak').exists(), isFalse);
+    } finally {
+      await directory.delete(recursive: true);
+    }
+  });
+
+  test('pending problem and training transaction rolls forward on recovery',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('oj_float_test_');
+    final transaction = File(
+      '${directory.path}${Platform.pathSeparator}'
+      '$_problemTrainingTransactionFile',
+    );
+    try {
+      final store = LocalStore(supportDirectory: directory);
+      final oldProblem = _trainingProblem();
+      await store.saveProblemsAndTraining(
+        [oldProblem],
+        const TrainingStoreData(),
+      );
+
+      final endedAt = DateTime(2026, 7, 27, 8, 10);
+      final updatedProblem = oldProblem.copyWith(
+        workflowStatus: ProblemWorkflowStatus.mastered,
+        updatedAt: endedAt,
+      );
+      final updatedTraining = TrainingStoreData(
+        attempts: [
+          TrainingAttempt.create(
+            id: 'recovered-attempt',
+            problemId: oldProblem.id,
+            origin: TrainingAttemptOrigin.manual,
+            startedAt: endedAt.subtract(const Duration(minutes: 10)),
+            endedAt: endedAt,
+            durationSeconds: 600,
+            result: AttemptResult.ac,
+          ),
+        ],
+      );
+      await transaction.writeAsString(
+        jsonEncode({
+          'schemaVersion': 1,
+          'problems': [updatedProblem.toStorageJson()],
+          'training': updatedTraining.toJson(),
+        }),
+        flush: true,
+      );
+      await store.saveProblems([updatedProblem]);
+
+      final trainingBeforeRecovery = jsonDecode(
+        await File(
+          '${directory.path}${Platform.pathSeparator}$_trainingFile',
+        ).readAsString(),
+      ) as Map<String, dynamic>;
+      expect(trainingBeforeRecovery['attempts'], isEmpty);
+
+      await LocalStore(supportDirectory: directory)
+          .recoverPendingProblemTrainingTransaction();
+
+      final recoveredStore = LocalStore(supportDirectory: directory);
+      expect((await recoveredStore.loadProblems()).single.workflowStatus,
+          ProblemWorkflowStatus.mastered);
+      expect(
+        (await recoveredStore.loadTraining()).attempts.single.id,
+        'recovered-attempt',
+      );
+      expect(await transaction.exists(), isFalse);
+      expect(
+        jsonDecode(
+          await File(
+            '${directory.path}${Platform.pathSeparator}$_problemsFile',
+          ).readAsString(),
+        ),
+        isA<List<dynamic>>(),
+      );
+    } finally {
+      await directory.delete(recursive: true);
+    }
   });
 
   test('parse failure logs do not include raw sensitive JSON content',
@@ -297,4 +535,17 @@ Map<String, Object?> _validSnapshot({
     'solvedCount': 42,
     'error': null,
   };
+}
+
+ProblemRecord _trainingProblem({
+  ProblemWorkflowStatus workflowStatus = ProblemWorkflowStatus.active,
+}) {
+  return ProblemRecord.create(
+    id: 'training-problem',
+    title: 'Training Problem',
+    url: 'https://example.com/problem/training',
+    platform: ProblemPlatform.other,
+    workflowStatus: workflowStatus,
+    now: DateTime(2026, 7, 27, 8),
+  );
 }

@@ -3,40 +3,9 @@ import 'package:flutter/material.dart';
 import '../../models/app_config.dart' show DashboardModule;
 import '../app_theme.dart';
 
-enum HomeDisplayMode {
-  compact,
-  largeFloat,
-  dashboard,
-  heatmap,
-  problems,
-  refreshLogs,
-  contests,
-  teammates,
-}
-
-enum TrayCommand {
-  show('show'),
-  hide('hide'),
-  toggleOnTop('toggle_on_top'),
-  refresh('refresh'),
-  exit('exit');
-
-  const TrayCommand(this.key);
-
-  final String key;
-
-  static TrayCommand? fromKey(String? key) {
-    for (final command in values) {
-      if (command.key == key) {
-        return command;
-      }
-    }
-    return null;
-  }
-}
-
 enum DashboardSection {
   summary,
+  training,
   heatmap,
   problems,
   refreshLogs,
@@ -46,13 +15,6 @@ enum DashboardSection {
   daily,
   settings,
 }
-
-const largeFloatModules = [
-  DashboardModule.summary,
-  DashboardModule.problems,
-  DashboardModule.heatmap,
-  DashboardModule.refreshLogs,
-];
 
 class DashboardShell extends StatelessWidget {
   const DashboardShell({
@@ -284,6 +246,7 @@ class DashboardSectionTitle extends StatelessWidget {
 String sectionLabel(DashboardSection section) {
   return switch (section) {
     DashboardSection.summary => '总览',
+    DashboardSection.training => '训练',
     DashboardSection.heatmap => dashboardModuleLabel(DashboardModule.heatmap),
     DashboardSection.problems => dashboardModuleLabel(DashboardModule.problems),
     DashboardSection.refreshLogs =>
@@ -301,6 +264,7 @@ String sectionLabel(DashboardSection section) {
 IconData sectionIcon(DashboardSection section) {
   return switch (section) {
     DashboardSection.summary => Icons.query_stats,
+    DashboardSection.training => Icons.timer_outlined,
     DashboardSection.heatmap => dashboardModuleIcon(DashboardModule.heatmap),
     DashboardSection.problems => dashboardModuleIcon(DashboardModule.problems),
     DashboardSection.refreshLogs =>
@@ -318,6 +282,7 @@ IconData sectionIcon(DashboardSection section) {
 String dashboardModuleLabel(DashboardModule module) {
   return switch (module) {
     DashboardModule.summary => '总览',
+    DashboardModule.training => '训练',
     DashboardModule.heatmap => '热力图',
     DashboardModule.problems => '补题',
     DashboardModule.refreshLogs => '刷新日志',
@@ -331,6 +296,7 @@ String dashboardModuleLabel(DashboardModule module) {
 IconData dashboardModuleIcon(DashboardModule module) {
   return switch (module) {
     DashboardModule.summary => Icons.query_stats,
+    DashboardModule.training => Icons.timer_outlined,
     DashboardModule.heatmap => Icons.calendar_view_week,
     DashboardModule.problems => Icons.bookmark_border,
     DashboardModule.refreshLogs => Icons.history,

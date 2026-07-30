@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -27,24 +28,56 @@ class HomeActionService {
   final BackupFilePicker _pickBackupFile;
   final ProblemUrlLauncher _launchProblemUrl;
 
-  Future<ActionFeedback?> saveConfigFromDashboard({
+  Future<SyncResult?> saveSettings({
     required OjController controller,
-    required WindowShellService shell,
+    required WindowShell shell,
     required AppConfig config,
+    required String syncToken,
+    required bool syncNow,
     required bool enablePlatformIntegration,
   }) async {
+    final previousAccounts = controller.state.config.accounts;
+    Object? startupError;
+    await controller.saveSyncToken(syncToken);
     try {
-      await controller.saveConfig(config, syncAfterRefresh: false);
-      if (enablePlatformIntegration) {
-        await shell.applyPreferences(config);
-        await shell.setupTrayMenu();
-      }
-      return null;
+      await controller.saveConfig(config);
     } catch (error) {
-      return ActionFeedback.failure(
-        '${AppLabels.settingsSaveFailed}：${normalizeError(error)}',
-      );
+      startupError = error;
     }
+    final savedConfig = controller.state.config;
+
+    if (enablePlatformIntegration) {
+      try {
+        if (savedConfig.closeToTray) {
+          await shell.setTrayEnabled(true);
+        } else {
+          await shell.setTrayEnabled(false);
+        }
+        await shell.setCloseInterceptionEnabled(true);
+      } catch (error) {
+        await shell.setCloseInterceptionEnabled(true);
+        await shell.setTrayEnabled(false);
+        await shell.showAndFocus();
+        await controller.saveConfig(
+          savedConfig.copyWith(
+            closeToTray: false,
+            launchAtStartup: false,
+          ),
+        );
+        throw FetchException('托盘初始化失败，已恢复为关闭即退出：$error');
+      }
+    }
+
+    if (!_accountsEqual(previousAccounts, savedConfig.accounts)) {
+      unawaited(controller.refresh());
+    }
+    if (startupError != null) {
+      throw FetchException(normalizeError(startupError));
+    }
+    if (syncNow) {
+      return controller.syncNow();
+    }
+    return null;
   }
 
   Future<ActionFeedback> exportData(OjState state) async {
@@ -55,6 +88,7 @@ class HomeActionService {
         problems: state.problems,
         contests: state.contests,
         teammates: state.teammates,
+        training: state.training,
       );
       return ActionFeedback.success(
         '${AppLabels.exportSuccessPrefix} ${result.directory.path}',
@@ -83,41 +117,12 @@ class HomeActionService {
     }
   }
 
-  Future<ActionFeedback?> applySettingsDialogResult({
-    required OjController controller,
-    required WindowShellService shell,
-    required SettingsActionResult result,
-    required bool enablePlatformIntegration,
-  }) async {
-    Object? saveError;
-    try {
-      await controller.saveSyncToken(result.syncToken);
-      await controller.saveConfig(
-        result.config,
-        syncAfterRefresh: !result.syncNow,
-      );
-    } catch (error) {
-      saveError = error;
-    }
-    if (enablePlatformIntegration) {
-      await shell.applyPreferences(result.config);
-      await shell.setupTrayMenu();
-    }
-    if (saveError != null) {
-      return ActionFeedback.failure(
-        '${AppLabels.startupSettingsUpdateFailed}：${normalizeError(saveError)}',
-      );
-    }
-    if (result.syncNow) {
-      final syncResult = await controller.syncNow();
-      return ActionFeedback.fromSyncResult(syncResult);
-    }
-    return null;
-  }
-
   Future<void> openProblemUrl(ProblemRecord problem) async {
     final uri = Uri.tryParse(problem.url);
-    if (uri == null || !uri.hasScheme) {
+    if (uri == null ||
+        !uri.hasScheme ||
+        (uri.scheme != 'http' && uri.scheme != 'https') ||
+        uri.host.trim().isEmpty) {
       throw FetchException(AppLabels.invalidProblemUrl);
     }
     final opened = await _launchProblemUrl(uri);
@@ -125,6 +130,31 @@ class HomeActionService {
       throw FetchException(AppLabels.openProblemFailed);
     }
   }
+}
+
+bool _accountsEqual(
+  Map<String, OjAccountConfig> left,
+  Map<String, OjAccountConfig> right,
+) {
+  if (left.length != right.length) {
+    return false;
+  }
+  for (final entry in left.entries) {
+    final other = right[entry.key];
+    if (other == null || other.enabled != entry.value.enabled) {
+      return false;
+    }
+    final usernames = entry.value.usernames;
+    if (usernames.length != other.usernames.length) {
+      return false;
+    }
+    for (var index = 0; index < usernames.length; index++) {
+      if (usernames[index] != other.usernames[index]) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 class ActionFeedback {
@@ -150,18 +180,6 @@ class ActionFeedback {
 
   final String message;
   final bool isSuccess;
-}
-
-class SettingsActionResult {
-  const SettingsActionResult({
-    required this.config,
-    required this.syncToken,
-    required this.syncNow,
-  });
-
-  final AppConfig config;
-  final String syncToken;
-  final bool syncNow;
 }
 
 Future<File?> _defaultPickBackupFile() async {
