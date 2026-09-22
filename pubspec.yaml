@@ -1,7 +1,7 @@
 name: oj_float
 description: Windows desktop client for OJ training and solved-count tracking.
 publish_to: "none"
-version: 0.2.0-beta+4
+version: 0.2.0-beta+6
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
+  crypto: ^3.0.6
   http: ^1.2.2
   html: ^0.15.4
   file_picker: ^8.1.7

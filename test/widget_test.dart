@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:oj_float/main.dart';
+import 'package:oj_float/ui/app_labels.dart';
 
 void main() {
   Widget buildTestApp() {
@@ -46,6 +47,7 @@ void main() {
     expect(find.byKey(const ValueKey('dashboard-shell')), findsOneWidget);
     expect(find.byKey(const ValueKey('dashboard-nav')), findsOneWidget);
     expect(find.byKey(const ValueKey('app-toolbar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('app-brand-icon')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-summary-panel')), findsOneWidget);
     expect(find.byKey(const ValueKey('compact-widget')), findsNothing);
     expect(find.byKey(const ValueKey('compact-mode-button')), findsNothing);
@@ -106,6 +108,32 @@ void main() {
       find.byKey(const ValueKey('launch-at-startup-switch')),
     );
     expect(startupSwitch.onChanged, isNull);
+  });
+
+  testWidgets('backup settings and import dialog fit the minimum client size',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 620));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await openDashboardShell(tester);
+    await tapDashboardNav(tester, 'settings');
+
+    final backupSwitch = find.byKey(const ValueKey('automatic-backup-switch'));
+    await tester.ensureVisible(backupSwitch);
+    await tester.pumpAndSettle();
+    expect(backupSwitch, findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('automatic-backup-directory-path')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+
+    await tapDashboardNav(tester, 'heatmap');
+    await tester.tap(find.byTooltip('导入备份'));
+    await tester.pumpAndSettle();
+
+    expect(find.text(AppLabels.importConfirmMessage), findsOneWidget);
+    expect(find.text('继续导入'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('dashboard nav reaches feature pages without back buttons',

@@ -107,8 +107,13 @@ class HomeActionService {
         return null;
       }
       final result = await controller.importPortableBackup(backupFile);
+      final successPrefix = switch (result.scope) {
+        BackupImportScope.portable => AppLabels.portableImportSuccessPrefix,
+        BackupImportScope.coreTraining =>
+          AppLabels.coreTrainingImportSuccessPrefix,
+      };
       return ActionFeedback.success(
-        '${AppLabels.importSuccessPrefix}${result.safetyBackupFile.path}',
+        '$successPrefix${result.safetyBackupFile.path}',
       );
     } catch (error) {
       return ActionFeedback.failure(

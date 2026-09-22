@@ -27,10 +27,16 @@ class ExportResult {
   final File dailySummaryFile;
 }
 
+enum BackupImportScope { portable, coreTraining }
+
 class ImportResult {
-  const ImportResult({required this.safetyBackupFile});
+  const ImportResult({
+    required this.safetyBackupFile,
+    required this.scope,
+  });
 
   final File safetyBackupFile;
+  final BackupImportScope scope;
 }
 
 class ParsedPortableBackup {
@@ -67,28 +73,34 @@ Future<ExportResult> exportOjData({
   final exportDirectory = directory ?? await exportDirectoryForOjData();
   await exportDirectory.create(recursive: true);
 
-  final backupFile = File(
-    '${exportDirectory.path}${Platform.pathSeparator}'
-    '${buildExportFileName(prefix, 'json', exportTime)}',
+  final backupFile = await _availableExportFile(
+    exportDirectory,
+    prefix,
+    'json',
+    exportTime,
   );
-  final dailySummaryFile = File(
-    '${exportDirectory.path}${Platform.pathSeparator}'
-    '${buildExportFileName('oj_float_daily_summary', 'csv', exportTime)}',
+  final dailySummaryFile = await _availableExportFile(
+    exportDirectory,
+    'oj_float_daily_summary',
+    'csv',
+    exportTime,
   );
 
-  await backupFile.writeAsString(
-    buildPortableBackupJson(
-      config: config,
-      snapshots: snapshots,
-      problems: problems,
-      contests: contests,
-      teammates: teammates,
-      training: training,
-      exportedAt: exportTime,
-    ),
+  final backupText = buildPortableBackupJson(
+    config: config,
+    snapshots: snapshots,
+    problems: problems,
+    contests: contests,
+    teammates: teammates,
+    training: training,
+    exportedAt: exportTime,
   );
+  await _writeVerifiedPortableBackup(backupFile, backupText);
   if (writeDailySummary) {
-    await dailySummaryFile.writeAsString(buildDailySummaryCsv(snapshots));
+    await dailySummaryFile.writeAsString(
+      buildDailySummaryCsv(snapshots),
+      flush: true,
+    );
   }
 
   return ExportResult(
@@ -342,4 +354,39 @@ String buildExportFileName(String prefix, String extension, DateTime time) {
       '${local.hour.toString().padLeft(2, '0')}'
       '${local.minute.toString().padLeft(2, '0')}';
   return '${prefix}_$timestamp.$extension';
+}
+
+Future<File> _availableExportFile(
+  Directory directory,
+  String prefix,
+  String extension,
+  DateTime time,
+) async {
+  final baseName = buildExportFileName(prefix, extension, time);
+  final dot = baseName.lastIndexOf('.');
+  final stem = dot < 0 ? baseName : baseName.substring(0, dot);
+  final suffix = dot < 0 ? '' : baseName.substring(dot);
+  var index = 0;
+  while (true) {
+    final name = index == 0 ? baseName : '${stem}_$index$suffix';
+    final file = File('${directory.path}${Platform.pathSeparator}$name');
+    if (!await file.exists() && !await File('${file.path}.tmp').exists()) {
+      return file;
+    }
+    index++;
+  }
+}
+
+Future<void> _writeVerifiedPortableBackup(File target, String text) async {
+  final temporary = File('${target.path}.tmp');
+  try {
+    await temporary.writeAsString(text, flush: true);
+    parsePortableBackupJson(await temporary.readAsString());
+    await temporary.rename(target.path);
+  } catch (_) {
+    if (await temporary.exists()) {
+      await temporary.delete();
+    }
+    rethrow;
+  }
 }

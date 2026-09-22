@@ -10,6 +10,7 @@ const _configKey = 'app_config_v1';
 const _snapshotsFile = 'snapshots_v1.json';
 const _refreshLogsFile = 'refresh_logs_v1.json';
 const _problemsFile = 'problems_v1.json';
+const _contestsFile = 'contests_v1.json';
 const _trainingFile = 'training_v1.json';
 const _problemTrainingTransactionFile = 'problem_training_transaction_v1.json';
 
@@ -148,7 +149,7 @@ void main() {
       expect(migrated.closeToTray, isFalse);
       expect(migrated.launchAtStartup, isFalse);
       expect(migrated.refreshIntervalMinutes, 45);
-      expect(migrated.colorTheme, AppColorTheme.ocean);
+      expect(migrated.colorTheme, AppColorTheme.githubLight);
       expect(migrated.dashboardModules, [
         DashboardModule.teammates,
         DashboardModule.heatmap,
@@ -473,6 +474,69 @@ void main() {
     }
   });
 
+  test('pending core transaction rolls problems, training and contests forward',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('oj_float_test_');
+    final transaction = File(
+      '${directory.path}${Platform.pathSeparator}'
+      '$_problemTrainingTransactionFile',
+    );
+    try {
+      final store = LocalStore(supportDirectory: directory);
+      final problem = _trainingProblem();
+      final endedAt = DateTime(2026, 7, 27, 9);
+      final training = TrainingStoreData(
+        attempts: [
+          TrainingAttempt.create(
+            id: 'core-attempt',
+            problemId: problem.id,
+            origin: TrainingAttemptOrigin.manual,
+            startedAt: endedAt.subtract(const Duration(minutes: 20)),
+            endedAt: endedAt,
+            durationSeconds: 1200,
+            result: AttemptResult.ac,
+          ),
+        ],
+      );
+      final contest = ContestRecord.create(
+        id: 'core-contest',
+        title: 'Core contest',
+        date: '2026-07-27',
+        rank: 3,
+        note: 'Recovered review',
+        now: endedAt,
+      );
+      await transaction.writeAsString(
+        jsonEncode({
+          'schemaVersion': 2,
+          'problems': [problem.toStorageJson()],
+          'training': training.toJson(),
+          'contests': [contest.toStorageJson()],
+        }),
+        flush: true,
+      );
+
+      await store.recoverPendingProblemTrainingTransaction();
+
+      final snapshot = await store.loadCoreBackupSnapshot();
+      expect(snapshot.problems.single.id, problem.id);
+      expect(snapshot.training.attempts.single.id, 'core-attempt');
+      expect(snapshot.contests.single.id, 'core-contest');
+      expect(snapshot.contests.single.note, 'Recovered review');
+      expect(await transaction.exists(), isFalse);
+      expect(
+        jsonDecode(
+          await File(
+            '${directory.path}${Platform.pathSeparator}$_contestsFile',
+          ).readAsString(),
+        ),
+        isA<List<dynamic>>(),
+      );
+    } finally {
+      await directory.delete(recursive: true);
+    }
+  });
+
   test('parse failure logs do not include raw sensitive JSON content',
       () async {
     final logs = <String>[];
@@ -549,3 +613,5 @@ ProblemRecord _trainingProblem({
     now: DateTime(2026, 7, 27, 8),
   );
 }
+
+

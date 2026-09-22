@@ -49,6 +49,44 @@ class AppPalette {
   final List<Color> heatmapLevels;
 }
 
+const _githubLightPalette = AppPalette(
+  brightness: Brightness.light,
+  surface: Color(0xFFF6F8FA),
+  card: Color(0xFFFFFFFF),
+  cardMuted: Color(0xFFF0F3F6),
+  border: Color(0xFFD0D7DE),
+  textPrimary: Color(0xFF1F2328),
+  textSecondary: Color(0xFF656D76),
+  accent: Color(0xFF0969DA),
+  danger: Color(0xFFCF222E),
+  heatmapLevels: [
+    Color(0xFFEAF2E9),
+    Color(0xFFACD7A5),
+    Color(0xFF6FBA65),
+    Color(0xFF3B9140),
+    Color(0xFF216E39)
+  ],
+);
+
+const _terminalDarkPalette = AppPalette(
+  brightness: Brightness.dark,
+  surface: Color(0xFF0F1115),
+  card: Color(0xFF171A21),
+  cardMuted: Color(0xFF202630),
+  border: Color(0xFF303846),
+  textPrimary: Color(0xFFE6EDF3),
+  textSecondary: Color(0xFF8B98A8),
+  accent: Color(0xFF58A6FF),
+  danger: Color(0xFFF85149),
+  heatmapLevels: [
+    Color(0xFF202630),
+    Color(0xFF1F4E38),
+    Color(0xFF28754B),
+    Color(0xFF35A866),
+    Color(0xFF74D990)
+  ],
+);
+
 const _classicPalette = AppPalette(
   brightness: Brightness.light,
   surface: Color(0xFFF5F7FA),
@@ -65,44 +103,6 @@ const _classicPalette = AppPalette(
     Color(0xFF40C463),
     Color(0xFF30A14E),
     Color(0xFF216E39),
-  ],
-);
-
-const _oceanPalette = AppPalette(
-  brightness: Brightness.light,
-  surface: Color(0xFFF2F8FA),
-  card: Color(0xFFFFFFFF),
-  cardMuted: Color(0xFFEAF4F7),
-  border: Color(0xFFD3E4E8),
-  textPrimary: Color(0xFF10242B),
-  textSecondary: Color(0xFF5E7077),
-  accent: Color(0xFF197B8A),
-  danger: Color(0xFFC43D4B),
-  heatmapLevels: [
-    Color(0xFFE7F1F4),
-    Color(0xFFB8E3EA),
-    Color(0xFF76C7D2),
-    Color(0xFF369EAD),
-    Color(0xFF176B78),
-  ],
-);
-
-const _rosePalette = AppPalette(
-  brightness: Brightness.light,
-  surface: Color(0xFFFBF5F7),
-  card: Color(0xFFFFFFFF),
-  cardMuted: Color(0xFFF8ECEF),
-  border: Color(0xFFEBD5DB),
-  textPrimary: Color(0xFF2A1B20),
-  textSecondary: Color(0xFF75656A),
-  accent: Color(0xFFA33F62),
-  danger: Color(0xFFB3261E),
-  heatmapLevels: [
-    Color(0xFFF5E9EE),
-    Color(0xFFF4B8CB),
-    Color(0xFFE6799F),
-    Color(0xFFB84570),
-    Color(0xFF7F284B),
   ],
 );
 
@@ -146,9 +146,9 @@ const _candyPalette = AppPalette(
 
 AppPalette appPaletteFor(AppColorTheme theme) {
   return switch (theme) {
+    AppColorTheme.githubLight => _githubLightPalette,
+    AppColorTheme.terminalDark => _terminalDarkPalette,
     AppColorTheme.classic => _classicPalette,
-    AppColorTheme.ocean => _oceanPalette,
-    AppColorTheme.rose => _rosePalette,
     AppColorTheme.dark => _darkPalette,
     AppColorTheme.candy => _candyPalette,
   };

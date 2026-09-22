@@ -13,6 +13,36 @@ void main() {
     expect(feedback, isNull);
   });
 
+  test('portable import feedback describes the replaced data', () async {
+    final service = HomeActionService(
+      pickBackupFile: () async => File('portable.json'),
+    );
+
+    final feedback = await service.importData(
+      _ImportingFakeOjController(BackupImportScope.portable),
+    );
+
+    expect(feedback?.isSuccess, isTrue);
+    expect(feedback?.message, contains('完整便携备份导入完成'));
+    expect(feedback?.message, contains('抓取快照'));
+    expect(feedback?.message, contains('safety.json'));
+  });
+
+  test('core import feedback says OJ data is preserved', () async {
+    final service = HomeActionService(
+      pickBackupFile: () async => File('core.json'),
+    );
+
+    final feedback = await service.importData(
+      _ImportingFakeOjController(BackupImportScope.coreTraining),
+    );
+
+    expect(feedback?.isSuccess, isTrue);
+    expect(feedback?.message, contains('核心训练备份导入完成'));
+    expect(feedback?.message, contains('OJ 配置和抓取数据保持不变'));
+    expect(feedback?.message, contains('safety.json'));
+  });
+
   test('open problem rejects invalid URLs', () async {
     final service = HomeActionService();
 
@@ -214,6 +244,26 @@ class _FakeOjController implements OjController {
     Directory? safetyBackupDirectory,
   }) async {
     throw UnimplementedError('Should not import when picker is cancelled.');
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _ImportingFakeOjController implements OjController {
+  _ImportingFakeOjController(this.scope);
+
+  final BackupImportScope scope;
+
+  @override
+  Future<ImportResult> importPortableBackup(
+    File backupFile, {
+    Directory? safetyBackupDirectory,
+  }) async {
+    return ImportResult(
+      safetyBackupFile: File('safety.json'),
+      scope: scope,
+    );
   }
 
   @override

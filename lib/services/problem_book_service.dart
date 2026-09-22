@@ -34,23 +34,22 @@ class ProblemBookService {
     List<ProblemRecord> problems,
     ProblemRecord problem,
   ) {
-    final updated = <ProblemRecord>[];
-    var replaced = false;
-    for (final item in problems) {
-      if (item.id == problem.id ||
-          canonicalProblemKey(item) == canonicalProblemKey(problem)) {
-        updated.add(
-          item.id == problem.id
-              ? problem
-              : _mergeDuplicateProblem(item, problem),
-        );
-        replaced = true;
+    final updated = <ProblemRecord>[...problems];
+    final idIndex = updated.indexWhere((item) => item.id == problem.id);
+    if (idIndex >= 0) {
+      // Editing an existing record must never mutate another record merely
+      // because legacy data gave both records the same canonical key.
+      updated[idIndex] = problem;
+    } else {
+      final problemKey = canonicalProblemKey(problem);
+      final keyIndex = updated.indexWhere(
+        (item) => canonicalProblemKey(item) == problemKey,
+      );
+      if (keyIndex >= 0) {
+        updated[keyIndex] = _mergeDuplicateProblem(updated[keyIndex], problem);
       } else {
-        updated.add(item);
+        updated.add(problem);
       }
-    }
-    if (!replaced) {
-      updated.add(problem);
     }
     updated.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return List.unmodifiable(updated);
@@ -66,17 +65,20 @@ class ProblemBookService {
   ) {
     final merged = <ProblemRecord>[...local];
     for (final problem in incoming) {
-      final index = merged.indexWhere(
-        (item) =>
-            item.id == problem.id ||
-            canonicalProblemKey(item) == canonicalProblemKey(problem),
-      );
+      var index = merged.indexWhere((item) => item.id == problem.id);
+      final matchedById = index >= 0;
+      if (!matchedById) {
+        final problemKey = canonicalProblemKey(problem);
+        index = merged.indexWhere(
+          (item) => canonicalProblemKey(item) == problemKey,
+        );
+      }
       if (index < 0) {
         merged.add(problem);
         continue;
       }
       if (problem.updatedAt.isAfter(merged[index].updatedAt)) {
-        merged[index] = merged[index].id == problem.id
+        merged[index] = matchedById
             ? problem
             : _mergeDuplicateProblem(merged[index], problem);
       }
@@ -251,18 +253,58 @@ Uri normalizeProblemUri(String input) {
 
 String canonicalProblemKey(ProblemRecord problem) {
   final uri = Uri.tryParse(problem.url);
-  if (problem.externalId.trim().isNotEmpty) {
-    return '${problem.platform.name}:${problem.externalId.trim().toLowerCase()}';
-  }
-  if (uri == null) {
-    return '${problem.platform.name}:${problem.url.trim().toLowerCase()}';
+  if (uri == null || uri.host.trim().isEmpty) {
+    final externalId = problem.externalId.trim();
+    return '${problem.platform.name}:${externalId.isEmpty ? problem.url.trim().toLowerCase() : externalId.toLowerCase()}';
   }
   final externalId = extractProblemExternalId(uri, problem.platform);
   if (externalId.isNotEmpty) {
     return '${problem.platform.name}:${externalId.toLowerCase()}';
   }
-  final path = uri.path.replaceAll(RegExp(r'/+$'), '').toLowerCase();
-  return '${problem.platform.name}:${uri.host.toLowerCase()}$path';
+  return '${problem.platform.name}:${_canonicalUriPath(uri, conservative: problem.platform == ProblemPlatform.other)}';
+}
+
+String _canonicalUriPath(Uri uri, {required bool conservative}) {
+  final normalizedHost = uri.host.toLowerCase();
+  final host = conservative
+      ? '${uri.scheme.toLowerCase()}://$normalizedHost'
+      : normalizedHost.replaceFirst('www.', '');
+  final port = uri.hasPort ? ':${uri.port}' : '';
+  final rawPath =
+      conservative ? uri.path : uri.path.replaceAll(RegExp(r'/+$'), '');
+  final path = conservative ? rawPath : rawPath.toLowerCase();
+  final query = <MapEntry<String, String>>[];
+  for (final entry in uri.queryParametersAll.entries) {
+    if (_isProblemTrackingQuery(entry.key)) {
+      continue;
+    }
+    for (final value in entry.value) {
+      query.add(MapEntry(entry.key, value));
+    }
+  }
+  query.sort((a, b) {
+    final byKey = a.key.compareTo(b.key);
+    return byKey != 0 ? byKey : a.value.compareTo(b.value);
+  });
+  if (query.isEmpty) {
+    return '$host$port$path';
+  }
+  final queryString = query
+      .map((entry) =>
+          '${Uri.encodeQueryComponent(entry.key)}=${Uri.encodeQueryComponent(entry.value)}')
+      .join('&');
+  return '$host$port$path?$queryString';
+}
+
+bool _isProblemTrackingQuery(String key) {
+  final normalized = key.trim().toLowerCase();
+  return normalized == 'source' ||
+      normalized == 'ref' ||
+      normalized == 'from' ||
+      normalized == 'locale' ||
+      normalized == 'lang' ||
+      normalized == 'language' ||
+      normalized.startsWith('utm_');
 }
 
 String extractProblemExternalId(Uri uri, ProblemPlatform platform) {
@@ -284,7 +326,20 @@ String extractProblemExternalId(Uri uri, ProblemPlatform platform) {
     case ProblemPlatform.atcoder:
       final tasks = segments.indexOf('tasks');
       if (tasks >= 0 && tasks + 1 < segments.length) {
-        return segments[tasks + 1];
+        final task = segments[tasks + 1];
+        final contests = segments.indexOf('contests');
+        if (contests >= 0 && contests + 1 < segments.length) {
+          final contest = segments[contests + 1];
+          final normalizedContest = contest.toLowerCase();
+          final normalizedTask = task.toLowerCase();
+          // Standard AtCoder task IDs already contain the contest ID (for
+          // example abc300_a). Custom contests may reuse names such as A.
+          if (normalizedTask != normalizedContest &&
+              !normalizedTask.startsWith('${normalizedContest}_')) {
+            return '$contest:$task';
+          }
+        }
+        return task;
       }
       break;
     case ProblemPlatform.lg:
@@ -306,10 +361,38 @@ String extractProblemExternalId(Uri uri, ProblemPlatform platform) {
       }
       break;
     case ProblemPlatform.hd:
-      return uri.queryParameters['pid'] ?? '';
+      final pid = uri.queryParameters['pid']?.trim() ?? '';
+      final cid = uri.queryParameters['cid']?.trim() ?? '';
+      final contest = segments.indexOf('contest');
+      final isContestProblem = contest >= 0 &&
+          contest + 1 < segments.length &&
+          segments[contest + 1].toLowerCase() == 'problem';
+      if (isContestProblem && cid.isNotEmpty && pid.isNotEmpty) {
+        return '$cid:$pid';
+      }
+      return pid;
     case ProblemPlatform.poj:
       return uri.queryParameters['id'] ?? '';
-    case ProblemPlatform.uva || ProblemPlatform.spoj || ProblemPlatform.other:
+    case ProblemPlatform.uva:
+      final problem = uri.queryParameters['problem']?.trim() ?? '';
+      if (problem.isNotEmpty) {
+        return problem;
+      }
+      final problemSegment = segments.indexOf('problem');
+      if (problemSegment >= 0 && problemSegment + 1 < segments.length) {
+        return segments[problemSegment + 1];
+      }
+      final external = segments.indexOf('external');
+      if (external >= 0 && external + 2 < segments.length) {
+        final volume = segments[external + 1];
+        final number =
+            segments[external + 2].replaceFirst(RegExp(r'\.[^.]+$'), '');
+        if (volume.isNotEmpty && number.isNotEmpty) {
+          return '$volume:$number';
+        }
+      }
+      break;
+    case ProblemPlatform.spoj || ProblemPlatform.other:
       break;
   }
   return '';
@@ -328,12 +411,27 @@ ProblemRecord _mergeDuplicateProblem(
         incoming.difficulty.isEmpty ? existing.difficulty : incoming.difficulty,
     externalId:
         incoming.externalId.isEmpty ? existing.externalId : incoming.externalId,
-    note: incoming.note.isEmpty ? existing.note : incoming.note,
-    analysis: incoming.analysis.isEmpty ? existing.analysis : incoming.analysis,
+    note: _mergeProblemText(existing.note, incoming.note),
+    analysis: _mergeProblemText(existing.analysis, incoming.analysis),
     updatedAt: incoming.updatedAt.isAfter(existing.updatedAt)
         ? incoming.updatedAt
         : existing.updatedAt,
   );
+}
+
+String _mergeProblemText(String existing, String incoming) {
+  final first = existing.trim();
+  final second = incoming.trim();
+  if (first.isEmpty) {
+    return second;
+  }
+  if (second.isEmpty || first == second || first.contains(second)) {
+    return first;
+  }
+  if (second.contains(first)) {
+    return second;
+  }
+  return '$first\n\n---\n\n$second';
 }
 
 ProblemPlatform detectProblemPlatform(Uri uri) {
@@ -391,8 +489,8 @@ String fallbackProblemTitle(Uri uri, ProblemPlatform platform) {
       final id = uri.queryParameters['id'] ?? _lastUsefulSegment(uri);
       return id == null ? 'POJ Problem' : 'POJ $id';
     case ProblemPlatform.uva:
-      final id = _lastUsefulSegment(uri);
-      return id == null ? 'UVA Problem' : 'UVA $id';
+      final id = extractProblemExternalId(uri, platform);
+      return id.isEmpty ? 'UVA Problem' : 'UVA $id';
     case ProblemPlatform.spoj:
       final id = _lastUsefulSegment(uri);
       return id == null ? 'SPOJ Problem' : 'SPOJ $id';

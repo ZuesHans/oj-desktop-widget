@@ -116,12 +116,15 @@ class WindowShellService implements WindowShell {
 
   @override
   Future<void> exitApp() async {
-    await window.setPreventClose(false);
     if (_trayReady) {
       await tray.destroy();
       _trayReady = false;
     }
-    await window.destroy();
+    await window.setPreventClose(false);
+    // close() posts a native close request and lets the method call return
+    // before the Flutter engine is torn down. destroy() quits the Windows
+    // message loop immediately and can crash the engine callback in flight.
+    await window.close();
   }
 
   Future<File> _extractTrayIcon() async {

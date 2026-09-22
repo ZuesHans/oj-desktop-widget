@@ -59,4 +59,53 @@ void main() {
     );
     expect(controller.state.problems.single.difficulty, '800');
   });
+
+  test('browser imports keep HDU contest problems separate by cid', () async {
+    final directory = await Directory.systemTemp.createTemp('hdu_import_');
+    final controller = OjController(
+      storage: LocalStore(supportDirectory: directory),
+      service: RefreshService(client: http.Client(), providers: const {}),
+      startupService: NoopStartupService(),
+      syncSecretStore: MemorySyncSecretStore(),
+    );
+    addTearDown(() async {
+      controller.dispose();
+      await directory.delete(recursive: true);
+    });
+    await controller.init();
+
+    final first = await controller.importBrowserProblem(
+      const BrowserProblemImport(
+        url: 'https://acm.hdu.edu.cn/contest/problem?cid=1237&pid=1007',
+        title: 'HDU 1237 1007',
+        platform: 'hd',
+        externalId: '1007',
+        tags: [],
+        difficulty: '',
+      ),
+    );
+    final second = await controller.importBrowserProblem(
+      const BrowserProblemImport(
+        url: 'https://acm.hdu.edu.cn/contest/problem?cid=1230&pid=1007',
+        title: 'HDU 1230 1007',
+        platform: 'hd',
+        externalId: '1007',
+        tags: [],
+        difficulty: '',
+      ),
+    );
+
+    expect(first.created, isTrue);
+    expect(second.created, isTrue);
+    expect(second.problemId, isNot(first.problemId));
+    expect(controller.state.problems, hasLength(2));
+    expect(
+      controller.state.problems.map((item) => item.externalId),
+      containsAll(['1237:1007', '1230:1007']),
+    );
+    expect(
+      controller.state.problems.map((item) => item.title),
+      containsAll(['HDU 1237 1007', 'HDU 1230 1007']),
+    );
+  });
 }

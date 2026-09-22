@@ -13,6 +13,9 @@
 - Replaced automatic review queues with user-managed schedules for any date, a shared filtered problem picker, list-based favorites, and precise task-bound timing.
 - Simplified attempt records to results, assistance, mistake categories, reflections, and automatic elapsed time while preserving compatible legacy imports.
 - Added a recoverable write-ahead transaction for problem and training updates so interrupted saves roll forward consistently on the next launch.
+- Added opt-in local core-data backups with a user-selected directory and daily time, retaining the latest 7 backup days plus one backup from each of 4 earlier weeks.
+- Added strict schema parsing, SHA-256 content verification, temporary-file flush and atomic publication, consistent snapshots across queued writes, and visible reporting for corrupt or failed backups.
+- Added pre-import safety backups outside normal rotation and core-backup restore that preserves OJ snapshots, teammate fetches, refresh logs, local backup settings, and securely stored tokens.
 
 ## v0.1.3beta - 2026-07-10
 

@@ -214,6 +214,41 @@ void main() {
       await directory.delete(recursive: true);
     }
   });
+
+  test('repeated exports in one minute never overwrite an earlier backup',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('oj_export_test_');
+    try {
+      final first = await exportOjData(
+        config: _config(),
+        snapshots: const [],
+        now: DateTime.parse('2026-06-18T21:30:00'),
+        directory: directory,
+        writeDailySummary: false,
+      );
+      final firstText = await first.backupFile.readAsString();
+      final second = await exportOjData(
+        config: _config(),
+        snapshots: const [],
+        now: DateTime.parse('2026-06-18T21:30:30'),
+        directory: directory,
+        writeDailySummary: false,
+      );
+
+      expect(first.backupFile.path, isNot(second.backupFile.path));
+      expect(second.backupFile.path, endsWith('_1.json'));
+      expect(await first.backupFile.readAsString(), firstText);
+      expect(parsePortableBackupJson(firstText), isA<ParsedPortableBackup>());
+      expect(
+        directory.listSync().whereType<File>().where(
+              (file) => file.path.endsWith('.tmp'),
+            ),
+        isEmpty,
+      );
+    } finally {
+      await directory.delete(recursive: true);
+    }
+  });
 }
 
 ContestRecord _contest() {

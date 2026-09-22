@@ -1,6 +1,10 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/services.dart';
+import '../problems/quick_entry_view.dart';
 
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
@@ -16,13 +20,15 @@ import '../../providers/codeforces_provider.dart';
 import '../../providers/leetcode_provider.dart';
 import '../../providers/luogu_provider.dart';
 import '../../providers/nowcoder_provider.dart';
+import '../../services/browser_import_service.dart';
 import '../../services/heatmap_service.dart';
 import '../../services/home_action_service.dart';
-import '../../services/browser_import_service.dart';
 import '../../services/local_store.dart';
 import '../../services/oj_controller.dart';
+import '../../services/quick_entry_hotkey_service.dart';
 import '../../services/refresh_service.dart';
 import '../../services/window_shell_service.dart';
+import '../app_labels.dart';
 import '../app_theme.dart';
 import '../contests/contests_entry_panel.dart';
 import '../contests/contests_page.dart';
@@ -52,6 +58,7 @@ class OjFloatHome extends StatefulWidget {
     this.initialConfig,
     this.startHidden = false,
     this.windowShell,
+    this.browserImportServer,
     this.enablePlatformIntegration = true,
     this.autoInitializeController = true,
   });
@@ -59,6 +66,7 @@ class OjFloatHome extends StatefulWidget {
   final AppConfig? initialConfig;
   final bool startHidden;
   final WindowShell? windowShell;
+  final BrowserImportServer? browserImportServer;
   final bool enablePlatformIntegration;
   final bool autoInitializeController;
 
@@ -79,6 +87,14 @@ class _OjFloatHomeState extends State<OjFloatHome>
   String _syncToken = '';
   String _browserImportToken = '';
   String _browserImportError = '';
+  static const _quickChannel = MethodChannel('oj_float/quick_entry');
+  static const _hotkeyService = QuickEntryHotkeyService();
+  bool _quickEntry = false;
+  bool _quickTransition = false;
+  Rect? _previousBounds;
+  bool _previousVisible = true;
+  bool _previousMaximized = false;
+  bool _previousMinimized = false;
   bool _exiting = false;
   bool _handlingWindowClose = false;
 
@@ -87,7 +103,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
     super.initState();
     _windowShell = widget.windowShell ?? WindowShellService();
     _homeActions = HomeActionService();
-    _browserImportServer = BrowserImportServer();
+    _browserImportServer = widget.browserImportServer ?? BrowserImportServer();
     _browserImportTokenStore = SecureBrowserImportTokenStore();
     _controller = OjController(
       storage: LocalStore(),
@@ -128,6 +144,8 @@ class _OjFloatHomeState extends State<OjFloatHome>
         await _applyShellConfig(widget.initialConfig!);
       }
       await _controller.init();
+      if (widget.enablePlatformIntegration && Platform.isWindows)
+        await _registerQuickEntry();
       _syncToken = await _controller.loadSyncToken();
       if (widget.enablePlatformIntegration) {
         await _startBrowserImportService();
@@ -151,7 +169,9 @@ class _OjFloatHomeState extends State<OjFloatHome>
       _windowShell.removeTrayListener(this);
       _windowShell.removeWindowListener(this);
     }
-    unawaited(_browserImportServer.stop());
+    if (widget.enablePlatformIntegration && Platform.isWindows)
+      _quickChannel.setMethodCallHandler(null);
+    unawaited(_stopBrowserImportServer());
     _controller.dispose();
     super.dispose();
   }
@@ -184,6 +204,10 @@ class _OjFloatHomeState extends State<OjFloatHome>
   }
 
   Future<void> _handleWindowClose() async {
+    if (_quickEntry) {
+      await _closeQuickEntry();
+      return;
+    }
     if (_exiting || _handlingWindowClose) {
       return;
     }
@@ -209,22 +233,101 @@ class _OjFloatHomeState extends State<OjFloatHome>
       builder: (context, _) {
         return Theme(
           data: buildAppTheme(_controller.state.config.colorTheme),
-          child: DashboardShell(
-            header: WindowHeader(
-              sectionLabel: sectionLabel(_dashboardSection),
-              refreshing: _controller.refreshing,
-              onRefresh: _controller.refreshing ? null : _controller.refresh,
-              onSettings: () => unawaited(
-                _selectSection(DashboardSection.settings),
-              ),
-            ),
-            currentSection: _dashboardSection,
-            onSectionSelected: (section) => unawaited(_selectSection(section)),
-            child: _dashboardContent(context),
-          ),
+          child: Stack(children: [
+            Offstage(
+                offstage: _quickEntry,
+                child: OverflowBox(
+                    minWidth: _quickEntry ? appWindowSize.width : null,
+                    maxWidth: _quickEntry ? appWindowSize.width : null,
+                    minHeight: _quickEntry ? appWindowSize.height : null,
+                    maxHeight: _quickEntry ? appWindowSize.height : null,
+                    child: DashboardShell(
+                      header: WindowHeader(
+                        sectionLabel: sectionLabel(_dashboardSection),
+                        refreshing: _controller.refreshing,
+                        onRefresh:
+                            _controller.refreshing ? null : _controller.refresh,
+                        quickEntryHotkey:
+                            _controller.state.config.quickEntryHotkey,
+                        onQuickEntry: () => unawaited(_openQuickEntry()),
+                        onSettings: () => unawaited(
+                          _selectSection(DashboardSection.settings),
+                        ),
+                      ),
+                      currentSection: _dashboardSection,
+                      onSectionSelected: (section) =>
+                          unawaited(_selectSection(section)),
+                      child: _dashboardContent(context),
+                    ))),
+            if (_quickEntry)
+              QuickEntryView(
+                  onParse: _controller.parseProblemLink,
+                  onSave: _controller.saveProblem,
+                  onClose: () => unawaited(_closeQuickEntry())),
+          ]),
         );
       },
     );
+  }
+
+  Future<void> _registerQuickEntry() async {
+    _quickChannel.setMethodCallHandler((call) async {
+      if (call.method == 'open' && mounted) await _openQuickEntry();
+    });
+    try {
+      await _hotkeyService.register(_controller.state.config.quickEntryHotkey);
+    } catch (error) {
+      if (mounted) _showFeedback('快捷键未生效：$error');
+    }
+  }
+
+  Future<void> _openQuickEntry() async {
+    if (_quickTransition) return;
+    if (_quickEntry) {
+      if (widget.enablePlatformIntegration) await _windowShell.showAndFocus();
+      return;
+    }
+    _quickTransition = true;
+    try {
+      if (widget.enablePlatformIntegration) {
+        _previousVisible = await windowManager.isVisible();
+        _previousMinimized = await windowManager.isMinimized();
+        _previousMaximized = await windowManager.isMaximized();
+        if (_previousMinimized) await windowManager.restore();
+        if (_previousMaximized) await windowManager.unmaximize();
+        _previousBounds = await windowManager.getBounds();
+      }
+      if (!mounted) return;
+      setState(() => _quickEntry = true);
+      if (widget.enablePlatformIntegration) {
+        await windowManager.setMinimumSize(const Size(440, 400));
+        await windowManager.setSize(const Size(520, 640));
+        await windowManager.center();
+        await _windowShell.showAndFocus();
+      }
+    } catch (error) {
+      if (mounted) _showFeedback('打开快速录入失败：$error');
+    } finally {
+      _quickTransition = false;
+    }
+  }
+
+  Future<void> _closeQuickEntry() async {
+    if (_quickTransition) return;
+    _quickTransition = true;
+    try {
+      if (widget.enablePlatformIntegration) {
+        if (!_previousVisible) await _windowShell.hide();
+        await windowManager.setMinimumSize(appMinimumWindowSize);
+        if (_previousBounds != null)
+          await windowManager.setBounds(_previousBounds!);
+        if (_previousMaximized) await windowManager.maximize();
+        if (_previousMinimized) await windowManager.minimize();
+      }
+      if (mounted) setState(() => _quickEntry = false);
+    } finally {
+      _quickTransition = false;
+    }
   }
 
   Future<void> _selectSection(DashboardSection section) async {
@@ -279,7 +382,9 @@ class _OjFloatHomeState extends State<OjFloatHome>
           onParseLink: _controller.parseProblemLink,
           onSave: _controller.saveProblem,
           onDelete: _controller.deleteProblem,
-          onOpenProblem: (problem) => _startTraining(problem, null),
+          onOpenProblem: _openProblemUrl,
+          onToggleFavorite: _controller.toggleProblemFavorite,
+          onTogglePinned: _controller.toggleProblemPinned,
           onRestore: _controller.restoreProblem,
           onPermanentDelete: _controller.permanentlyDeleteProblem,
           onStartTraining: (problem) => _startTraining(problem, null),
@@ -346,6 +451,12 @@ class _OjFloatHomeState extends State<OjFloatHome>
               _browserImportServer.boundPort ?? defaultBrowserImportPort,
           browserImportError: _browserImportError,
           onRotateBrowserImportToken: _rotateBrowserImportToken,
+          onChooseAutomaticBackupDirectory: _chooseAutomaticBackupDirectory,
+          automaticBackupLastSuccessAt:
+              _controller.automaticBackupOverview?.latestBackupAt,
+          automaticBackupLastPath:
+              _controller.automaticBackupOverview?.latestBackupPath,
+          automaticBackupError: _controller.automaticBackupError,
           onSave: _saveSettings,
         ),
     };
@@ -428,14 +539,33 @@ class _OjFloatHomeState extends State<OjFloatHome>
   }
 
   Future<void> _saveSettings(SettingsPageResult result) async {
-    await _homeActions.saveSettings(
-      controller: _controller,
-      shell: _windowShell,
-      config: result.config,
-      syncToken: result.syncToken,
-      syncNow: result.syncNow,
-      enablePlatformIntegration: widget.enablePlatformIntegration,
-    );
+    final nativeHotkey = widget.enablePlatformIntegration && Platform.isWindows;
+    // Native registration reserves the new combination before releasing the old
+    // one. A conflict must not persist an unusable setting or show save success.
+    if (nativeHotkey)
+      await _hotkeyService.register(result.config.quickEntryHotkey);
+    try {
+      await _homeActions.saveSettings(
+        controller: _controller,
+        shell: _windowShell,
+        config: result.config,
+        syncToken: result.syncToken,
+        syncNow: result.syncNow,
+        enablePlatformIntegration: widget.enablePlatformIntegration,
+      );
+    } catch (_) {
+      // saveConfig may persist successfully then fail at startup integration.
+      // Restore the registration to whichever config actually remains in state.
+      if (nativeHotkey) {
+        try {
+          await _hotkeyService
+              .register(_controller.state.config.quickEntryHotkey);
+        } catch (error) {
+          if (mounted) _showFeedback('恢复快捷键失败：$error');
+        }
+      }
+      rethrow;
+    }
     if (mounted) {
       setState(() => _syncToken = result.syncToken);
     } else {
@@ -475,8 +605,8 @@ class _OjFloatHomeState extends State<OjFloatHome>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('导入备份'),
-        content: const Text('导入会覆盖当前配置和本地数据，是否继续？'),
+        title: const Text(AppLabels.importBackup),
+        content: const Text(AppLabels.importConfirmMessage),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -505,6 +635,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
   Future<void> _openProblemUrl(ProblemRecord problem) async {
     try {
       await _homeActions.openProblemUrl(problem);
+      await _controller.markProblemOpened(problem.id);
     } catch (error) {
       if (mounted) {
         _showFeedback('打开题目失败：$error');
@@ -603,6 +734,13 @@ class _OjFloatHomeState extends State<OjFloatHome>
     }
   }
 
+  Future<String?> _chooseAutomaticBackupDirectory() {
+    return FilePicker.platform.getDirectoryPath(
+      dialogTitle: '选择 OJ Float 自动备份文件夹',
+      initialDirectory: _controller.state.config.automaticBackup.directoryPath,
+    );
+  }
+
   void _showFeedback(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -625,12 +763,21 @@ class _OjFloatHomeState extends State<OjFloatHome>
     }
     _exiting = true;
     try {
+      await _stopBrowserImportServer();
       await _windowShell.exitApp();
     } catch (error) {
       _exiting = false;
       if (mounted) {
         _showFeedback('退出客户端失败：$error');
       }
+    }
+  }
+
+  Future<void> _stopBrowserImportServer() async {
+    try {
+      await _browserImportServer.stop();
+    } catch (error) {
+      debugPrint('Failed to stop browser import service: $error');
     }
   }
 }

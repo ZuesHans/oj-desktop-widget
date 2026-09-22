@@ -18,6 +18,7 @@ import '../models/teammate.dart';
 import '../models/training.dart';
 import '../platform/startup_service.dart';
 import 'backup_service.dart';
+import 'automatic_backup_service.dart';
 import 'browser_import_service.dart';
 import 'contest_record_service.dart';
 import 'daily_summary_service.dart';
@@ -40,6 +41,7 @@ class OjController extends ChangeNotifier {
     SyncService? syncService,
     SyncSecretStore? syncSecretStore,
     TrainingService? trainingService,
+    AutomaticBackupService? automaticBackupService,
   })  : problemBookService =
             problemBookService ?? ProblemBookService(client: http.Client()),
         contestRecordService =
@@ -49,7 +51,16 @@ class OjController extends ChangeNotifier {
                 client: http.Client(), providers: service.providers),
         syncService = syncService ?? SyncService(client: http.Client()),
         syncSecretStore = syncSecretStore ?? SecureSyncSecretStore(),
-        trainingService = trainingService ?? const TrainingService();
+        trainingService = trainingService ?? const TrainingService(),
+        automaticBackupService = automaticBackupService ??
+            AutomaticBackupService(
+              defaultDirectoryProvider: () async {
+                final support = await storage.supportDirectory();
+                return Directory(
+                  '${support.path}${Platform.pathSeparator}backups',
+                );
+              },
+            );
 
   final LocalStore storage;
   final RefreshService service;
@@ -60,22 +71,30 @@ class OjController extends ChangeNotifier {
   final SyncService syncService;
   final SyncSecretStore syncSecretStore;
   final TrainingService trainingService;
+  final AutomaticBackupService automaticBackupService;
   OjState state = OjState.initial();
   bool refreshing = false;
   bool refreshingTeammates = false;
   bool syncing = false;
   SyncResult? lastSyncResult;
   Timer? _timer;
+  Timer? _automaticBackupTimer;
+  AutomaticBackupOverview? automaticBackupOverview;
+  AutomaticBackupResult? lastAutomaticBackupResult;
+  String automaticBackupError = '';
+  bool automaticBackupRunning = false;
 
   Future<void> init() async {
     await storage.recoverPendingProblemTrainingTransaction();
-    final config = await storage.loadConfig();
+    var config = await storage.loadConfig();
+    config = await _withResolvedAutomaticBackupDirectory(config);
     final snapshots = await storage.loadSnapshots();
     final refreshLogs = await storage.loadRefreshLogs();
-    var problems = await storage.loadProblems();
-    final contests = await storage.loadContests();
+    final coreSnapshot = await storage.loadCoreBackupSnapshot();
+    var problems = coreSnapshot.problems;
+    final contests = coreSnapshot.contests;
     final teammates = await storage.loadTeammates();
-    var training = await storage.loadTraining();
+    var training = coreSnapshot.training;
     training = trainingService.migrateLegacyAttempts(problems, training);
     problems = trainingService.normalizeLegacyProblems(problems);
     training = trainingService.normalizeTrainingData(training);
@@ -98,17 +117,25 @@ class OjController extends ChangeNotifier {
     }
     _recomputeSummaries();
     _schedule();
+    await _configureAutomaticBackup(runIfDue: true);
     notifyListeners();
     await refresh();
     await maybeAutoRefreshTeammates();
   }
 
   Future<void> saveConfig(AppConfig config) async {
-    final normalized =
+    var normalized =
         config.closeToTray ? config : config.copyWith(launchAtStartup: false);
+    normalized = await _withResolvedAutomaticBackupDirectory(normalized);
+    if (normalized.automaticBackup.enabled) {
+      await automaticBackupService.validateDirectory(
+        normalized.automaticBackup,
+      );
+    }
     await storage.saveConfig(normalized);
     state = state.copyWith(config: normalized);
     _schedule();
+    await _configureAutomaticBackup(runIfDue: true);
     notifyListeners();
     Object? startupError;
     try {
@@ -129,7 +156,12 @@ class OjController extends ChangeNotifier {
     File backupFile, {
     Directory? safetyBackupDirectory,
   }) async {
-    final imported = parsePortableBackupJson(await backupFile.readAsString());
+    final backupText = await backupFile.readAsString();
+    final coreBackup = isCoreTrainingBackupJson(backupText)
+        ? parseCoreTrainingBackupJson(backupText)
+        : null;
+    final imported =
+        coreBackup == null ? parsePortableBackupJson(backupText) : null;
     final previousConfig = state.config;
     final previousSnapshots = state.snapshots;
     final previousProblems = state.problems;
@@ -137,6 +169,10 @@ class OjController extends ChangeNotifier {
     final previousTeammates = state.teammates;
     final previousTraining = state.training;
     final previousRefreshLogs = state.refreshLogs;
+    final resolvedSafetyDirectory = safetyBackupDirectory ??
+        await automaticBackupService.resolveDirectory(
+          state.config.automaticBackup,
+        );
     final safetyBackup = await exportOjData(
       config: state.config,
       snapshots: state.snapshots,
@@ -144,37 +180,49 @@ class OjController extends ChangeNotifier {
       contests: state.contests,
       teammates: state.teammates,
       training: state.training,
-      directory: safetyBackupDirectory,
+      directory: resolvedSafetyDirectory,
       prefix: 'oj_float_pre_import_backup',
       writeDailySummary: false,
     );
     try {
+      final rawProblems = coreBackup?.problems ?? imported!.problems;
       var importedTraining = trainingService.migrateLegacyAttempts(
-        imported.problems,
-        imported.training,
+        rawProblems,
+        coreBackup?.training ?? imported!.training,
       );
       final importedProblems =
-          trainingService.normalizeLegacyProblems(imported.problems);
+          trainingService.normalizeLegacyProblems(rawProblems);
       importedTraining =
           trainingService.normalizeTrainingData(importedTraining);
-      await storage.saveConfig(imported.config);
-      await storage.replaceSnapshots(imported.snapshots);
-      await storage.saveProblemsAndTraining(
+      final importedConfig = coreBackup == null
+          ? imported!.config.copyWith(
+              automaticBackup: previousConfig.automaticBackup,
+            )
+          : previousConfig;
+      await storage.saveConfig(importedConfig);
+      await storage.replaceSnapshots(
+        coreBackup == null ? imported!.snapshots : previousSnapshots,
+      );
+      await storage.replaceCoreData(
         importedProblems,
         importedTraining,
+        coreBackup?.contests ?? imported!.contests,
       );
-      await storage.replaceContests(imported.contests);
-      await storage.replaceTeammates(imported.teammates);
-      await storage.saveRefreshLogs(const []);
+      await storage.replaceTeammates(
+        coreBackup == null ? imported!.teammates : previousTeammates,
+      );
+      await storage.saveRefreshLogs(
+        coreBackup == null ? const [] : previousRefreshLogs,
+      );
     } catch (error) {
       try {
         await storage.saveConfig(previousConfig);
         await storage.replaceSnapshots(previousSnapshots);
-        await storage.saveProblemsAndTraining(
+        await storage.replaceCoreData(
           previousProblems,
           previousTraining,
+          previousContests,
         );
-        await storage.replaceContests(previousContests);
         await storage.replaceTeammates(previousTeammates);
         await storage.saveRefreshLogs(previousRefreshLogs);
       } catch (rollbackError) {
@@ -190,7 +238,7 @@ class OjController extends ChangeNotifier {
     state = state.copyWith(
       config: await storage.loadConfig(),
       snapshots: await storage.loadSnapshots(),
-      refreshLogs: const [],
+      refreshLogs: coreBackup == null ? const [] : previousRefreshLogs,
       problems: await storage.loadProblems(),
       contests: await storage.loadContests(),
       teammates: await storage.loadTeammates(),
@@ -199,6 +247,7 @@ class OjController extends ChangeNotifier {
     );
     _recomputeSummaries();
     _schedule();
+    await _configureAutomaticBackup(runIfDue: false);
     notifyListeners();
     try {
       final startupSynced =
@@ -209,7 +258,12 @@ class OjController extends ChangeNotifier {
     } catch (_) {
       // Import restores local state even if the OS startup toggle cannot sync.
     }
-    return ImportResult(safetyBackupFile: safetyBackup.backupFile);
+    return ImportResult(
+      safetyBackupFile: safetyBackup.backupFile,
+      scope: coreBackup == null
+          ? BackupImportScope.portable
+          : BackupImportScope.coreTraining,
+    );
   }
 
   Future<void> refresh({bool syncAfterRefresh = true}) async {
@@ -452,6 +506,21 @@ class OjController extends ChangeNotifier {
     return problemBookService.parseLink(url);
   }
 
+  Future<void> toggleProblemFavorite(String id) async {
+    final problem = _problemById(id);
+    if (problem != null) await saveProblem(problem.copyWith(isFavorite: !problem.isFavorite));
+  }
+
+  Future<void> toggleProblemPinned(String id) async {
+    final problem = _problemById(id);
+    if (problem != null) await saveProblem(problem.copyWith(isPinned: !problem.isPinned));
+  }
+
+  Future<void> markProblemOpened(String id) async {
+    final problem = _problemById(id);
+    if (problem != null) await saveProblem(problem.copyWith(lastOpenedAt: DateTime.now(), updatedAt: problem.updatedAt));
+  }
+
   Future<void> saveProblem(ProblemRecord problem) async {
     final problems = problemBookService.upsert(state.problems, problem);
     await storage.saveProblems(problems);
@@ -465,9 +534,9 @@ class OjController extends ChangeNotifier {
     final uri = normalizeProblemUri(input.url);
     final platform =
         parseProblemPlatform(input.platform) ?? detectProblemPlatform(uri);
-    final externalId = input.externalId.isEmpty
-        ? extractProblemExternalId(uri, platform)
-        : input.externalId;
+    final extractedExternalId = extractProblemExternalId(uri, platform);
+    final externalId =
+        extractedExternalId.isNotEmpty ? extractedExternalId : input.externalId;
     final now = DateTime.now();
     final candidate = ProblemRecord.create(
       title: input.title.isEmpty
@@ -785,9 +854,117 @@ class OjController extends ChangeNotifier {
     );
   }
 
+  Future<AppConfig> _withResolvedAutomaticBackupDirectory(
+    AppConfig config,
+  ) async {
+    if (config.automaticBackup.directoryPath.trim().isNotEmpty) {
+      return config;
+    }
+    final directory =
+        await automaticBackupService.resolveDirectory(config.automaticBackup);
+    final resolved = config.copyWith(
+      automaticBackup: config.automaticBackup.copyWith(
+        directoryPath: directory.path,
+      ),
+    );
+    await storage.saveConfig(resolved);
+    return resolved;
+  }
+
+  Future<void> _configureAutomaticBackup({required bool runIfDue}) async {
+    _automaticBackupTimer?.cancel();
+    _automaticBackupTimer = null;
+    final config = state.config.automaticBackup;
+    try {
+      automaticBackupOverview = await automaticBackupService.inspect(config);
+      automaticBackupError = automaticBackupOverview!.invalidBackupCount > 0
+          ? '检测到 ${automaticBackupOverview!.invalidBackupCount} 个损坏的自动备份文件，已保留原文件。'
+          : '';
+    } catch (error) {
+      automaticBackupError = '无法检查自动备份目录：${normalizeError(error)}';
+    }
+    if (!config.enabled) {
+      return;
+    }
+
+    final now = automaticBackupService.currentTime;
+    final scheduledToday = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      config.timeMinutes ~/ 60,
+      config.timeMinutes % 60,
+    );
+    if (runIfDue && !now.isBefore(scheduledToday)) {
+      await _runAutomaticBackup(notify: false);
+    }
+    _scheduleNextAutomaticBackup();
+  }
+
+  void _scheduleNextAutomaticBackup() {
+    _automaticBackupTimer?.cancel();
+    final config = state.config.automaticBackup;
+    if (!config.enabled) {
+      _automaticBackupTimer = null;
+      return;
+    }
+    final now = automaticBackupService.currentTime;
+    var next = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      config.timeMinutes ~/ 60,
+      config.timeMinutes % 60,
+    );
+    if (!next.isAfter(now)) {
+      next = next.add(const Duration(days: 1));
+    }
+    _automaticBackupTimer = Timer(next.difference(now), () async {
+      await _runAutomaticBackup();
+      _scheduleNextAutomaticBackup();
+    });
+  }
+
+  Future<void> _runAutomaticBackup({bool notify = true}) async {
+    if (automaticBackupRunning || !state.config.automaticBackup.enabled) {
+      return;
+    }
+    automaticBackupRunning = true;
+    try {
+      final snapshot = await storage.loadCoreBackupSnapshot();
+      final result = await automaticBackupService.createBackup(
+        config: state.config.automaticBackup,
+        problems: snapshot.problems,
+        training: snapshot.training,
+        contests: snapshot.contests,
+      );
+      lastAutomaticBackupResult = result;
+      automaticBackupOverview = await automaticBackupService.inspect(
+        state.config.automaticBackup,
+      );
+      if (result.cleanupFailures.isNotEmpty) {
+        automaticBackupError =
+            '备份已完成，但 ${result.cleanupFailures.length} 个旧备份无法清理。';
+      } else if (result.invalidBackupCount > 0) {
+        automaticBackupError =
+            '检测到 ${result.invalidBackupCount} 个损坏的自动备份文件，已保留原文件。';
+      } else {
+        automaticBackupError = '';
+      }
+    } catch (error) {
+      automaticBackupError = '自动备份失败：${normalizeError(error)}';
+    } finally {
+      automaticBackupRunning = false;
+      if (notify) {
+        notifyListeners();
+      }
+    }
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
+    _automaticBackupTimer?.cancel();
     service.dispose();
     problemBookService.dispose();
     teammateService.dispose();

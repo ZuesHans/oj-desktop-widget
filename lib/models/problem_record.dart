@@ -29,6 +29,9 @@ class ProblemRecord {
     int reviewStage = 0,
     DateTime? nextReviewAt,
     DateTime? archivedAt,
+    bool isFavorite = false,
+    bool isPinned = false,
+    DateTime? lastOpenedAt,
   }) {
     final legacyStatus = status ?? ProblemStatus.TODO;
     return ProblemRecord._(
@@ -47,6 +50,9 @@ class ProblemRecord {
       reviewStage: reviewStage.clamp(0, 5).toInt(),
       nextReviewAt: nextReviewAt,
       archivedAt: archivedAt,
+      isFavorite: isFavorite,
+      isPinned: isPinned,
+      lastOpenedAt: lastOpenedAt,
       createdAt: createdAt,
       updatedAt: updatedAt,
       legacyStatusForMigration: workflowStatus == null ? legacyStatus : null,
@@ -68,6 +74,9 @@ class ProblemRecord {
     required this.reviewStage,
     required this.nextReviewAt,
     required this.archivedAt,
+    required this.isFavorite,
+    required this.isPinned,
+    required this.lastOpenedAt,
     required this.createdAt,
     required this.updatedAt,
     required this.legacyStatusForMigration,
@@ -106,6 +115,9 @@ class ProblemRecord {
       reviewStage: 0,
       nextReviewAt: null,
       archivedAt: null,
+      isFavorite: false,
+      isPinned: false,
+      lastOpenedAt: null,
       createdAt: timestamp,
       updatedAt: timestamp,
       legacyStatusForMigration: workflowStatus == null ? legacyStatus : null,
@@ -181,6 +193,9 @@ class ProblemRecord {
       return null;
     }
     final archivedAt = json['archivedAt'];
+    final lastOpenedAt = json['lastOpenedAt'];
+    final parsedLastOpenedAt = lastOpenedAt is String ? DateTime.tryParse(lastOpenedAt) : null;
+    if (lastOpenedAt != null && parsedLastOpenedAt == null) return null;
     final parsedArchivedAt =
         archivedAt is String ? DateTime.tryParse(archivedAt) : null;
     if (archivedAt != null && parsedArchivedAt == null) {
@@ -206,6 +221,9 @@ class ProblemRecord {
       reviewStage: reviewStage is int ? reviewStage : 0,
       nextReviewAt: parsedNextReviewAt,
       archivedAt: parsedArchivedAt,
+      isFavorite: json['isFavorite'] == true,
+      isPinned: json['isPinned'] == true,
+      lastOpenedAt: parsedLastOpenedAt,
       createdAt: parsedCreatedAt,
       updatedAt: parsedUpdatedAt,
       legacyStatusForMigration:
@@ -227,6 +245,9 @@ class ProblemRecord {
   final int reviewStage;
   final DateTime? nextReviewAt;
   final DateTime? archivedAt;
+  final bool isFavorite;
+  final bool isPinned;
+  final DateTime? lastOpenedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
   final ProblemStatus? legacyStatusForMigration;
@@ -250,6 +271,10 @@ class ProblemRecord {
     bool clearNextReviewAt = false,
     DateTime? archivedAt,
     bool clearArchivedAt = false,
+    bool? isFavorite,
+    bool? isPinned,
+    DateTime? lastOpenedAt,
+    bool clearLastOpenedAt = false,
     DateTime? updatedAt,
   }) {
     return ProblemRecord._(
@@ -271,6 +296,9 @@ class ProblemRecord {
       nextReviewAt:
           clearNextReviewAt ? null : nextReviewAt ?? this.nextReviewAt,
       archivedAt: clearArchivedAt ? null : archivedAt ?? this.archivedAt,
+      isFavorite: isFavorite ?? this.isFavorite,
+      isPinned: isPinned ?? this.isPinned,
+      lastOpenedAt: clearLastOpenedAt ? null : lastOpenedAt ?? this.lastOpenedAt,
       createdAt: createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
       legacyStatusForMigration: null,
@@ -291,6 +319,9 @@ class ProblemRecord {
         'difficulty': difficulty,
         'externalId': externalId,
         'archivedAt': archivedAt?.toIso8601String(),
+        'isFavorite': isFavorite,
+        'isPinned': isPinned,
+        'lastOpenedAt': lastOpenedAt?.toIso8601String(),
         'created_at': createdAt.toIso8601String(),
         'updated_at': updatedAt.toIso8601String(),
       };
@@ -490,3 +521,4 @@ String buildProblemId(DateTime time) {
   final micros = time.microsecondsSinceEpoch.toRadixString(36);
   return 'p$micros';
 }
+

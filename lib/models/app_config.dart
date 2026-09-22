@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../core/oj_catalog.dart';
+import 'quick_entry_shortcut.dart';
 
 const defaultDashboardModules = <DashboardModule>[
   DashboardModule.summary,
@@ -14,7 +15,7 @@ const defaultDashboardModules = <DashboardModule>[
   DashboardModule.daily,
 ];
 
-const currentAppConfigVersion = 2;
+const currentAppConfigVersion = 3;
 
 enum DashboardModule {
   summary('summary'),
@@ -33,9 +34,9 @@ enum DashboardModule {
 }
 
 enum AppColorTheme {
+  githubLight('githubLight'),
+  terminalDark('terminalDark'),
   classic('classic'),
-  ocean('ocean'),
-  rose('rose'),
   dark('dark'),
   candy('candy');
 
@@ -52,8 +53,10 @@ class AppConfig {
     this.dashboardModules = defaultDashboardModules,
     this.colorTheme = AppColorTheme.classic,
     this.sync = const SyncConfig(),
+    this.automaticBackup = const AutomaticBackupConfig(),
     this.launchAtStartup = false,
     this.closeToTray = false,
+    this.quickEntryHotkey = 'Ctrl+Shift+O',
   });
 
   factory AppConfig.defaults() {
@@ -62,6 +65,7 @@ class AppConfig {
       launchAtStartup: false,
       closeToTray: false,
       sync: const SyncConfig(),
+      automaticBackup: const AutomaticBackupConfig(),
       dashboardModules: defaultDashboardModules,
       colorTheme: AppColorTheme.classic,
       accounts: {
@@ -75,7 +79,7 @@ class AppConfig {
     final rawAccounts = json['accounts'];
     final storedVersion =
         json['configVersion'] is int ? json['configVersion'] as int : 1;
-    final isLegacyFloatingConfig = storedVersion < currentAppConfigVersion;
+    final isLegacyFloatingConfig = storedVersion < 2;
     return AppConfig(
       configVersion: currentAppConfigVersion,
       refreshIntervalMinutes: _parseRefreshInterval(
@@ -89,8 +93,12 @@ class AppConfig {
           ? json['closeToTray'] as bool
           : false,
       sync: SyncConfig.fromJson(json['sync']),
+      automaticBackup: AutomaticBackupConfig.fromJson(
+        json['automaticBackup'],
+      ),
       dashboardModules: _parseDashboardModules(json['dashboardModules']),
       colorTheme: _parseColorTheme(json['colorTheme']),
+      quickEntryHotkey: _parseQuickEntryHotkey(json['quickEntryHotkey']),
       accounts: {
         for (final meta in supportedOjs)
           meta.id: _parseAccountConfig(
@@ -131,8 +139,10 @@ class AppConfig {
       launchAtStartup: false,
       closeToTray: false,
       sync: const SyncConfig(),
+      automaticBackup: const AutomaticBackupConfig(),
       dashboardModules: _parseDashboardModules(json['dashboardModules']),
       colorTheme: _parseColorTheme(json['colorTheme']),
+      quickEntryHotkey: _parseQuickEntryHotkey(json['quickEntryHotkey']),
       accounts: accounts,
     );
   }
@@ -184,7 +194,13 @@ class AppConfig {
     return null;
   }
 
+  static String _parseQuickEntryHotkey(Object? value) => value is String
+      ? QuickEntryShortcut.parse(value)?.label ??
+          QuickEntryShortcut.defaultLabel
+      : QuickEntryShortcut.defaultLabel;
+
   static AppColorTheme _parseColorTheme(Object? value) {
+    if (value == 'ocean' || value == 'rose') return AppColorTheme.githubLight;
     if (value is String) {
       for (final theme in AppColorTheme.values) {
         if (theme.id == value) {
@@ -202,7 +218,9 @@ class AppConfig {
   final AppColorTheme colorTheme;
   final bool launchAtStartup;
   final bool closeToTray;
+  final String quickEntryHotkey;
   final SyncConfig sync;
+  final AutomaticBackupConfig automaticBackup;
 
   AppConfig copyWith({
     int? configVersion,
@@ -212,7 +230,9 @@ class AppConfig {
     AppColorTheme? colorTheme,
     bool? launchAtStartup,
     bool? closeToTray,
+    String? quickEntryHotkey,
     SyncConfig? sync,
+    AutomaticBackupConfig? automaticBackup,
   }) {
     return AppConfig(
       configVersion: configVersion ?? this.configVersion,
@@ -223,7 +243,9 @@ class AppConfig {
       colorTheme: colorTheme ?? this.colorTheme,
       launchAtStartup: launchAtStartup ?? this.launchAtStartup,
       closeToTray: closeToTray ?? this.closeToTray,
+      quickEntryHotkey: quickEntryHotkey ?? this.quickEntryHotkey,
       sync: sync ?? this.sync,
+      automaticBackup: automaticBackup ?? this.automaticBackup,
     );
   }
 
@@ -232,13 +254,62 @@ class AppConfig {
         'refreshIntervalMinutes': refreshIntervalMinutes,
         'launchAtStartup': launchAtStartup,
         'closeToTray': closeToTray,
+        'quickEntryHotkey': quickEntryHotkey,
         'dashboardModules':
             dashboardModules.map((module) => module.id).toList(),
         'colorTheme': colorTheme.id,
         'sync': sync.toJson(),
+        'automaticBackup': automaticBackup.toJson(),
         'accounts': {
           for (final entry in accounts.entries) entry.key: entry.value.toJson(),
         },
+      };
+}
+
+class AutomaticBackupConfig {
+  const AutomaticBackupConfig({
+    this.enabled = false,
+    this.timeMinutes = 22 * 60,
+    this.directoryPath = '',
+  });
+
+  factory AutomaticBackupConfig.fromJson(Object? value) {
+    if (value is! Map) {
+      return const AutomaticBackupConfig();
+    }
+    final json = Map<String, dynamic>.from(value);
+    final rawTime = json['timeMinutes'];
+    final timeMinutes =
+        rawTime is int && rawTime >= 0 && rawTime < 24 * 60 ? rawTime : 22 * 60;
+    return AutomaticBackupConfig(
+      enabled: json['enabled'] is bool ? json['enabled'] as bool : false,
+      timeMinutes: timeMinutes,
+      directoryPath: json['directoryPath'] is String
+          ? (json['directoryPath'] as String).trim()
+          : '',
+    );
+  }
+
+  final bool enabled;
+  final int timeMinutes;
+  final String directoryPath;
+
+  AutomaticBackupConfig copyWith({
+    bool? enabled,
+    int? timeMinutes,
+    String? directoryPath,
+  }) {
+    return AutomaticBackupConfig(
+      enabled: enabled ?? this.enabled,
+      timeMinutes: timeMinutes ?? this.timeMinutes,
+      directoryPath: directoryPath?.trim() ?? this.directoryPath,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'enabled': enabled,
+        'timeMinutes': timeMinutes,
+        'directoryPath': directoryPath,
       };
 }
 

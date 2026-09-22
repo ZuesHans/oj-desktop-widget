@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/solved_totals.dart';
@@ -17,6 +20,8 @@ class ProblemsPage extends StatefulWidget {
     required this.onSave,
     required this.onDelete,
     required this.onOpenProblem,
+    this.onToggleFavorite,
+    this.onTogglePinned,
     this.onRestore,
     this.onPermanentDelete,
     this.onStartTraining,
@@ -32,6 +37,8 @@ class ProblemsPage extends StatefulWidget {
   final Future<void> Function(String id)? onRestore;
   final Future<void> Function(String id)? onPermanentDelete;
   final Future<void> Function(ProblemRecord problem)? onStartTraining;
+  final Future<void> Function(String id)? onToggleFavorite;
+  final Future<void> Function(String id)? onTogglePinned;
   final bool showBackButton;
 
   @override
@@ -44,6 +51,15 @@ class _ProblemsPageState extends State<ProblemsPage> {
   ProblemPlatform? _platformFilter;
   String? _tagFilter;
   String _query = '';
+  String _specialFilter = '全部';
+  final Set<String> _selectedIds = <String>{};
+
+  @override
+  void didUpdateWidget(covariant ProblemsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final availableIds = widget.problems.map((problem) => problem.id).toSet();
+    _selectedIds.removeWhere((id) => !availableIds.contains(id));
+  }
 
   @override
   void dispose() {
@@ -59,7 +75,20 @@ class _ProblemsPageState extends State<ProblemsPage> {
       workflowStatus: _statusFilter,
       platform: _platformFilter,
       tag: _tagFilter,
-    );
+    ).where((problem) {
+      return switch (_specialFilter) {
+        '收藏' => problem.isFavorite,
+        '置顶' => problem.isPinned,
+        '最近打开' => problem.lastOpenedAt != null,
+        '最近编辑' => true,
+        _ => true,
+      };
+    }).toList()
+      ..sort((a, b) {
+        if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+        if (_specialFilter == '最近打开') return (b.lastOpenedAt ?? DateTime(0)).compareTo(a.lastOpenedAt ?? DateTime(0));
+        return b.updatedAt.compareTo(a.updatedAt);
+      });
     final tagStats = buildProblemTagStats(
       widget.problems,
       platform: _platformFilter,
@@ -107,6 +136,20 @@ class _ProblemsPageState extends State<ProblemsPage> {
                       isDense: true,
                     ),
                     onChanged: (value) => setState(() => _query = value),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    key: const ValueKey('problem-special-filter'),
+                    initialValue: _specialFilter,
+                    decoration: const InputDecoration(labelText: '快速访问'),
+                    items: const [
+                      DropdownMenuItem(value: '全部', child: Text('全部题目')),
+                      DropdownMenuItem(value: '收藏', child: Text('收藏')),
+                      DropdownMenuItem(value: '置顶', child: Text('置顶')),
+                      DropdownMenuItem(value: '最近打开', child: Text('最近打开')),
+                      DropdownMenuItem(value: '最近编辑', child: Text('最近编辑')),
+                    ],
+                    onChanged: (value) => setState(() => _specialFilter = value ?? '全部'),
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -196,6 +239,27 @@ class _ProblemsPageState extends State<ProblemsPage> {
                 ],
               ),
             ),
+            if (_selectedIds.isNotEmpty)
+              _BatchToolbar(
+                selectedCount: _selectedIds.length,
+                allVisibleSelected: visible.isNotEmpty &&
+                    visible.every((p) => _selectedIds.contains(p.id)),
+                onToggleAll: () => setState(() {
+                  final all = visible.isNotEmpty &&
+                      visible.every((p) => _selectedIds.contains(p.id));
+                  if (all) {
+                    _selectedIds.removeAll(visible.map((p) => p.id));
+                  } else {
+                    _selectedIds.addAll(visible.map((p) => p.id));
+                  }
+                }),
+                onClear: () => setState(() => _selectedIds.clear()),
+                onArchive: () => _archiveSelected(context),
+                onTags: () => _editSelectedTags(context),
+                onExport: () => _exportSelected(context),
+                onChangeStatus: (status) =>
+                    _changeSelectedStatus(context, status),
+              ),
             Expanded(
               child: visible.isEmpty
                   ? Padding(
@@ -233,6 +297,14 @@ class _ProblemsPageState extends State<ProblemsPage> {
                           itemCount: visible.length,
                           itemBuilder: (context, index) => _ProblemListItem(
                             problem: visible[index],
+                            selected: _selectedIds.contains(visible[index].id),
+                            onSelected: (value) => setState(() {
+                              if (value) {
+                                _selectedIds.add(visible[index].id);
+                              } else {
+                                _selectedIds.remove(visible[index].id);
+                              }
+                            }),
                             onView: () => _openDetails(
                               context,
                               visible[index],
@@ -247,6 +319,8 @@ class _ProblemsPageState extends State<ProblemsPage> {
                             onDelete: () => _delete(context, visible[index]),
                             onOpenProblem: () =>
                                 _openProblem(context, visible[index]),
+                            onToggleFavorite: widget.onToggleFavorite == null ? null : () => widget.onToggleFavorite!(visible[index].id),
+                            onTogglePinned: widget.onTogglePinned == null ? null : () => widget.onTogglePinned!(visible[index].id),
                             onRestore: widget.onRestore == null
                                 ? null
                                 : () => _restore(context, visible[index]),
@@ -265,6 +339,112 @@ class _ProblemsPageState extends State<ProblemsPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _editSelectedTags(BuildContext context) async {
+    final controller = TextEditingController();
+    final tagsText = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+                title: const Text('批量标签'),
+                content: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Text('输入以逗号分隔的标签'),
+                  const SizedBox(height: 8),
+                  TextField(
+                      controller: controller,
+                      autofocus: true,
+                      decoration: const InputDecoration(hintText: '例如：图论, 待重做'))
+                ]),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      child: const Text('取消')),
+                  FilledButton(
+                      onPressed: () =>
+                          Navigator.pop(dialogContext, controller.text),
+                      child: const Text('添加标签'))
+                ]));
+    controller.dispose();
+    if (tagsText == null) return;
+    final tags = normalizeProblemTags(tagsText.split(','));
+    if (tags.isEmpty) return;
+    final selected =
+        widget.problems.where((p) => _selectedIds.contains(p.id)).toList();
+    for (final problem in selected) {
+      await widget.onSave(problem.copyWith(
+          tags: normalizeProblemTags([...problem.tags, ...tags]),
+          updatedAt: DateTime.now()));
+    }
+    if (!context.mounted) return;
+    setState(() => _selectedIds.clear());
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('已为 ${selected.length} 项添加标签')));
+  }
+
+  Future<void> _exportSelected(BuildContext context) async {
+    final selected =
+        widget.problems.where((p) => _selectedIds.contains(p.id)).toList();
+    final path = await FilePicker.platform.saveFile(
+        dialogTitle: '导出题目 Markdown',
+        fileName: 'oj-problems.md',
+        type: FileType.custom,
+        allowedExtensions: ['md']);
+    if (path == null) return;
+    final buffer = StringBuffer('# OJ 题目导出\n\n');
+    for (final p in selected) {
+      buffer.writeln(
+          '## [${p.title}](${p.url})\n\n- 平台：${problemPlatformLabel(p.platform)}\n- 状态：${problemWorkflowStatusLabel(p.workflowStatus)}\n- 标签：${p.tags.join('、')}\n- 日期：${p.date}\n\n${p.note.isEmpty ? '' : '### 备注\n${p.note}\n\n'}${p.analysis.isEmpty ? '' : '### 题解\n${p.analysis}\n\n'}---\n');
+    }
+    await File(path).writeAsString(buffer.toString());
+    if (!context.mounted) return;
+    setState(() => _selectedIds.clear());
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('已导出 ${selected.length} 项')));
+  }
+
+  Future<void> _changeSelectedStatus(
+      BuildContext context, ProblemWorkflowStatus status) async {
+    final selected =
+        widget.problems.where((p) => _selectedIds.contains(p.id)).toList();
+    for (final problem in selected) {
+      await widget.onSave(problem.copyWith(
+          workflowStatus: status,
+          archivedAt:
+              status == ProblemWorkflowStatus.archived ? DateTime.now() : null,
+          clearArchivedAt: status != ProblemWorkflowStatus.archived,
+          updatedAt: DateTime.now()));
+    }
+    if (!context.mounted) return;
+    setState(() => _selectedIds.clear());
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('已批量修改 ${selected.length} 项')));
+  }
+
+  Future<void> _archiveSelected(BuildContext context) async {
+    final selected =
+        widget.problems.where((p) => _selectedIds.contains(p.id)).toList();
+    final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+                    title: const Text('批量归档？'),
+                    content: Text('将归档 ${selected.length} 道题目，之后仍可恢复。'),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(dialogContext, false),
+                          child: const Text('取消')),
+                      FilledButton(
+                          onPressed: () => Navigator.pop(dialogContext, true),
+                          child: const Text('归档'))
+                    ])) ??
+        false;
+    if (!confirmed) return;
+    for (final problem in selected) {
+      await widget.onDelete(problem.id);
+    }
+    if (!context.mounted) return;
+    setState(() => _selectedIds.clear());
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('已归档 ${selected.length} 项')));
   }
 
   Future<void> _openEditor(
@@ -640,24 +820,91 @@ class _SummaryMetric extends StatelessWidget {
   }
 }
 
+class _BatchToolbar extends StatelessWidget {
+  const _BatchToolbar(
+      {required this.selectedCount,
+      required this.allVisibleSelected,
+      required this.onToggleAll,
+      required this.onClear,
+      required this.onArchive,
+      required this.onTags,
+      required this.onExport,
+      required this.onChangeStatus});
+  final int selectedCount;
+  final bool allVisibleSelected;
+  final VoidCallback onToggleAll;
+  final VoidCallback onClear;
+  final VoidCallback onArchive;
+  final VoidCallback onTags;
+  final VoidCallback onExport;
+  final ValueChanged<ProblemWorkflowStatus> onChangeStatus;
+  @override
+  Widget build(BuildContext context) => Container(
+      margin: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+          color: accentColor.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(appRadiusControl),
+          border: Border.all(color: accentColor.withValues(alpha: 0.25))),
+      child: Row(children: [
+        Checkbox(value: allVisibleSelected, onChanged: (_) => onToggleAll()),
+        Text('已选 $selectedCount 项'),
+        const Spacer(),
+        PopupMenuButton<ProblemWorkflowStatus>(
+            tooltip: '批量修改状态',
+            onSelected: onChangeStatus,
+            itemBuilder: (_) => [
+                  for (final status in ProblemWorkflowStatus.values)
+                    PopupMenuItem(
+                        value: status,
+                        child: Text(problemWorkflowStatusLabel(status)))
+                ],
+            child: const Padding(
+                padding: EdgeInsets.all(8),
+                child: Icon(Icons.edit_note_outlined))),
+        IconButton(
+            tooltip: '批量标签',
+            onPressed: onTags,
+            icon: const Icon(Icons.sell_outlined)),
+        IconButton(
+            tooltip: '导出 Markdown',
+            onPressed: onExport,
+            icon: const Icon(Icons.file_download_outlined)),
+        IconButton(
+            tooltip: '批量归档',
+            onPressed: onArchive,
+            icon: const Icon(Icons.archive_outlined)),
+        IconButton(
+            tooltip: '取消选择', onPressed: onClear, icon: const Icon(Icons.close))
+      ]));
+}
+
 class _ProblemListItem extends StatelessWidget {
   const _ProblemListItem({
     required this.problem,
+    required this.selected,
+    required this.onSelected,
     required this.onView,
     required this.onEdit,
     required this.onStatusChanged,
     required this.onDelete,
     required this.onOpenProblem,
+    this.onToggleFavorite,
+    this.onTogglePinned,
     this.onRestore,
     this.onStartTraining,
   });
 
   final ProblemRecord problem;
+  final bool selected;
+  final ValueChanged<bool> onSelected;
   final VoidCallback onView;
   final VoidCallback onEdit;
   final ValueChanged<ProblemWorkflowStatus> onStatusChanged;
   final VoidCallback onDelete;
   final VoidCallback onOpenProblem;
+  final VoidCallback? onToggleFavorite;
+  final VoidCallback? onTogglePinned;
   final VoidCallback? onRestore;
   final VoidCallback? onStartTraining;
 
@@ -681,6 +928,12 @@ class _ProblemListItem extends StatelessWidget {
           Container(
             width: 4,
             color: statusColor.withValues(alpha: 0.85),
+          ),
+          SizedBox(
+            width: 42,
+            child: Checkbox(
+                value: selected,
+                onChanged: (value) => onSelected(value ?? false)),
           ),
           Expanded(
             child: Padding(
@@ -760,6 +1013,18 @@ class _ProblemListItem extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
+                      _CompactActionButton(
+                        key: ValueKey('favorite-problem-${problem.id}'),
+                        tooltip: problem.isFavorite ? '取消收藏' : '收藏',
+                        onPressed: onToggleFavorite,
+                        icon: problem.isFavorite ? Icons.favorite : Icons.favorite_border,
+                      ),
+                      _CompactActionButton(
+                        key: ValueKey('pin-problem-${problem.id}'),
+                        tooltip: problem.isPinned ? '取消置顶' : '置顶',
+                        onPressed: onTogglePinned,
+                        icon: problem.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                      ),
                       _CompactActionButton(
                         key: ValueKey('view-problem-${problem.id}'),
                         tooltip: '查看详情',

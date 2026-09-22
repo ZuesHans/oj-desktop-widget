@@ -15,16 +15,19 @@ void main() {
   Future<_FakeWindowShell> pumpClient(
     WidgetTester tester, {
     required AppConfig config,
+    BrowserImportServer? browserImportServer,
+    List<String>? lifecycleEvents,
   }) async {
-    final shell = _FakeWindowShell();
-    await tester.pumpWidget(
-      OjFloatApp(
+    final shell = _FakeWindowShell(lifecycleEvents: lifecycleEvents);
+    await tester.pumpWidget(MaterialApp(
+      home: OjFloatHome(
         initialConfig: config,
         windowShell: shell,
+        browserImportServer: browserImportServer,
         enablePlatformIntegration: true,
         autoInitializeController: false,
       ),
-    );
+    ));
     await tester.pumpAndSettle();
     return shell;
   }
@@ -45,6 +48,41 @@ void main() {
 
     expect(shell.exitCalls, 1);
     expect(shell.hideCalls, 0);
+  });
+
+  testWidgets('native exit stops browser import before closing the window',
+      (tester) async {
+    final lifecycleEvents = <String>[];
+    final server = _RecordingBrowserImportServer(lifecycleEvents);
+    final shell = await pumpClient(
+      tester,
+      config: AppConfig.defaults(),
+      browserImportServer: server,
+      lifecycleEvents: lifecycleEvents,
+    );
+
+    shell.windowListener!.onWindowClose();
+    await tester.pumpAndSettle();
+
+    expect(lifecycleEvents, ['browser-import-stop', 'window-exit']);
+  });
+
+  testWidgets('browser import cleanup failure does not block native exit',
+      (tester) async {
+    final lifecycleEvents = <String>[];
+    final server = _FailingBrowserImportServer(lifecycleEvents);
+    final shell = await pumpClient(
+      tester,
+      config: AppConfig.defaults(),
+      browserImportServer: server,
+      lifecycleEvents: lifecycleEvents,
+    );
+
+    shell.windowListener!.onWindowClose();
+    await tester.pumpAndSettle();
+
+    expect(lifecycleEvents, ['browser-import-stop', 'window-exit']);
+    expect(shell.exitCalls, 1);
   });
 
   testWidgets('tray close confirms dirty settings before hiding',
@@ -115,6 +153,9 @@ void main() {
 }
 
 class _FakeWindowShell implements WindowShell {
+  _FakeWindowShell({this.lifecycleEvents});
+
+  final List<String>? lifecycleEvents;
   TrayListener? trayListener;
   WindowListener? windowListener;
   int hideCalls = 0;
@@ -169,6 +210,30 @@ class _FakeWindowShell implements WindowShell {
 
   @override
   Future<void> exitApp() async {
+    lifecycleEvents?.add('window-exit');
     exitCalls++;
+  }
+}
+
+class _RecordingBrowserImportServer extends BrowserImportServer {
+  _RecordingBrowserImportServer(this.lifecycleEvents);
+
+  final List<String> lifecycleEvents;
+
+  @override
+  Future<void> stop() async {
+    lifecycleEvents.add('browser-import-stop');
+  }
+}
+
+class _FailingBrowserImportServer extends BrowserImportServer {
+  _FailingBrowserImportServer(this.lifecycleEvents);
+
+  final List<String> lifecycleEvents;
+
+  @override
+  Future<void> stop() async {
+    lifecycleEvents.add('browser-import-stop');
+    throw StateError('simulated cleanup failure');
   }
 }

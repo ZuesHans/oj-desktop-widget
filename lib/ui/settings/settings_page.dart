@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/oj_catalog.dart';
 import '../../models/app_config.dart';
+import '../../models/quick_entry_shortcut.dart';
 import '../app_theme.dart';
 import '../shared/app_surface_card.dart';
 
@@ -28,6 +29,10 @@ class SettingsPage extends StatefulWidget {
     this.browserImportPort = 27121,
     this.browserImportError = '',
     this.onRotateBrowserImportToken,
+    this.onChooseAutomaticBackupDirectory,
+    this.automaticBackupLastSuccessAt,
+    this.automaticBackupLastPath,
+    this.automaticBackupError = '',
   });
 
   final AppConfig config;
@@ -38,6 +43,10 @@ class SettingsPage extends StatefulWidget {
   final int browserImportPort;
   final String browserImportError;
   final Future<void> Function()? onRotateBrowserImportToken;
+  final Future<String?> Function()? onChooseAutomaticBackupDirectory;
+  final DateTime? automaticBackupLastSuccessAt;
+  final String? automaticBackupLastPath;
+  final String automaticBackupError;
 
   @override
   SettingsPageState createState() => SettingsPageState();
@@ -47,6 +56,7 @@ class SettingsPageState extends State<SettingsPage> {
   late final TextEditingController _intervalController;
   late final TextEditingController _syncEndpointController;
   late final TextEditingController _syncTokenController;
+  late final TextEditingController _quickEntryHotkeyController;
   late final Map<String, TextEditingController> _accountControllers;
   late final Map<String, bool> _accountEnabled;
 
@@ -58,6 +68,10 @@ class SettingsPageState extends State<SettingsPage> {
   late bool _includeProblemNote;
   late bool _includeProblemAnalysis;
   late bool _autoSyncAfterRefresh;
+  late bool _automaticBackupEnabled;
+  late AppColorTheme _colorTheme;
+  late TimeOfDay _automaticBackupTime;
+  late String _automaticBackupDirectoryPath;
 
   bool _dirty = false;
   bool _saving = false;
@@ -72,6 +86,8 @@ class SettingsPageState extends State<SettingsPage> {
       text: widget.config.sync.endpointUrl,
     );
     _syncTokenController = TextEditingController(text: widget.initialSyncToken);
+    _quickEntryHotkeyController =
+        TextEditingController(text: widget.config.quickEntryHotkey);
     _accountControllers = {
       for (final meta in supportedOjs)
         meta.id: TextEditingController(
@@ -90,6 +106,13 @@ class SettingsPageState extends State<SettingsPage> {
     _includeProblemNote = widget.config.sync.includeProblemNote;
     _includeProblemAnalysis = widget.config.sync.includeProblemAnalysis;
     _autoSyncAfterRefresh = widget.config.sync.autoSyncAfterRefresh;
+    _automaticBackupEnabled = widget.config.automaticBackup.enabled;
+    _colorTheme = widget.config.colorTheme;
+    _automaticBackupTime = TimeOfDay(
+      hour: widget.config.automaticBackup.timeMinutes ~/ 60,
+      minute: widget.config.automaticBackup.timeMinutes % 60,
+    );
+    _automaticBackupDirectoryPath = widget.config.automaticBackup.directoryPath;
   }
 
   @override
@@ -97,6 +120,7 @@ class SettingsPageState extends State<SettingsPage> {
     _intervalController.dispose();
     _syncEndpointController.dispose();
     _syncTokenController.dispose();
+    _quickEntryHotkeyController.dispose();
     for (final controller in _accountControllers.values) {
       controller.dispose();
     }
@@ -151,6 +175,15 @@ class SettingsPageState extends State<SettingsPage> {
       _includeProblemNote = widget.config.sync.includeProblemNote;
       _includeProblemAnalysis = widget.config.sync.includeProblemAnalysis;
       _autoSyncAfterRefresh = widget.config.sync.autoSyncAfterRefresh;
+      _automaticBackupEnabled = widget.config.automaticBackup.enabled;
+      _colorTheme = widget.config.colorTheme;
+      _quickEntryHotkeyController.text = widget.config.quickEntryHotkey;
+      _automaticBackupTime = TimeOfDay(
+        hour: widget.config.automaticBackup.timeMinutes ~/ 60,
+        minute: widget.config.automaticBackup.timeMinutes % 60,
+      );
+      _automaticBackupDirectoryPath =
+          widget.config.automaticBackup.directoryPath;
       _dirty = false;
     });
   }
@@ -176,6 +209,44 @@ class SettingsPageState extends State<SettingsPage> {
                   subtitle: '控制自动刷新频率和客户端后台行为',
                   child: Column(
                     children: [
+                      DropdownButtonFormField<AppColorTheme>(
+                        key: const ValueKey('color-theme-field'),
+                        initialValue: _colorTheme,
+                        decoration: const InputDecoration(
+                          labelText: '配色皮肤',
+                          helperText: '保存后立即应用到整个工作台',
+                        ),
+                        items: [
+                          for (final theme in AppColorTheme.values)
+                            DropdownMenuItem(
+                              value: theme,
+                              child: Text(_colorThemeLabel(theme)),
+                            ),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() {
+                            _colorTheme = value;
+                            _dirty = true;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: appSpace2),
+                      _ColorThemePreview(theme: _colorTheme),
+                      const SizedBox(height: appSpace3),
+                      TextField(
+                        key: const ValueKey('quick-entry-hotkey-field'),
+                        controller: _quickEntryHotkeyController,
+                        textCapitalization: TextCapitalization.characters,
+                        decoration: const InputDecoration(
+                          labelText: '快速录入快捷键',
+                          hintText: '例如 Ctrl+Shift+O、Alt+Shift+Q',
+                          helperText:
+                              '保存后立即重新注册；冲突时可修改。至少包含 Ctrl 或 Alt + 一个字母或数字，可加 Shift',
+                        ),
+                        onChanged: (_) => _markDirty(),
+                      ),
+                      const SizedBox(height: appSpace3),
                       TextField(
                         key: const ValueKey('refresh-interval-field'),
                         controller: _intervalController,
@@ -221,6 +292,133 @@ class SettingsPageState extends State<SettingsPage> {
                               }
                             : null,
                       ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: appSpace4),
+                _SettingsSection(
+                  icon: Icons.backup_outlined,
+                  title: '自动备份',
+                  subtitle: '仅备份题目、题单、每日安排、训练复盘和比赛复盘',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SwitchListTile(
+                        key: const ValueKey('automatic-backup-switch'),
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('启用轮换自动备份'),
+                        subtitle: const Text('应用运行时按设定时间备份；每天最多一份'),
+                        value: _automaticBackupEnabled,
+                        onChanged: (value) {
+                          setState(() {
+                            _automaticBackupEnabled = value;
+                            _dirty = true;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: appSpace2),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '备份时间',
+                              style: TextStyle(
+                                color: textPrimaryColor,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          OutlinedButton.icon(
+                            key: const ValueKey('automatic-backup-time-button'),
+                            onPressed: _automaticBackupEnabled
+                                ? _pickAutomaticBackupTime
+                                : null,
+                            icon: const Icon(Icons.schedule_outlined),
+                            label:
+                                Text(_formatBackupTime(_automaticBackupTime)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: appSpace3),
+                      Text(
+                        '保存位置',
+                        style: TextStyle(
+                          color: textPrimaryColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      SelectableText(
+                        _automaticBackupDirectoryPath.isEmpty
+                            ? '尚未确定备份目录'
+                            : _automaticBackupDirectoryPath,
+                        key: const ValueKey('automatic-backup-directory-path'),
+                        style: TextStyle(
+                          color: textSecondaryColor,
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: appSpace2),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: OutlinedButton.icon(
+                          key: const ValueKey(
+                            'choose-automatic-backup-directory',
+                          ),
+                          onPressed:
+                              widget.onChooseAutomaticBackupDirectory == null
+                                  ? null
+                                  : _chooseAutomaticBackupDirectory,
+                          icon: const Icon(Icons.folder_open_outlined),
+                          label: const Text('选择文件夹'),
+                        ),
+                      ),
+                      const SizedBox(height: appSpace2),
+                      Text(
+                        '保留最近 7 个备份日，并额外保留更早的最近 4 周各一份。'
+                        '导入前安全备份也保存在此目录，但不会被自动删除。',
+                        style: TextStyle(
+                          color: textSecondaryColor,
+                          fontSize: 12,
+                          height: 1.45,
+                        ),
+                      ),
+                      if (widget.automaticBackupLastSuccessAt != null) ...[
+                        const SizedBox(height: appSpace2),
+                        Text(
+                          '上次有效备份：${_formatBackupDateTime(widget.automaticBackupLastSuccessAt!)}',
+                          key: const ValueKey('automatic-backup-last-success'),
+                          style: TextStyle(
+                            color: textSecondaryColor,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                      if (widget.automaticBackupLastPath?.isNotEmpty ==
+                          true) ...[
+                        const SizedBox(height: 4),
+                        SelectableText(
+                          widget.automaticBackupLastPath!,
+                          key: const ValueKey('automatic-backup-last-path'),
+                          style: TextStyle(
+                            color: textSecondaryColor,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                      if (widget.automaticBackupError.isNotEmpty) ...[
+                        const SizedBox(height: appSpace2),
+                        Text(
+                          widget.automaticBackupError,
+                          key: const ValueKey('automatic-backup-error'),
+                          style: TextStyle(
+                            color: dangerColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -535,6 +733,14 @@ class SettingsPageState extends State<SettingsPage> {
       return;
     }
 
+    final shortcut = QuickEntryShortcut.parse(_quickEntryHotkeyController.text);
+    if (shortcut == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('快捷键需要 Ctrl 或 Alt，加一个字母或数字；可同时加 Shift，例如 Ctrl+Shift+O。')));
+      return;
+    }
+
     final accounts = {
       for (final meta in supportedOjs)
         meta.id: OjAccountConfig(
@@ -544,11 +750,26 @@ class SettingsPageState extends State<SettingsPage> {
           enabled: _accountEnabled[meta.id] ?? false,
         ),
     };
+    if (_automaticBackupEnabled &&
+        _automaticBackupDirectoryPath.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先选择自动备份文件夹。')),
+      );
+      return;
+    }
     final config = widget.config.copyWith(
       refreshIntervalMinutes: interval,
+      colorTheme: _colorTheme,
+      quickEntryHotkey: shortcut.label,
       accounts: accounts,
       closeToTray: _closeToTray,
       launchAtStartup: _closeToTray && _launchAtStartup,
+      automaticBackup: AutomaticBackupConfig(
+        enabled: _automaticBackupEnabled,
+        timeMinutes:
+            _automaticBackupTime.hour * 60 + _automaticBackupTime.minute,
+        directoryPath: _automaticBackupDirectoryPath,
+      ),
       sync: SyncConfig(
         enabled: _syncEnabled,
         endpointUrl: _syncEndpointController.text.trim(),
@@ -575,6 +796,7 @@ class SettingsPageState extends State<SettingsPage> {
       setState(() {
         _saving = false;
         _dirty = false;
+        _quickEntryHotkeyController.text = shortcut.label;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(syncNow ? '设置已保存并完成同步。' : '设置已保存。')),
@@ -589,6 +811,46 @@ class SettingsPageState extends State<SettingsPage> {
       );
     }
   }
+
+  Future<void> _pickAutomaticBackupTime() async {
+    final selected = await showTimePicker(
+      context: context,
+      initialTime: _automaticBackupTime,
+      helpText: '选择每日自动备份时间',
+    );
+    if (selected == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _automaticBackupTime = selected;
+      _dirty = true;
+    });
+  }
+
+  Future<void> _chooseAutomaticBackupDirectory() async {
+    final selected = await widget.onChooseAutomaticBackupDirectory?.call();
+    if (selected == null || selected.trim().isEmpty || !mounted) {
+      return;
+    }
+    setState(() {
+      _automaticBackupDirectoryPath = selected.trim();
+      _dirty = true;
+    });
+  }
+}
+
+String _formatBackupTime(TimeOfDay time) {
+  return '${time.hour.toString().padLeft(2, '0')}:'
+      '${time.minute.toString().padLeft(2, '0')}';
+}
+
+String _formatBackupDateTime(DateTime time) {
+  final local = time.toLocal();
+  return '${local.year.toString().padLeft(4, '0')}-'
+      '${local.month.toString().padLeft(2, '0')}-'
+      '${local.day.toString().padLeft(2, '0')} '
+      '${local.hour.toString().padLeft(2, '0')}:'
+      '${local.minute.toString().padLeft(2, '0')}';
 }
 
 class _SettingsSection extends StatelessWidget {
@@ -637,6 +899,77 @@ class _SettingsSection extends StatelessWidget {
           ),
           const SizedBox(height: appSpace3),
           child,
+        ],
+      ),
+    );
+  }
+}
+
+String _colorThemeLabel(AppColorTheme theme) {
+  return switch (theme) {
+    AppColorTheme.githubLight => 'GitHub Light · 开发者浅色',
+    AppColorTheme.terminalDark => 'Terminal Dark · 竞赛终端',
+    AppColorTheme.classic => 'Classic · 经典蓝',
+    AppColorTheme.dark => 'Dark · 原版深色',
+    AppColorTheme.candy => 'Candy · 糖果粉蓝',
+  };
+}
+
+class _ColorThemePreview extends StatelessWidget {
+  const _ColorThemePreview({required this.theme});
+
+  final AppColorTheme theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = appPaletteFor(theme);
+    return Container(
+      key: const ValueKey('color-theme-preview'),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: palette.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('皮肤预览 · 不影响尚未保存的设置',
+              style: TextStyle(color: palette.textSecondary, fontSize: 12)),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: palette.card,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: palette.border),
+            ),
+            child: Row(children: [
+              Icon(Icons.auto_stories_outlined, color: palette.accent),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('我的题目与笔记',
+                      style: TextStyle(
+                          color: palette.textPrimary,
+                          fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 4),
+                  Text('由你安排，随时记录',
+                      style: TextStyle(
+                          color: palette.textSecondary, fontSize: 12)),
+                ],
+              )),
+              for (final color in palette.heatmapLevels)
+                Container(
+                    width: 12,
+                    height: 12,
+                    margin: const EdgeInsets.only(left: 3),
+                    decoration: BoxDecoration(
+                        color: color, borderRadius: BorderRadius.circular(2))),
+            ]),
+          ),
         ],
       ),
     );

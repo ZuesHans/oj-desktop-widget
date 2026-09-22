@@ -9,11 +9,15 @@ const cases = [
   ["https://codeforces.com/contest/1799/problem/A", "cf", "1799:A"],
   ["https://codeforces.com/problemset/problem/1799/A?locale=en", "cf", "1799:A"],
   ["https://atcoder.jp/contests/abc300/tasks/abc300_a", "atcoder", "abc300_a"],
+  ["https://atcoder.jp/contests/custom/tasks/A", "atcoder", "custom:A"],
   ["https://www.luogu.com.cn/problem/P1001", "lg", "P1001"],
   ["https://ac.nowcoder.com/acm/problem/12345", "nc", "12345"],
   ["https://leetcode.cn/problems/two-sum/", "lccn", "two-sum"],
   ["https://acm.hdu.edu.cn/showproblem.php?pid=1000", "hd", "1000"],
-  ["http://poj.org/problem?id=1000", "poj", "1000"]
+  ["https://acm.hdu.edu.cn/contest/problem?cid=1237&pid=1007", "hd", "1237:1007"],
+  ["http://poj.org/problem?id=1000", "poj", "1000"],
+  ["https://onlinejudge.org/index.php?option=onlinejudge&page=show_problem&problem=36", "uva", "36"],
+  ["https://onlinejudge.org/problem/36", "uva", "36"]
 ];
 
 for (const [url, platform, externalId] of cases) {

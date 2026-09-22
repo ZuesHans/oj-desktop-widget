@@ -33,6 +33,7 @@ export 'providers/luogu_provider.dart';
 export 'providers/nowcoder_provider.dart';
 export 'providers/oj_provider.dart';
 export 'services/backup_service.dart';
+export 'services/automatic_backup_service.dart';
 export 'services/browser_import_service.dart';
 export 'services/contest_record_service.dart';
 export 'services/daily_summary_service.dart';

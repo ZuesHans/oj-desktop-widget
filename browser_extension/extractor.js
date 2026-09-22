@@ -50,11 +50,50 @@
         return `${parts[problemset + 2] || ""}:${parts[problemset + 3] || ""}`;
       }
     }
-    if (platform === "atcoder") return after("tasks");
+    if (platform === "atcoder") {
+      const taskIndex = parts.indexOf("tasks");
+      if (taskIndex >= 0 && taskIndex + 1 < parts.length) {
+        const task = parts[taskIndex + 1];
+        const contestIndex = parts.indexOf("contests");
+        if (contestIndex >= 0 && contestIndex + 1 < parts.length) {
+          const contest = parts[contestIndex + 1];
+          const normalizedContest = contest.toLowerCase();
+          const normalizedTask = task.toLowerCase();
+          if (normalizedTask !== normalizedContest &&
+            !normalizedTask.startsWith(`${normalizedContest}_`)) {
+            return `${contest}:${task}`;
+          }
+        }
+        return task;
+      }
+      return "";
+    }
     if (platform === "lg" || platform === "nc") return after("problem");
     if (platform === "lccn") return after("problems");
-    if (platform === "hd") return parsed.searchParams.get("pid") || "";
+    if (platform === "hd") {
+      const cid = parsed.searchParams.get("cid") || "";
+      const pid = parsed.searchParams.get("pid") || "";
+      const contest = parts.indexOf("contest");
+      const isContestProblem = contest >= 0 &&
+        parts[contest + 1]?.toLowerCase() === "problem";
+      if (isContestProblem && cid && pid) return `${cid}:${pid}`;
+      return pid;
+    }
     if (platform === "poj") return parsed.searchParams.get("id") || "";
+    if (platform === "uva") {
+      const problem = parsed.searchParams.get("problem") || "";
+      if (problem) return problem;
+      const problemIndex = parts.indexOf("problem");
+      if (problemIndex >= 0 && problemIndex + 1 < parts.length) {
+        return parts[problemIndex + 1];
+      }
+      const external = parts.indexOf("external");
+      if (external >= 0 && external + 2 < parts.length) {
+        const volume = parts[external + 1];
+        const number = parts[external + 2].replace(/\.[^.]+$/, "");
+        if (volume && number) return `${volume}:${number}`;
+      }
+    }
     return "";
   }
 

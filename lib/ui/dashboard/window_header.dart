@@ -9,12 +9,16 @@ class WindowHeader extends StatelessWidget {
     required this.refreshing,
     required this.onRefresh,
     required this.onSettings,
+    this.onQuickEntry,
+    this.quickEntryHotkey = 'Ctrl+Shift+O',
   });
 
   final String sectionLabel;
   final bool refreshing;
   final VoidCallback? onRefresh;
   final VoidCallback onSettings;
+  final VoidCallback? onQuickEntry;
+  final String quickEntryHotkey;
 
   @override
   Widget build(BuildContext context) {
@@ -28,18 +32,15 @@ class WindowHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
+          SizedBox(
             width: 32,
             height: 32,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.11),
-              borderRadius: BorderRadius.circular(appRadiusControl),
-            ),
-            child: Icon(
-              Icons.bubble_chart_outlined,
-              color: accentColor,
-              size: 19,
+            child: Image.asset(
+              'assets/app_icon.png',
+              key: const ValueKey('app-brand-icon'),
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+              excludeFromSemantics: true,
             ),
           ),
           const SizedBox(width: 10),
@@ -62,6 +63,10 @@ class WindowHeader extends StatelessWidget {
               style: TextStyle(color: textSecondaryColor, fontSize: 13),
             ),
           ),
+          IconButton(
+              tooltip: '快速录入 ($quickEntryHotkey)',
+              onPressed: onQuickEntry,
+              icon: const Icon(Icons.add_link)),
           IconButton(
             key: const ValueKey('toolbar-refresh-button'),
             tooltip: '立即刷新',

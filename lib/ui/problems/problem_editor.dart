@@ -30,6 +30,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
   late final TextEditingController _analysisController;
   late ProblemPlatform _platform;
   late ProblemWorkflowStatus _status;
+  late String _externalId;
   bool _parsing = false;
   String? _parseMessage;
 
@@ -47,6 +48,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
     _analysisController = TextEditingController(text: initial?.analysis ?? '');
     _platform = initial?.platform ?? ProblemPlatform.other;
     _status = initial?.workflowStatus ?? ProblemWorkflowStatus.backlog;
+    _externalId = initial?.externalId ?? '';
   }
 
   @override
@@ -270,6 +272,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
         _titleController.text = parsed.title;
         _urlController.text = parsed.url;
         _platform = parsed.platform;
+        _externalId = parsed.externalId;
         _parseMessage = '解析完成';
       });
     } catch (error) {
@@ -296,30 +299,54 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
     }
     final now = DateTime.now();
     final initial = widget.initial;
+    final url = _urlController.text.trim();
+    final externalId = _externalIdForSavedUrl(url, initial);
     final record = initial == null
         ? ProblemRecord.create(
             title: _titleController.text,
-            url: _urlController.text,
+            url: url,
             platform: _platform,
             workflowStatus: _status,
             tags: normalizeProblemTags(_tagsController.text.split(',')),
             date: _dateController.text.trim(),
             note: _noteController.text,
             analysis: _analysisController.text,
+            externalId: externalId,
             now: now,
           )
         : initial.copyWith(
             title: _titleController.text,
-            url: _urlController.text,
+            url: url,
             platform: _platform,
             workflowStatus: _status,
             tags: normalizeProblemTags(_tagsController.text.split(',')),
             date: _dateController.text.trim(),
             note: _noteController.text,
             analysis: _analysisController.text,
+            externalId: externalId,
             updatedAt: now,
           );
     Navigator.pop(context, record);
+  }
+
+  String _externalIdForSavedUrl(String url, ProblemRecord? initial) {
+    try {
+      final uri = normalizeProblemUri(url);
+      final extracted = extractProblemExternalId(uri, _platform);
+      if (extracted.isNotEmpty) {
+        return extracted;
+      }
+      if (initial == null ||
+          initial.platform != _platform ||
+          normalizeProblemUri(initial.url) != uri) {
+        return '';
+      }
+    } catch (_) {
+      if (initial == null) {
+        return '';
+      }
+    }
+    return _externalId.trim();
   }
 
   String? _required(String? value) {
