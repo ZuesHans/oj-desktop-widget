@@ -1,4 +1,5 @@
 #include "problem_database.hpp"
+#include "resource.h"
 
 #include <commctrl.h>
 #include <objbase.h>
@@ -342,7 +343,14 @@ class Application {
     window_class.lpfnWndProc = WindowProcedure;
     window_class.hInstance = instance;
     window_class.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    window_class.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+    HICON application_icon = static_cast<HICON>(LoadImageW(
+        instance, MAKEINTRESOURCEW(IDI_OJ_PROBLEM_COMPANION), IMAGE_ICON, 0, 0,
+        LR_DEFAULTSIZE | LR_SHARED));
+    if (application_icon == nullptr) {
+      application_icon = LoadIconW(nullptr, IDI_APPLICATION);
+    }
+    window_class.hIcon = application_icon;
+    window_class.hIconSm = application_icon;
     window_class.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
     window_class.lpszClassName = kWindowClass;
     if (RegisterClassExW(&window_class) == 0) {

@@ -14,8 +14,10 @@ target_include_directories(oj_companion_database PUBLIC src)
 target_compile_definitions(oj_companion_database PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 
 add_executable(oj_problem_companion WIN32
+  resources/app.rc
   src/main.cpp
 )
+target_include_directories(oj_problem_companion PRIVATE resources)
 target_compile_definitions(oj_problem_companion PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_link_libraries(oj_problem_companion PRIVATE
   oj_companion_database
@@ -52,4 +54,3 @@ endif()
 
 enable_testing()
 add_test(NAME oj_companion_database COMMAND oj_companion_tests)
-

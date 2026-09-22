@@ -9,6 +9,9 @@ book. It does not embed Flutter. The first version supports:
 - one-second revision polling so Flutter and the companion refresh each other;
 - Unicode database paths and UTF-8 problem content.
 
+For a learner-oriented map of the modules, startup sequence, data flow, and
+safe extension points, see [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
 ## Prerequisites
 
 Flutter owns schema migrations and creates
@@ -41,3 +44,13 @@ To open an isolated or portable database, pass its full path:
 Only schema version 2 databases are accepted. See
 [`docs/problem-database.md`](../docs/problem-database.md) for the shared storage
 contract.
+
+## Application icon
+
+The editable source asset is `resources/oj_problem_companion.png`; the Windows
+resource compiler embeds `resources/oj_problem_companion.ico` into the EXE.
+After replacing the PNG, regenerate the multi-size ICO with:
+
+```powershell
+.\native_companion\tools\create_windows_icon.ps1
+```
