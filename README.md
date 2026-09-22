@@ -47,6 +47,7 @@ oj-desktop-widget-v0.2.0-beta-windows-x64.zip
 - 支持可选系统托盘、关闭到托盘和登录时静默启动，默认均关闭。
 - 支持便携备份导入导出，以及可指定本地目录和每日时间的轮换自动备份。
 - 题库使用支持 WAL 的 SQLite 行级读写，外部小程序修改后客户端会自动刷新。
+- 提供轻量 Win32/C++ 题库小程序；构建方法见 [`native_companion/README.md`](native_companion/README.md)。
 - 支持可选 Webhook 同步，用于把公开训练投影同步到个人网站。
 
 ## 首次使用

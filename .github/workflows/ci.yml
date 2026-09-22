@@ -33,3 +33,7 @@ jobs:
 
       - name: Test browser extension fixtures
         run: node browser_extension/test/extractor.test.js
+
+      - name: Build and test native C++ companion
+        shell: pwsh
+        run: ./native_companion/build.ps1

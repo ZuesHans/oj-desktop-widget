@@ -2,7 +2,7 @@
 
 The Flutter client stores the problem book in `problem_book.sqlite3` inside the
 application support directory. This file is the shared persistence boundary for
-the Flutter client and the planned native C++ quick-entry companion.
+the Flutter client and the native C++ quick-entry companion.
 
 ## Compatibility rules
 
