@@ -37,7 +37,37 @@ void main() {
     expect(parseProblemTags('DP, 图论, dp'), ['DP', '图论']);
   });
 
-  test('LocalStore skips damaged problem entries', () async {
+  test('LocalStore migrates the legacy problem JSON into SQLite once',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('problem_store_');
+    try {
+      final file = File('${directory.path}${Platform.pathSeparator}'
+          'problems_v1.json');
+      await file.writeAsString(jsonEncode([_problem().toStorageJson()]));
+
+      final store = LocalStore(supportDirectory: directory);
+      final problems = await store.loadProblems();
+
+      expect(problems, hasLength(1));
+      expect(problems.single.title, 'CF 1799A');
+      expect(
+        await File(
+          '${directory.path}${Platform.pathSeparator}$problemDatabaseFileName',
+        ).exists(),
+        isTrue,
+      );
+
+      await file.writeAsString('[]');
+      final reloaded =
+          await LocalStore(supportDirectory: directory).loadProblems();
+      expect(reloaded.single.title, 'CF 1799A');
+    } finally {
+      await directory.delete(recursive: true);
+    }
+  });
+
+  test('legacy migration refuses damaged rows instead of dropping data',
+      () async {
     final directory = await Directory.systemTemp.createTemp('problem_store_');
     try {
       final file = File('${directory.path}${Platform.pathSeparator}'
@@ -45,14 +75,11 @@ void main() {
       await file.writeAsString(jsonEncode([
         _problem().toStorageJson(),
         {'id': 'broken'},
-        'not-an-object',
       ]));
 
       final store = LocalStore(supportDirectory: directory);
-      final problems = await store.loadProblems();
-
-      expect(problems, hasLength(1));
-      expect(problems.single.title, 'CF 1799A');
+      await expectLater(store.loadProblems(), throwsFormatException);
+      expect(await file.exists(), isTrue);
     } finally {
       await directory.delete(recursive: true);
     }

@@ -248,18 +248,21 @@ void main() {
       expect(snapshot.contests.single.id, 'contest-old');
     });
 
-    test('core snapshot recovers a semantically damaged primary from .bak',
+    test('legacy migration recovers a semantically damaged primary from .bak',
         () async {
       final storeDirectory = Directory(
         '${directory.path}${Platform.pathSeparator}semantic_recovery_store',
       );
-      final store = LocalStore(supportDirectory: storeDirectory);
       final previous = _coreData('previous');
-      final current = _coreData('current');
-      await store.saveProblems(previous.problems);
-      await store.saveProblems(current.problems);
+      await storeDirectory.create(recursive: true);
       final primary = File(
         '${storeDirectory.path}${Platform.pathSeparator}problems_v1.json',
+      );
+      await File('${primary.path}.bak').writeAsString(
+        jsonEncode(
+          previous.problems.map((item) => item.toStorageJson()).toList(),
+        ),
+        flush: true,
       );
       await primary.writeAsString(
         jsonEncode([
@@ -268,6 +271,7 @@ void main() {
         flush: true,
       );
 
+      final store = LocalStore(supportDirectory: storeDirectory);
       final snapshot = await store.loadCoreBackupSnapshot();
 
       expect(snapshot.problems.single.id, 'p-previous');

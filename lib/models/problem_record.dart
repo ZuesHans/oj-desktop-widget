@@ -194,7 +194,8 @@ class ProblemRecord {
     }
     final archivedAt = json['archivedAt'];
     final lastOpenedAt = json['lastOpenedAt'];
-    final parsedLastOpenedAt = lastOpenedAt is String ? DateTime.tryParse(lastOpenedAt) : null;
+    final parsedLastOpenedAt =
+        lastOpenedAt is String ? DateTime.tryParse(lastOpenedAt) : null;
     if (lastOpenedAt != null && parsedLastOpenedAt == null) return null;
     final parsedArchivedAt =
         archivedAt is String ? DateTime.tryParse(archivedAt) : null;
@@ -298,7 +299,8 @@ class ProblemRecord {
       archivedAt: clearArchivedAt ? null : archivedAt ?? this.archivedAt,
       isFavorite: isFavorite ?? this.isFavorite,
       isPinned: isPinned ?? this.isPinned,
-      lastOpenedAt: clearLastOpenedAt ? null : lastOpenedAt ?? this.lastOpenedAt,
+      lastOpenedAt:
+          clearLastOpenedAt ? null : lastOpenedAt ?? this.lastOpenedAt,
       createdAt: createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
       legacyStatusForMigration: null,
@@ -521,4 +523,3 @@ String buildProblemId(DateTime time) {
   final micros = time.microsecondsSinceEpoch.toRadixString(36);
   return 'p$micros';
 }
-

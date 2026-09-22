@@ -16,6 +16,7 @@
 - Added opt-in local core-data backups with a user-selected directory and daily time, retaining the latest 7 backup days plus one backup from each of 4 earlier weeks.
 - Added strict schema parsing, SHA-256 content verification, temporary-file flush and atomic publication, consistent snapshots across queued writes, and visible reporting for corrupt or failed backups.
 - Added pre-import safety backups outside normal rotation and core-backup restore that preserves OJ snapshots, teammate fetches, refresh logs, local backup settings, and securely stored tokens.
+- Migrated the problem book from `problems_v1.json` to a WAL-enabled SQLite database, with strict one-time legacy migration and the original JSON retained as a recovery source.
 
 ## v0.1.3beta - 2026-07-10
 

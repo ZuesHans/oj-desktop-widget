@@ -9,7 +9,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 const _configKey = 'app_config_v1';
 const _snapshotsFile = 'snapshots_v1.json';
 const _refreshLogsFile = 'refresh_logs_v1.json';
-const _problemsFile = 'problems_v1.json';
 const _contestsFile = 'contests_v1.json';
 const _trainingFile = 'training_v1.json';
 const _problemTrainingTransactionFile = 'problem_training_transaction_v1.json';
@@ -462,12 +461,11 @@ void main() {
       );
       expect(await transaction.exists(), isFalse);
       expect(
-        jsonDecode(
-          await File(
-            '${directory.path}${Platform.pathSeparator}$_problemsFile',
-          ).readAsString(),
-        ),
-        isA<List<dynamic>>(),
+        await File(
+          '${directory.path}${Platform.pathSeparator}'
+          '$problemDatabaseFileName',
+        ).exists(),
+        isTrue,
       );
     } finally {
       await directory.delete(recursive: true);
@@ -613,5 +611,3 @@ ProblemRecord _trainingProblem({
     now: DateTime(2026, 7, 27, 8),
   );
 }
-
-

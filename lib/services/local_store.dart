@@ -12,6 +12,7 @@ import '../models/refresh_log_entry.dart';
 import '../models/solved_snapshot.dart';
 import '../models/teammate.dart';
 import '../models/training.dart';
+import 'problem_database.dart';
 
 const maxStoredSnapshots = 6000;
 
@@ -56,6 +57,7 @@ class LocalStore {
   static const _maxRefreshLogs = 200;
 
   final Directory? _supportDirectory;
+  Future<void>? _problemDatabaseInitialization;
   Future<void> _problemTrainingTransactionTail = Future.value();
   Future<void> _coreWriteTail = Future.value();
 
@@ -208,41 +210,8 @@ class LocalStore {
   }
 
   Future<List<ProblemRecord>> loadProblems() async {
-    final file = await _problemsFileHandle();
-    if (!await _hasStoredFile(file)) {
-      return [];
-    }
-    try {
-      final data = await _readJsonWithBackup(file);
-      if (data is! List) {
-        debugPrint('题单 JSON 无效：应为列表。');
-        return [];
-      }
-      final problems = <ProblemRecord>[];
-      for (final item in data) {
-        try {
-          if (item is! Map) {
-            debugPrint('已跳过无效题目：应为对象。');
-            continue;
-          }
-          final problem = ProblemRecord.tryFromJson(
-            Map<String, dynamic>.from(item),
-          );
-          if (problem == null) {
-            debugPrint('已跳过无效题目条目。');
-            continue;
-          }
-          problems.add(problem);
-        } catch (_) {
-          debugPrint('已跳过无效题目条目。');
-        }
-      }
-      problems.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      return List.unmodifiable(problems);
-    } catch (_) {
-      debugPrint('解析题单失败，已使用空列表。');
-      return [];
-    }
+    await _ensureProblemDatabase();
+    return (await _problemDatabaseHandle()).loadProblems();
   }
 
   Future<void> saveProblems(List<ProblemRecord> problems) async {
@@ -411,17 +380,8 @@ class LocalStore {
   }
 
   Future<List<ProblemRecord>> _loadCoreProblemsStrict() async {
-    final file = await _problemsFileHandle();
-    if (!await _hasStoredFile(file)) {
-      return const [];
-    }
-    final problems = await _readParsedJsonWithBackup(
-      file,
-      _parseTransactionProblems,
-    );
-    final sorted = [...problems]
-      ..sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
-    return List.unmodifiable(sorted);
+    await _ensureProblemDatabase();
+    return (await _problemDatabaseHandle()).loadProblems();
   }
 
   Future<TrainingStoreData> _loadCoreTrainingStrict() async {
@@ -516,11 +476,8 @@ class LocalStore {
   }
 
   Future<void> _writeProblems(List<ProblemRecord> problems) async {
-    final file = await _problemsFileHandle();
-    await _writeJsonAtomically(
-      file,
-      problems.map((item) => item.toStorageJson()).toList(),
-    );
+    await _ensureProblemDatabase();
+    (await _problemDatabaseHandle()).replaceProblems(problems);
   }
 
   Future<void> _writeTraining(TrainingStoreData training) async {
@@ -578,6 +535,35 @@ class LocalStore {
     final directory =
         _supportDirectory ?? await getApplicationSupportDirectory();
     return File('${directory.path}${Platform.pathSeparator}$_problemsFile');
+  }
+
+  Future<ProblemDatabase> _problemDatabaseHandle() async {
+    final directory = await supportDirectory();
+    return ProblemDatabase(
+      File(
+        '${directory.path}${Platform.pathSeparator}$problemDatabaseFileName',
+      ),
+    );
+  }
+
+  Future<void> _ensureProblemDatabase() {
+    return _problemDatabaseInitialization ??= _initializeProblemDatabase();
+  }
+
+  Future<void> _initializeProblemDatabase() async {
+    final database = await _problemDatabaseHandle();
+    if (!database.needsLegacyMigration) {
+      return;
+    }
+
+    final legacyFile = await _problemsFileHandle();
+    final legacyProblems = await _hasStoredFile(legacyFile)
+        ? await _readParsedJsonWithBackup(
+            legacyFile,
+            _parseTransactionProblems,
+          )
+        : const <ProblemRecord>[];
+    database.migrateLegacy(legacyProblems);
   }
 
   Future<File> _contestsFileHandle() async {

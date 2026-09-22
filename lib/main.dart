@@ -41,6 +41,7 @@ export 'services/heatmap_service.dart';
 export 'services/home_action_service.dart';
 export 'services/local_store.dart';
 export 'services/oj_controller.dart';
+export 'services/problem_database.dart';
 export 'services/problem_book_service.dart';
 export 'services/refresh_service.dart';
 export 'services/sync_secret_store.dart';
