@@ -7,6 +7,8 @@ import 'package:http/http.dart' as http;
 import 'package:oj_float/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'test_support.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -164,7 +166,7 @@ void main() {
       expect(loaded.launchAtStartup, isTrue);
       expect(loaded.accounts['codeforces']!.usernames, ['saved-user']);
     } finally {
-      await directory.delete(recursive: true);
+      await deleteTestDirectory(directory);
       controller.dispose();
     }
   });
@@ -197,7 +199,7 @@ void main() {
       expect(loaded.launchAtStartup, isTrue);
       expect(loaded.accounts['codeforces']!.usernames, ['saved-after-false']);
     } finally {
-      await directory.delete(recursive: true);
+      await deleteTestDirectory(directory);
       controller.dispose();
     }
   });
@@ -221,7 +223,7 @@ void main() {
       expect(startupService.calls, [false]);
     } finally {
       controller.dispose();
-      await directory.delete(recursive: true);
+      await deleteTestDirectory(directory);
     }
   });
 
@@ -309,7 +311,7 @@ void main() {
       );
     } finally {
       controller.dispose();
-      await directory.delete(recursive: true);
+      await deleteTestDirectory(directory);
     }
   });
 
@@ -355,7 +357,7 @@ void main() {
       );
     } finally {
       controller.dispose();
-      await directory.delete(recursive: true);
+      await deleteTestDirectory(directory);
     }
   });
 }

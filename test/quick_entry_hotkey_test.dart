@@ -1,11 +1,9 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:oj_float/models/app_config.dart';
 import 'package:oj_float/models/quick_entry_shortcut.dart';
 import 'package:oj_float/services/local_store.dart';
 import 'package:oj_float/services/quick_entry_hotkey_service.dart';
-import 'package:oj_float/ui/settings/settings_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -67,6 +65,4 @@ void main() {
     await expectLater(service.register('Q'), throwsFormatException);
     expect(calls.length, 2);
   });
-
 }
-

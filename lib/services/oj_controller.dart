@@ -42,6 +42,7 @@ class OjController extends ChangeNotifier {
     SyncSecretStore? syncSecretStore,
     TrainingService? trainingService,
     AutomaticBackupService? automaticBackupService,
+    this.problemRefreshInterval = Duration.zero,
   })  : problemBookService =
             problemBookService ?? ProblemBookService(client: http.Client()),
         contestRecordService =
@@ -72,6 +73,7 @@ class OjController extends ChangeNotifier {
   final SyncSecretStore syncSecretStore;
   final TrainingService trainingService;
   final AutomaticBackupService automaticBackupService;
+  final Duration problemRefreshInterval;
   OjState state = OjState.initial();
   bool refreshing = false;
   bool refreshingTeammates = false;
@@ -79,6 +81,9 @@ class OjController extends ChangeNotifier {
   SyncResult? lastSyncResult;
   Timer? _timer;
   Timer? _automaticBackupTimer;
+  Timer? _problemRefreshTimer;
+  int _knownProblemRevision = 0;
+  Future<bool>? _problemRefreshFuture;
   AutomaticBackupOverview? automaticBackupOverview;
   AutomaticBackupResult? lastAutomaticBackupResult;
   String automaticBackupError = '';
@@ -91,19 +96,26 @@ class OjController extends ChangeNotifier {
     final snapshots = await storage.loadSnapshots();
     final refreshLogs = await storage.loadRefreshLogs();
     final coreSnapshot = await storage.loadCoreBackupSnapshot();
-    var problems = coreSnapshot.problems;
+    final storedProblems = coreSnapshot.problems;
+    var problems = storedProblems;
     final contests = coreSnapshot.contests;
     final teammates = await storage.loadTeammates();
     var training = coreSnapshot.training;
     training = trainingService.migrateLegacyAttempts(problems, training);
     problems = trainingService.normalizeLegacyProblems(problems);
     training = trainingService.normalizeTrainingData(training);
-    await storage.saveProblemsAndTraining(problems, training);
+    final normalizedProblems = _changedProblems(storedProblems, problems);
+    if (normalizedProblems.isNotEmpty) {
+      await storage.saveProblems(normalizedProblems);
+    }
+    await storage.saveTraining(training);
+    final problemSnapshot = await storage.loadProblemSnapshot();
+    _knownProblemRevision = problemSnapshot.revision;
     state = state.copyWith(
       config: config,
       snapshots: snapshots,
       refreshLogs: refreshLogs,
-      problems: problems,
+      problems: problemSnapshot.problems,
       contests: contests,
       teammates: teammates,
       training: training,
@@ -117,6 +129,7 @@ class OjController extends ChangeNotifier {
     }
     _recomputeSummaries();
     _schedule();
+    _scheduleProblemRefresh();
     await _configureAutomaticBackup(runIfDue: true);
     notifyListeners();
     await refresh();
@@ -235,11 +248,13 @@ class OjController extends ChangeNotifier {
         '${normalizeError(error)}',
       );
     }
+    final problemSnapshot = await storage.loadProblemSnapshot();
+    _knownProblemRevision = problemSnapshot.revision;
     state = state.copyWith(
       config: await storage.loadConfig(),
       snapshots: await storage.loadSnapshots(),
       refreshLogs: coreBackup == null ? const [] : previousRefreshLogs,
-      problems: await storage.loadProblems(),
+      problems: problemSnapshot.problems,
       contests: await storage.loadContests(),
       teammates: await storage.loadTeammates(),
       training: await storage.loadTraining(),
@@ -323,9 +338,11 @@ class OjController extends ChangeNotifier {
     syncing = true;
     notifyListeners();
     try {
+      await refreshProblemsIfChanged();
       final websiteProblems = await syncService.fetchWebsiteProblems(
         config: state.config.sync,
       );
+      await refreshProblemsIfChanged();
       var problems = state.problems;
       if (websiteProblems.isNotEmpty) {
         problems = problemBookService.mergeSyncedProblems(
@@ -333,8 +350,11 @@ class OjController extends ChangeNotifier {
           websiteProblems,
         );
         if (!listEquals(problems, state.problems)) {
-          await storage.saveProblems(problems);
-          state = state.copyWith(problems: problems);
+          await storage.saveProblems(
+            _changedProblems(state.problems, problems),
+          );
+          await _reloadProblemsFromStorage();
+          problems = state.problems;
           notifyListeners();
         }
       }
@@ -507,24 +527,40 @@ class OjController extends ChangeNotifier {
   }
 
   Future<void> toggleProblemFavorite(String id) async {
+    await refreshProblemsIfChanged();
     final problem = _problemById(id);
-    if (problem != null) await saveProblem(problem.copyWith(isFavorite: !problem.isFavorite));
+    if (problem != null) {
+      await saveProblem(problem.copyWith(isFavorite: !problem.isFavorite));
+    }
   }
 
   Future<void> toggleProblemPinned(String id) async {
+    await refreshProblemsIfChanged();
     final problem = _problemById(id);
-    if (problem != null) await saveProblem(problem.copyWith(isPinned: !problem.isPinned));
+    if (problem != null) {
+      await saveProblem(problem.copyWith(isPinned: !problem.isPinned));
+    }
   }
 
   Future<void> markProblemOpened(String id) async {
+    await refreshProblemsIfChanged();
     final problem = _problemById(id);
-    if (problem != null) await saveProblem(problem.copyWith(lastOpenedAt: DateTime.now(), updatedAt: problem.updatedAt));
+    if (problem != null) {
+      await saveProblem(
+        problem.copyWith(
+          lastOpenedAt: DateTime.now(),
+          updatedAt: problem.updatedAt,
+        ),
+      );
+    }
   }
 
   Future<void> saveProblem(ProblemRecord problem) async {
+    await refreshProblemsIfChanged();
     final problems = problemBookService.upsert(state.problems, problem);
-    await storage.saveProblems(problems);
-    state = state.copyWith(problems: problems);
+    final saved = _persistedProblemFor(problems, problem);
+    await storage.saveProblem(saved);
+    await _reloadProblemsFromStorage();
     notifyListeners();
   }
 
@@ -578,24 +614,21 @@ class OjController extends ChangeNotifier {
   }
 
   Future<void> deleteProblem(String id) async {
+    await refreshProblemsIfChanged();
     final problem = _problemById(id);
     if (problem == null) {
       return;
     }
-    final problems = problemBookService.upsert(
-      state.problems,
+    await saveProblem(
       problem.copyWith(
-        workflowStatus: ProblemWorkflowStatus.archived,
-        archivedAt: DateTime.now(),
-        clearNextReviewAt: true,
-      ),
+          workflowStatus: ProblemWorkflowStatus.archived,
+          archivedAt: DateTime.now(),
+          clearNextReviewAt: true),
     );
-    await storage.saveProblems(problems);
-    state = state.copyWith(problems: problems);
-    notifyListeners();
   }
 
   Future<void> restoreProblem(String id) async {
+    await refreshProblemsIfChanged();
     final problem = _problemById(id);
     if (problem == null) {
       return;
@@ -609,11 +642,15 @@ class OjController extends ChangeNotifier {
   }
 
   Future<void> permanentlyDeleteProblem(String id) async {
-    final problems = problemBookService.remove(state.problems, id);
+    await refreshProblemsIfChanged();
+    if (_problemById(id) == null) {
+      return;
+    }
     final training =
         trainingService.removeProblemReferences(state.training, id);
-    await storage.saveProblemsAndTraining(problems, training);
-    state = state.copyWith(problems: problems, training: training);
+    await storage.deleteProblemAndSaveTraining(id, training);
+    await _reloadProblemsFromStorage();
+    state = state.copyWith(training: training);
     notifyListeners();
   }
 
@@ -690,6 +727,7 @@ class OjController extends ChangeNotifier {
     String reflection = '',
     String? favoriteListId,
   }) async {
+    await refreshProblemsIfChanged();
     final active = state.training.activeAttempt;
     if (active == null) {
       throw FetchException('没有进行中的训练。');
@@ -706,10 +744,6 @@ class OjController extends ChangeNotifier {
       mistakes: mistakes,
       reflection: reflection,
     );
-    final problems = problemBookService.upsert(
-      state.problems,
-      finished.problem,
-    );
     final training = favoriteListId == null
         ? finished.data
         : trainingService.addProblemToList(
@@ -717,8 +751,9 @@ class OjController extends ChangeNotifier {
             favoriteListId,
             problem.id,
           );
-    await storage.saveProblemsAndTraining(problems, training);
-    state = state.copyWith(problems: problems, training: training);
+    await storage.saveProblemAndTraining(finished.problem, training);
+    await _reloadProblemsFromStorage();
+    state = state.copyWith(training: training);
     notifyListeners();
     return finished.attempt;
   }
@@ -837,6 +872,51 @@ class OjController extends ChangeNotifier {
     return null;
   }
 
+  Future<bool> refreshProblemsIfChanged() {
+    final running = _problemRefreshFuture;
+    if (running != null) {
+      return running;
+    }
+    final operation = _refreshProblemsIfChanged();
+    _problemRefreshFuture = operation;
+    return operation.whenComplete(() {
+      if (identical(_problemRefreshFuture, operation)) {
+        _problemRefreshFuture = null;
+      }
+    });
+  }
+
+  Future<bool> _refreshProblemsIfChanged() async {
+    final revision = await storage.problemRevision();
+    if (revision == _knownProblemRevision) {
+      return false;
+    }
+    await _reloadProblemsFromStorage();
+    notifyListeners();
+    return true;
+  }
+
+  Future<void> _reloadProblemsFromStorage() async {
+    final snapshot = await storage.loadProblemSnapshot();
+    _knownProblemRevision = snapshot.revision;
+    state = state.copyWith(problems: snapshot.problems);
+  }
+
+  ProblemRecord _persistedProblemFor(
+    List<ProblemRecord> problems,
+    ProblemRecord submitted,
+  ) {
+    for (final problem in problems) {
+      if (problem.id == submitted.id) {
+        return problem;
+      }
+    }
+    final key = canonicalProblemKey(submitted);
+    return problems.firstWhere(
+      (problem) => canonicalProblemKey(problem) == key,
+    );
+  }
+
   void _recomputeSummaries() {
     final today = trainingDateFor(DateTime.now());
     state = state.copyWith(
@@ -852,6 +932,26 @@ class OjController extends ChangeNotifier {
         unawaited(maybeAutoRefreshTeammates());
       },
     );
+  }
+
+  void _scheduleProblemRefresh() {
+    _problemRefreshTimer?.cancel();
+    if (problemRefreshInterval <= Duration.zero) {
+      _problemRefreshTimer = null;
+      return;
+    }
+    _problemRefreshTimer = Timer.periodic(
+      problemRefreshInterval,
+      (_) => unawaited(_pollProblemChanges()),
+    );
+  }
+
+  Future<void> _pollProblemChanges() async {
+    try {
+      await refreshProblemsIfChanged();
+    } catch (error) {
+      debugPrint('Failed to refresh external problem changes: $error');
+    }
   }
 
   Future<AppConfig> _withResolvedAutomaticBackupDirectory(
@@ -965,12 +1065,29 @@ class OjController extends ChangeNotifier {
   void dispose() {
     _timer?.cancel();
     _automaticBackupTimer?.cancel();
+    _problemRefreshTimer?.cancel();
     service.dispose();
     problemBookService.dispose();
     teammateService.dispose();
     syncService.dispose();
     super.dispose();
   }
+}
+
+List<ProblemRecord> _changedProblems(
+  List<ProblemRecord> previous,
+  List<ProblemRecord> next,
+) {
+  final previousById = {for (final problem in previous) problem.id: problem};
+  return List.unmodifiable([
+    for (final problem in next)
+      if (previousById[problem.id] == null ||
+          !mapEquals(
+            previousById[problem.id]!.toStorageJson(),
+            problem.toStorageJson(),
+          ))
+        problem,
+  ]);
 }
 
 class _GuardedRefresh {

@@ -86,7 +86,10 @@ class _ProblemsPageState extends State<ProblemsPage> {
     }).toList()
       ..sort((a, b) {
         if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
-        if (_specialFilter == '最近打开') return (b.lastOpenedAt ?? DateTime(0)).compareTo(a.lastOpenedAt ?? DateTime(0));
+        if (_specialFilter == '最近打开') {
+          return (b.lastOpenedAt ?? DateTime(0))
+              .compareTo(a.lastOpenedAt ?? DateTime(0));
+        }
         return b.updatedAt.compareTo(a.updatedAt);
       });
     final tagStats = buildProblemTagStats(
@@ -149,7 +152,8 @@ class _ProblemsPageState extends State<ProblemsPage> {
                       DropdownMenuItem(value: '最近打开', child: Text('最近打开')),
                       DropdownMenuItem(value: '最近编辑', child: Text('最近编辑')),
                     ],
-                    onChanged: (value) => setState(() => _specialFilter = value ?? '全部'),
+                    onChanged: (value) =>
+                        setState(() => _specialFilter = value ?? '全部'),
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -319,8 +323,14 @@ class _ProblemsPageState extends State<ProblemsPage> {
                             onDelete: () => _delete(context, visible[index]),
                             onOpenProblem: () =>
                                 _openProblem(context, visible[index]),
-                            onToggleFavorite: widget.onToggleFavorite == null ? null : () => widget.onToggleFavorite!(visible[index].id),
-                            onTogglePinned: widget.onTogglePinned == null ? null : () => widget.onTogglePinned!(visible[index].id),
+                            onToggleFavorite: widget.onToggleFavorite == null
+                                ? null
+                                : () =>
+                                    widget.onToggleFavorite!(visible[index].id),
+                            onTogglePinned: widget.onTogglePinned == null
+                                ? null
+                                : () =>
+                                    widget.onTogglePinned!(visible[index].id),
                             onRestore: widget.onRestore == null
                                 ? null
                                 : () => _restore(context, visible[index]),
@@ -1017,13 +1027,17 @@ class _ProblemListItem extends StatelessWidget {
                         key: ValueKey('favorite-problem-${problem.id}'),
                         tooltip: problem.isFavorite ? '取消收藏' : '收藏',
                         onPressed: onToggleFavorite,
-                        icon: problem.isFavorite ? Icons.favorite : Icons.favorite_border,
+                        icon: problem.isFavorite
+                            ? Icons.favorite
+                            : Icons.favorite_border,
                       ),
                       _CompactActionButton(
                         key: ValueKey('pin-problem-${problem.id}'),
                         tooltip: problem.isPinned ? '取消置顶' : '置顶',
                         onPressed: onTogglePinned,
-                        icon: problem.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                        icon: problem.isPinned
+                            ? Icons.push_pin
+                            : Icons.push_pin_outlined,
                       ),
                       _CompactActionButton(
                         key: ValueKey('view-problem-${problem.id}'),

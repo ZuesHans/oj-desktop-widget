@@ -210,16 +210,34 @@ class LocalStore {
   }
 
   Future<List<ProblemRecord>> loadProblems() async {
+    return (await loadProblemSnapshot()).problems;
+  }
+
+  Future<ProblemDatabaseSnapshot> loadProblemSnapshot() async {
     await _ensureProblemDatabase();
-    return (await _problemDatabaseHandle()).loadProblems();
+    return (await _problemDatabaseHandle()).loadSnapshot();
+  }
+
+  Future<int> problemRevision() async {
+    await _ensureProblemDatabase();
+    return (await _problemDatabaseHandle()).readRevision();
+  }
+
+  Future<void> saveProblem(ProblemRecord problem) async {
+    await _enqueueCoreWrite(() => _upsertProblems([problem]));
   }
 
   Future<void> saveProblems(List<ProblemRecord> problems) async {
-    await _enqueueCoreWrite(() => _writeProblems(problems));
+    await _enqueueCoreWrite(() => _upsertProblems(problems));
   }
 
-  Future<void> replaceProblems(List<ProblemRecord> problems) =>
-      saveProblems(problems);
+  Future<void> replaceProblems(List<ProblemRecord> problems) async {
+    await _enqueueCoreWrite(() => _replaceProblems(problems));
+  }
+
+  Future<void> deleteProblem(String id) async {
+    await _enqueueCoreWrite(() => _deleteProblem(id));
+  }
 
   Future<List<ContestRecord>> loadContests() async {
     final file = await _contestsFileHandle();
@@ -346,7 +364,38 @@ class LocalStore {
   ) {
     return _enqueueCoreWrite(
       () => _enqueueProblemTrainingTransaction(
-        () => _commitCoreTransaction(problems, training),
+        () => _commitCoreTransaction(
+          _ProblemMutation.replace(problems),
+          training,
+        ),
+      ),
+    );
+  }
+
+  Future<void> saveProblemAndTraining(
+    ProblemRecord problem,
+    TrainingStoreData training,
+  ) {
+    return _enqueueCoreWrite(
+      () => _enqueueProblemTrainingTransaction(
+        () => _commitCoreTransaction(
+          _ProblemMutation.upsert([problem]),
+          training,
+        ),
+      ),
+    );
+  }
+
+  Future<void> deleteProblemAndSaveTraining(
+    String problemId,
+    TrainingStoreData training,
+  ) {
+    return _enqueueCoreWrite(
+      () => _enqueueProblemTrainingTransaction(
+        () => _commitCoreTransaction(
+          _ProblemMutation.delete([problemId]),
+          training,
+        ),
       ),
     );
   }
@@ -359,7 +408,7 @@ class LocalStore {
     return _enqueueCoreWrite(
       () => _enqueueProblemTrainingTransaction(
         () => _commitCoreTransaction(
-          problems,
+          _ProblemMutation.replace(problems),
           training,
           contests: contests,
         ),
@@ -380,8 +429,7 @@ class LocalStore {
   }
 
   Future<List<ProblemRecord>> _loadCoreProblemsStrict() async {
-    await _ensureProblemDatabase();
-    return (await _problemDatabaseHandle()).loadProblems();
+    return (await loadProblemSnapshot()).problems;
   }
 
   Future<TrainingStoreData> _loadCoreTrainingStrict() async {
@@ -419,12 +467,16 @@ class LocalStore {
     }
     final json = Map<String, dynamic>.from(decoded);
     final schemaVersion = json['schemaVersion'];
-    if (schemaVersion != 1 && schemaVersion != 2) {
+    if (schemaVersion != 1 && schemaVersion != 2 && schemaVersion != 3) {
       throw const FormatException(
         'Problem/training transaction version is unsupported.',
       );
     }
-    final problems = _parseTransactionProblems(json['problems']);
+    final problemMutation = schemaVersion == 3
+        ? _ProblemMutation.fromJson(json['problemMutation'])
+        : _ProblemMutation.replace(
+            _parseTransactionProblems(json['problems']),
+          );
     final rawTraining = json['training'];
     if (rawTraining is! Map) {
       throw const FormatException('Transaction training data is invalid.');
@@ -437,7 +489,7 @@ class LocalStore {
     }
     final contests =
         schemaVersion == 2 ? _parseCoreContestsStrict(json['contests']) : null;
-    await _writeProblems(problems);
+    await _applyProblemMutation(problemMutation);
     await _writeTraining(training);
     if (contests != null) {
       await _writeContests(contests);
@@ -446,21 +498,27 @@ class LocalStore {
   }
 
   Future<void> _commitCoreTransaction(
-    List<ProblemRecord> problems,
+    _ProblemMutation problemMutation,
     TrainingStoreData training, {
     List<ContestRecord>? contests,
   }) async {
     await _recoverPendingProblemTrainingTransaction();
     final transaction = await _problemTrainingTransactionFileHandle();
+    final usesRowMutation =
+        problemMutation.type != _ProblemMutationType.replace;
     await _writeJsonAtomically(transaction, {
-      'schemaVersion': contests == null ? 1 : 2,
-      'problems': problems.map((item) => item.toStorageJson()).toList(),
+      'schemaVersion': usesRowMutation ? 3 : (contests == null ? 1 : 2),
+      if (usesRowMutation) 'problemMutation': problemMutation.toJson(),
+      if (!usesRowMutation)
+        'problems': problemMutation.problems
+            .map((item) => item.toStorageJson())
+            .toList(),
       'training': training.toJson(),
       if (contests != null)
         'contests': contests.map((item) => item.toStorageJson()).toList(),
     });
     try {
-      await _writeProblems(problems);
+      await _applyProblemMutation(problemMutation);
       await _writeTraining(training);
       if (contests != null) {
         await _writeContests(contests);
@@ -475,9 +533,35 @@ class LocalStore {
     await _clearProblemTrainingTransaction(transaction);
   }
 
-  Future<void> _writeProblems(List<ProblemRecord> problems) async {
+  Future<void> _replaceProblems(List<ProblemRecord> problems) async {
     await _ensureProblemDatabase();
     (await _problemDatabaseHandle()).replaceProblems(problems);
+  }
+
+  Future<void> _upsertProblems(Iterable<ProblemRecord> problems) async {
+    await _ensureProblemDatabase();
+    (await _problemDatabaseHandle()).upsertProblems(problems);
+  }
+
+  Future<void> _deleteProblem(String id) async {
+    await _ensureProblemDatabase();
+    (await _problemDatabaseHandle()).deleteProblem(id);
+  }
+
+  Future<void> _applyProblemMutation(_ProblemMutation mutation) async {
+    switch (mutation.type) {
+      case _ProblemMutationType.replace:
+        await _replaceProblems(mutation.problems);
+        return;
+      case _ProblemMutationType.upsert:
+        await _upsertProblems(mutation.problems);
+        return;
+      case _ProblemMutationType.delete:
+        for (final id in mutation.problemIds) {
+          await _deleteProblem(id);
+        }
+        return;
+    }
   }
 
   Future<void> _writeTraining(TrainingStoreData training) async {
@@ -598,6 +682,74 @@ class LocalStore {
       '$_problemTrainingTransactionFile',
     );
   }
+}
+
+enum _ProblemMutationType { replace, upsert, delete }
+
+class _ProblemMutation {
+  const _ProblemMutation._({
+    required this.type,
+    this.problems = const [],
+    this.problemIds = const [],
+  });
+
+  factory _ProblemMutation.replace(List<ProblemRecord> problems) {
+    return _ProblemMutation._(
+      type: _ProblemMutationType.replace,
+      problems: List.unmodifiable(problems),
+    );
+  }
+
+  factory _ProblemMutation.upsert(List<ProblemRecord> problems) {
+    return _ProblemMutation._(
+      type: _ProblemMutationType.upsert,
+      problems: List.unmodifiable(problems),
+    );
+  }
+
+  factory _ProblemMutation.delete(List<String> problemIds) {
+    return _ProblemMutation._(
+      type: _ProblemMutationType.delete,
+      problemIds: List.unmodifiable(problemIds),
+    );
+  }
+
+  factory _ProblemMutation.fromJson(Object? value) {
+    if (value is! Map) {
+      throw const FormatException('Problem mutation is invalid.');
+    }
+    final json = Map<String, dynamic>.from(value);
+    switch (json['operation']) {
+      case 'upsert':
+        return _ProblemMutation.upsert(
+          _parseTransactionProblems(json['problems']),
+        );
+      case 'delete':
+        final rawIds = json['problemIds'];
+        if (rawIds is! List ||
+            rawIds.any(
+              (id) => id is! String || id.trim().isEmpty,
+            )) {
+          throw const FormatException('Problem deletion is invalid.');
+        }
+        return _ProblemMutation.delete(
+          rawIds.cast<String>().map((id) => id.trim()).toList(),
+        );
+      default:
+        throw const FormatException('Problem mutation operation is invalid.');
+    }
+  }
+
+  final _ProblemMutationType type;
+  final List<ProblemRecord> problems;
+  final List<String> problemIds;
+
+  Map<String, dynamic> toJson() => {
+        'operation': type.name,
+        if (type == _ProblemMutationType.upsert)
+          'problems': problems.map((item) => item.toStorageJson()).toList(),
+        if (type == _ProblemMutationType.delete) 'problemIds': problemIds,
+      };
 }
 
 List<ProblemRecord> _parseTransactionProblems(Object? value) {

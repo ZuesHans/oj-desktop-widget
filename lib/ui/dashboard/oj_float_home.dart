@@ -120,6 +120,9 @@ class _OjFloatHomeState extends State<OjFloatHome>
           'nowcoder': NowcoderProvider(),
         },
       ),
+      problemRefreshInterval: widget.enablePlatformIntegration
+          ? const Duration(seconds: 1)
+          : Duration.zero,
     );
     if (widget.initialConfig != null) {
       _controller.state = _controller.state.copyWith(
@@ -144,8 +147,9 @@ class _OjFloatHomeState extends State<OjFloatHome>
         await _applyShellConfig(widget.initialConfig!);
       }
       await _controller.init();
-      if (widget.enablePlatformIntegration && Platform.isWindows)
+      if (widget.enablePlatformIntegration && Platform.isWindows) {
         await _registerQuickEntry();
+      }
       _syncToken = await _controller.loadSyncToken();
       if (widget.enablePlatformIntegration) {
         await _startBrowserImportService();
@@ -169,8 +173,9 @@ class _OjFloatHomeState extends State<OjFloatHome>
       _windowShell.removeTrayListener(this);
       _windowShell.removeWindowListener(this);
     }
-    if (widget.enablePlatformIntegration && Platform.isWindows)
+    if (widget.enablePlatformIntegration && Platform.isWindows) {
       _quickChannel.setMethodCallHandler(null);
+    }
     unawaited(_stopBrowserImportServer());
     _controller.dispose();
     super.dispose();
@@ -319,8 +324,9 @@ class _OjFloatHomeState extends State<OjFloatHome>
       if (widget.enablePlatformIntegration) {
         if (!_previousVisible) await _windowShell.hide();
         await windowManager.setMinimumSize(appMinimumWindowSize);
-        if (_previousBounds != null)
+        if (_previousBounds != null) {
           await windowManager.setBounds(_previousBounds!);
+        }
         if (_previousMaximized) await windowManager.maximize();
         if (_previousMinimized) await windowManager.minimize();
       }
@@ -542,8 +548,9 @@ class _OjFloatHomeState extends State<OjFloatHome>
     final nativeHotkey = widget.enablePlatformIntegration && Platform.isWindows;
     // Native registration reserves the new combination before releasing the old
     // one. A conflict must not persist an unusable setting or show save success.
-    if (nativeHotkey)
+    if (nativeHotkey) {
       await _hotkeyService.register(result.config.quickEntryHotkey);
+    }
     try {
       await _homeActions.saveSettings(
         controller: _controller,

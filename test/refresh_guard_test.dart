@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:oj_float/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'test_support.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -70,7 +72,7 @@ void main() {
           RefreshLogStatus.fallbackSuccess);
     } finally {
       controller.dispose();
-      await directory.delete(recursive: true);
+      await deleteTestDirectory(directory);
     }
   });
 
@@ -99,7 +101,7 @@ void main() {
           controller.state.refreshLogs.single.status, RefreshLogStatus.success);
     } finally {
       controller.dispose();
-      await directory.delete(recursive: true);
+      await deleteTestDirectory(directory);
     }
   });
 
@@ -138,7 +140,7 @@ void main() {
       expect(controller.state.refreshLogs, hasLength(2));
     } finally {
       controller.dispose();
-      await directory.delete(recursive: true);
+      await deleteTestDirectory(directory);
     }
   });
 
@@ -182,7 +184,7 @@ void main() {
       expect(persisted.last.solvedCount, 6000);
     } finally {
       controller.dispose();
-      await directory.delete(recursive: true);
+      await deleteTestDirectory(directory);
     }
   });
 }

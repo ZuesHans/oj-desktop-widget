@@ -7,6 +7,16 @@ import '../models/problem_record.dart';
 
 const problemDatabaseFileName = 'problem_book.sqlite3';
 
+class ProblemDatabaseSnapshot {
+  const ProblemDatabaseSnapshot({
+    required this.problems,
+    required this.revision,
+  });
+
+  final List<ProblemRecord> problems;
+  final int revision;
+}
+
 /// SQLite-backed problem storage shared by the Flutter client and the future
 /// native quick-entry companion.
 ///
@@ -15,7 +25,7 @@ const problemDatabaseFileName = 'problem_book.sqlite3';
 class ProblemDatabase {
   ProblemDatabase(this.file);
 
-  static const schemaVersion = 1;
+  static const schemaVersion = 2;
   static const _legacyMigrationKey = 'legacy_json_migrated';
 
   final File file;
@@ -50,7 +60,7 @@ class ProblemDatabase {
           .select('SELECT COUNT(*) AS count FROM problems')
           .single['count'] as int;
       if (count == 0) {
-        _insertAll(database, legacyProblems);
+        _upsertAll(database, legacyProblems);
       }
       database.execute(
         'INSERT OR REPLACE INTO metadata(key, value) VALUES (?, ?)',
@@ -66,33 +76,65 @@ class ProblemDatabase {
   }
 
   List<ProblemRecord> loadProblems() {
+    return loadSnapshot().problems;
+  }
+
+  ProblemDatabaseSnapshot loadSnapshot() {
     final database = _open();
     try {
-      final problems = database.select('SELECT * FROM problems').map((row) {
-        return ProblemRecord.fromJson({
-          'id': row['id'],
-          'title': row['title'],
-          'url': row['url'],
-          'platform': row['platform'],
-          'workflowStatus': row['workflow_status'],
-          'tags': row['tags_json'],
-          'date': row['date'],
-          'note': row['note'],
-          'analysis': row['analysis'],
-          'difficulty': row['difficulty'],
-          'externalId': row['external_id'],
-          'reviewStage': row['review_stage'],
-          'nextReviewAt': row['next_review_at'],
-          'archivedAt': row['archived_at'],
-          'isFavorite': row['is_favorite'] == 1,
-          'isPinned': row['is_pinned'] == 1,
-          'lastOpenedAt': row['last_opened_at'],
-          'created_at': row['created_at'],
-          'updated_at': row['updated_at'],
-        });
-      }).toList();
+      database.execute('BEGIN');
+      final revision = _readRevision(database);
+      final problems = _readProblems(database);
+      database.execute('COMMIT');
       problems.sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
-      return List.unmodifiable(problems);
+      return ProblemDatabaseSnapshot(
+        problems: List.unmodifiable(problems),
+        revision: revision,
+      );
+    } catch (_) {
+      _rollback(database);
+      rethrow;
+    } finally {
+      database.close();
+    }
+  }
+
+  int readRevision() {
+    final database = _open();
+    try {
+      return _readRevision(database);
+    } finally {
+      database.close();
+    }
+  }
+
+  void upsertProblem(ProblemRecord problem) {
+    upsertProblems([problem]);
+  }
+
+  void upsertProblems(Iterable<ProblemRecord> problems) {
+    final database = _open();
+    try {
+      database.execute('BEGIN IMMEDIATE');
+      _upsertAll(database, problems);
+      database.execute('COMMIT');
+    } catch (_) {
+      _rollback(database);
+      rethrow;
+    } finally {
+      database.close();
+    }
+  }
+
+  void deleteProblem(String id) {
+    final database = _open();
+    try {
+      database.execute('BEGIN IMMEDIATE');
+      database.execute('DELETE FROM problems WHERE id = ?', [id]);
+      database.execute('COMMIT');
+    } catch (_) {
+      _rollback(database);
+      rethrow;
     } finally {
       database.close();
     }
@@ -103,7 +145,7 @@ class ProblemDatabase {
     try {
       database.execute('BEGIN IMMEDIATE');
       database.execute('DELETE FROM problems');
-      _insertAll(database, problems);
+      _upsertAll(database, problems);
       database.execute('COMMIT');
     } catch (_) {
       _rollback(database);
@@ -119,17 +161,28 @@ class ProblemDatabase {
     try {
       database.execute('PRAGMA busy_timeout = 5000');
       database.execute('PRAGMA foreign_keys = ON');
-      final currentVersion =
+      var currentVersion =
           database.select('PRAGMA user_version').single['user_version'] as int;
-      if (currentVersion != 0 && currentVersion != schemaVersion) {
+      if (currentVersion < 0 || currentVersion > schemaVersion) {
         throw StateError(
           'Unsupported problem database schema version: $currentVersion.',
         );
       }
-      if (currentVersion == 0) {
+      if (currentVersion <= 1) {
         database.execute('PRAGMA journal_mode = WAL');
-        _createSchema(database);
-        database.execute('PRAGMA user_version = $schemaVersion');
+      }
+      if (currentVersion == 0) {
+        _runMigration(database, () {
+          _createSchemaV1(database);
+          database.execute('PRAGMA user_version = 1');
+        });
+        currentVersion = 1;
+      }
+      if (currentVersion == 1) {
+        _runMigration(database, () {
+          _migrateSchema1To2(database);
+          database.execute('PRAGMA user_version = 2');
+        });
       }
       database.execute('PRAGMA synchronous = NORMAL');
       return database;
@@ -139,7 +192,7 @@ class ProblemDatabase {
     }
   }
 
-  static void _createSchema(Database database) {
+  static void _createSchemaV1(Database database) {
     database.execute('''
       CREATE TABLE IF NOT EXISTS metadata (
         key TEXT PRIMARY KEY NOT NULL,
@@ -179,7 +232,47 @@ class ProblemDatabase {
     );
   }
 
-  static void _insertAll(Database database, Iterable<ProblemRecord> problems) {
+  static void _migrateSchema1To2(Database database) {
+    database.execute('''
+      CREATE TABLE IF NOT EXISTS problem_change_state (
+        singleton INTEGER PRIMARY KEY NOT NULL CHECK (singleton = 1),
+        revision INTEGER NOT NULL
+      )
+    ''');
+    database.execute(
+      'INSERT OR IGNORE INTO problem_change_state(singleton, revision) '
+      'VALUES (1, 0)',
+    );
+    database.execute('''
+      CREATE TRIGGER IF NOT EXISTS problems_revision_after_insert
+      AFTER INSERT ON problems
+      BEGIN
+        UPDATE problem_change_state
+        SET revision = revision + 1
+        WHERE singleton = 1;
+      END
+    ''');
+    database.execute('''
+      CREATE TRIGGER IF NOT EXISTS problems_revision_after_update
+      AFTER UPDATE ON problems
+      BEGIN
+        UPDATE problem_change_state
+        SET revision = revision + 1
+        WHERE singleton = 1;
+      END
+    ''');
+    database.execute('''
+      CREATE TRIGGER IF NOT EXISTS problems_revision_after_delete
+      AFTER DELETE ON problems
+      BEGIN
+        UPDATE problem_change_state
+        SET revision = revision + 1
+        WHERE singleton = 1;
+      END
+    ''');
+  }
+
+  static void _upsertAll(Database database, Iterable<ProblemRecord> problems) {
     final statement = database.prepare('''
       INSERT INTO problems (
         id, title, url, platform, workflow_status, tags_json, date, note,
@@ -187,6 +280,25 @@ class ProblemDatabase {
         archived_at, is_favorite, is_pinned, last_opened_at, created_at,
         updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        title = excluded.title,
+        url = excluded.url,
+        platform = excluded.platform,
+        workflow_status = excluded.workflow_status,
+        tags_json = excluded.tags_json,
+        date = excluded.date,
+        note = excluded.note,
+        analysis = excluded.analysis,
+        difficulty = excluded.difficulty,
+        external_id = excluded.external_id,
+        review_stage = excluded.review_stage,
+        next_review_at = excluded.next_review_at,
+        archived_at = excluded.archived_at,
+        is_favorite = excluded.is_favorite,
+        is_pinned = excluded.is_pinned,
+        last_opened_at = excluded.last_opened_at,
+        created_at = excluded.created_at,
+        updated_at = excluded.updated_at
     ''');
     try {
       for (final problem in problems) {
@@ -214,6 +326,51 @@ class ProblemDatabase {
       }
     } finally {
       statement.close();
+    }
+  }
+
+  static List<ProblemRecord> _readProblems(Database database) {
+    return database.select('SELECT * FROM problems').map((row) {
+      return ProblemRecord.fromJson({
+        'id': row['id'],
+        'title': row['title'],
+        'url': row['url'],
+        'platform': row['platform'],
+        'workflowStatus': row['workflow_status'],
+        'tags': row['tags_json'],
+        'date': row['date'],
+        'note': row['note'],
+        'analysis': row['analysis'],
+        'difficulty': row['difficulty'],
+        'externalId': row['external_id'],
+        'reviewStage': row['review_stage'],
+        'nextReviewAt': row['next_review_at'],
+        'archivedAt': row['archived_at'],
+        'isFavorite': row['is_favorite'] == 1,
+        'isPinned': row['is_pinned'] == 1,
+        'lastOpenedAt': row['last_opened_at'],
+        'created_at': row['created_at'],
+        'updated_at': row['updated_at'],
+      });
+    }).toList();
+  }
+
+  static int _readRevision(Database database) {
+    return database
+        .select(
+          'SELECT revision FROM problem_change_state WHERE singleton = 1',
+        )
+        .single['revision'] as int;
+  }
+
+  static void _runMigration(Database database, void Function() migration) {
+    database.execute('BEGIN IMMEDIATE');
+    try {
+      migration();
+      database.execute('COMMIT');
+    } catch (_) {
+      _rollback(database);
+      rethrow;
     }
   }
 

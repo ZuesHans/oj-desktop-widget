@@ -472,6 +472,70 @@ void main() {
     }
   });
 
+  test('pending row upsert transaction rolls forward without replacing peers',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('oj_float_test_');
+    final transaction = File(
+      '${directory.path}${Platform.pathSeparator}'
+      '$_problemTrainingTransactionFile',
+    );
+    try {
+      final store = LocalStore(supportDirectory: directory);
+      final first = _trainingProblem();
+      final peer = ProblemRecord.create(
+        id: 'peer-problem',
+        title: 'Peer problem',
+        url: 'https://example.com/peer',
+        platform: ProblemPlatform.other,
+        date: '2026-07-27',
+        now: DateTime(2026, 7, 27, 7),
+      );
+      await store.replaceProblems([first, peer]);
+      final updated = first.copyWith(
+        note: 'Recovered row update',
+        updatedAt: DateTime(2026, 7, 27, 9),
+      );
+      final training = TrainingStoreData(
+        tasks: [
+          DailyTrainingTask.create(
+            id: 'row-upsert-task',
+            problemId: first.id,
+            trainingDate: '2026-07-27',
+            now: DateTime(2026, 7, 27, 9),
+          ),
+        ],
+      );
+      await transaction.writeAsString(
+        jsonEncode({
+          'schemaVersion': 3,
+          'problemMutation': {
+            'operation': 'upsert',
+            'problems': [updated.toStorageJson()],
+          },
+          'training': training.toJson(),
+        }),
+        flush: true,
+      );
+
+      await LocalStore(supportDirectory: directory)
+          .recoverPendingProblemTrainingTransaction();
+
+      final recovered = LocalStore(supportDirectory: directory);
+      final problems = await recovered.loadProblems();
+      expect(problems, hasLength(2));
+      expect(
+        problems.singleWhere((problem) => problem.id == first.id).note,
+        'Recovered row update',
+      );
+      expect(problems.any((problem) => problem.id == peer.id), isTrue);
+      expect(
+          (await recovered.loadTraining()).tasks.single.id, 'row-upsert-task');
+      expect(await transaction.exists(), isFalse);
+    } finally {
+      await directory.delete(recursive: true);
+    }
+  });
+
   test('pending core transaction rolls problems, training and contests forward',
       () async {
     final directory = await Directory.systemTemp.createTemp('oj_float_test_');
