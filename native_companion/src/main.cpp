@@ -54,6 +54,11 @@ const std::array<const char*, 5> kStatuses = {
     "backlog", "active", "review", "mastered", "archived",
 };
 
+struct DatabaseSelection {
+  std::filesystem::path path;
+  bool custom = false;
+};
+
 std::wstring WindowText(HWND window) {
   const int length = GetWindowTextLengthW(window);
   std::wstring value(static_cast<size_t>(length) + 1, L'\0');
@@ -239,21 +244,91 @@ std::filesystem::path DefaultDatabasePath() {
   return path / L"com.example" / L"oj_float" / L"problem_book.sqlite3";
 }
 
-std::filesystem::path DatabasePathFromCommandLine() {
+std::filesystem::path ExecutableDirectory() {
+  std::array<wchar_t, 32768> buffer{};
+  const DWORD length = GetModuleFileNameW(
+      nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+  if (length == 0 || length == buffer.size()) {
+    throw std::runtime_error("无法定位题库小程序所在目录。");
+  }
+  return std::filesystem::path(std::wstring(buffer.data(), length)).parent_path();
+}
+
+DatabaseSelection DatabasePathFromCommandLine() {
   int argument_count = 0;
   LPWSTR* arguments = CommandLineToArgvW(GetCommandLineW(), &argument_count);
   if (arguments == nullptr) {
-    return DefaultDatabasePath();
+    return {DefaultDatabasePath(), false};
   }
-  std::filesystem::path result = DefaultDatabasePath();
+  DatabaseSelection selection{DefaultDatabasePath(), false};
   for (int index = 1; index + 1 < argument_count; ++index) {
     if (std::wstring(arguments[index]) == L"--database") {
-      result = arguments[index + 1];
+      selection.path = arguments[index + 1];
+      selection.custom = true;
       break;
     }
   }
   LocalFree(arguments);
-  return result;
+  return selection;
+}
+
+std::filesystem::path FindFlutterClient() {
+  const auto executable_directory = ExecutableDirectory();
+  const auto packaged = executable_directory / L"oj_float.exe";
+  if (std::filesystem::exists(packaged)) {
+    return packaged;
+  }
+  const auto build_root = executable_directory.parent_path().parent_path();
+  const auto development =
+      build_root / L"windows" / L"x64" / L"runner" / L"Release" /
+      L"oj_float.exe";
+  return std::filesystem::exists(development) ? development
+                                              : std::filesystem::path();
+}
+
+void MigrateDefaultDatabase(const std::filesystem::path& database_path) {
+  if (std::filesystem::exists(database_path)) {
+    return;
+  }
+  const auto flutter_client = FindFlutterClient();
+  if (flutter_client.empty()) {
+    throw std::runtime_error(
+        "尚未生成题库数据库，也未找到 oj_float.exe。请把两个程序放在同一目录，"
+        "或先运行一次新版 Flutter 主程序。");
+  }
+
+  std::wstring command = L"\"" + flutter_client.wstring() +
+                         L"\" --migrate-problem-database-and-exit";
+  std::vector<wchar_t> mutable_command(command.begin(), command.end());
+  mutable_command.push_back(L'\0');
+  STARTUPINFOW startup{};
+  startup.cb = sizeof(startup);
+  startup.dwFlags = STARTF_USESHOWWINDOW;
+  startup.wShowWindow = SW_HIDE;
+  PROCESS_INFORMATION process{};
+  if (!CreateProcessW(flutter_client.c_str(), mutable_command.data(), nullptr,
+                      nullptr, FALSE, 0, nullptr,
+                      flutter_client.parent_path().c_str(), &startup,
+                      &process)) {
+    throw std::runtime_error("无法启动主程序执行题库迁移。");
+  }
+  CloseHandle(process.hThread);
+
+  constexpr int kMaximumWaitAttempts = 300;
+  for (int attempt = 0; attempt < kMaximumWaitAttempts; ++attempt) {
+    if (std::filesystem::exists(database_path)) {
+      break;
+    }
+    if (WaitForSingleObject(process.hProcess, 100) == WAIT_OBJECT_0 &&
+        !std::filesystem::exists(database_path)) {
+      break;
+    }
+  }
+  CloseHandle(process.hProcess);
+  if (!std::filesystem::exists(database_path)) {
+    throw std::runtime_error(
+        "主程序未能生成题库数据库。请先手动运行一次最新版 oj_float.exe。");
+  }
 }
 
 class Application {
@@ -751,7 +826,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show_command) {
   InitCommonControlsEx(&controls);
   const HRESULT com_result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
   try {
-    Application application(DatabasePathFromCommandLine());
+    const auto selection = DatabasePathFromCommandLine();
+    if (!selection.custom) {
+      MigrateDefaultDatabase(selection.path);
+    }
+    Application application(selection.path);
     if (!application.Create(instance, show_command)) {
       throw std::runtime_error("Unable to create the companion window.");
     }

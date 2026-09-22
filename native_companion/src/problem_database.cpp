@@ -71,8 +71,7 @@ ProblemDatabase::ProblemDatabase(const std::filesystem::path& path,
     : allow_create_for_testing_(allow_create_for_testing) {
   if (!allow_create_for_testing_ && !std::filesystem::exists(path)) {
     throw std::runtime_error(
-        "The problem database does not exist. Launch the Flutter client once "
-        "to migrate the problem book first.");
+        "题库数据库不存在。请先运行一次新版主程序完成迁移。");
   }
   const std::string utf8_path = WideToUtf8(path.wstring());
   int flags = kSqliteOpenReadWrite | kSqliteOpenFullMutex;
@@ -87,7 +86,7 @@ ProblemDatabase::ProblemDatabase(const std::filesystem::path& path,
       api_.close_v2(database_);
       database_ = nullptr;
     }
-    throw std::runtime_error("Unable to open the problem database: " + detail);
+    throw std::runtime_error("无法打开题库数据库：" + detail);
   }
   try {
     api_.busy_timeout(database_, 5000);
@@ -114,15 +113,15 @@ void ProblemDatabase::VerifySchema() {
   if (api_.step(statement.get()) != kSqliteRow ||
       api_.column_int(statement.get(), 0) != 2) {
     throw std::runtime_error(
-        "Unsupported problem database schema. Open the Flutter client to "
-        "finish migration; this companion requires schema version 2.");
+        "题库数据库版本不受支持。请先打开新版主程序完成迁移；"
+        "当前小程序需要 schema v2。");
   }
   Statement revision(api_, database_,
                      "SELECT revision FROM problem_change_state "
                      "WHERE singleton = 1");
   if (api_.step(revision.get()) != kSqliteRow) {
     throw std::runtime_error(
-        "The problem database is missing its change revision row.");
+        "题库数据库缺少变更修订记录，请使用新版主程序修复或恢复备份。");
   }
 }
 

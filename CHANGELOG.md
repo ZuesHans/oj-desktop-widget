@@ -19,6 +19,7 @@
 - Migrated the problem book from `problems_v1.json` to a WAL-enabled SQLite database, with strict one-time legacy migration and the original JSON retained as a recovery source.
 - Added row-level problem writes and trigger-backed change revisions so native companion edits refresh in Flutter without unrelated records being overwritten.
 - Added the first Win32/C++ problem companion with live SQLite refresh, row editing, links, tags, notes, and native database contract tests.
+- Added a headless Flutter migration entry point so the native companion can initialize the default SQLite database automatically on first launch.
 
 ## v0.1.3beta - 2026-07-10
 

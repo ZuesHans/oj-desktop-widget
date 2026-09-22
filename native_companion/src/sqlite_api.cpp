@@ -35,7 +35,7 @@ SqliteApi::SqliteApi() {
                                LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
   if (module_ == nullptr) {
     throw std::runtime_error(
-        "sqlite3.dll was not found next to oj_problem_companion.exe.");
+        "oj_problem_companion.exe 旁边缺少 sqlite3.dll。");
   }
 
   try {

@@ -259,6 +259,14 @@ void main() {
     );
   });
 
+  test('problem database migration mode is explicit', () {
+    expect(
+      shouldMigrateProblemDatabase([problemDatabaseMigrationFlag]),
+      isTrue,
+    );
+    expect(shouldMigrateProblemDatabase(const ['--startup']), isFalse);
+  });
+
   test('controller creates a due backup in the selected directory', () async {
     final directory = await Directory.systemTemp.createTemp('oj_float_test_');
     final backupDirectory = Directory(

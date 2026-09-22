@@ -11,9 +11,12 @@ book. It does not embed Flutter. The first version supports:
 
 ## Prerequisites
 
-Launch the Flutter client once before using the companion. Flutter owns schema
-migrations and creates `%APPDATA%\com.example\oj_float\problem_book.sqlite3`.
-The companion refuses unknown or incomplete schemas instead of modifying them.
+Flutter owns schema migrations and creates
+`%APPDATA%\com.example\oj_float\problem_book.sqlite3`. If the default database
+does not exist, the companion starts `oj_float.exe` in a dedicated background
+migration mode and then continues automatically. Keep both executables together
+when packaging them. Unknown, incomplete, or missing custom databases are still
+rejected instead of being modified.
 
 Visual Studio's **Desktop development with C++** workload is required. Build
 the Flutter application or run its tests first so the repository has the same
@@ -38,4 +41,3 @@ To open an isolated or portable database, pass its full path:
 Only schema version 2 databases are accepted. See
 [`docs/problem-database.md`](../docs/problem-database.md) for the shared storage
 contract.
-

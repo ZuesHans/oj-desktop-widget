@@ -63,8 +63,15 @@ export 'ui/teammates/teammate_editor.dart';
 export 'ui/teammates/teammates_page.dart';
 export 'ui/training/training_page.dart';
 
+const problemDatabaseMigrationFlag = '--migrate-problem-database-and-exit';
+
 Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (shouldMigrateProblemDatabase(arguments)) {
+    await LocalStore().loadProblemSnapshot();
+    exit(0);
+  }
 
   AppConfig? initialConfig;
   var startHidden = false;
@@ -95,6 +102,10 @@ Future<void> main(List<String> arguments) async {
     initialConfig: initialConfig,
     startHidden: startHidden,
   ));
+}
+
+bool shouldMigrateProblemDatabase(List<String> arguments) {
+  return arguments.contains(problemDatabaseMigrationFlag);
 }
 
 bool shouldStartHidden(List<String> arguments, AppConfig config) {
