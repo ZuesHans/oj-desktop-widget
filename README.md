@@ -91,7 +91,7 @@ oj-desktop-widget-v0.2.0-beta-windows-x64.zip
 
 ## 浏览器导入
 
-桌面客户端启动后会在 `127.0.0.1:27121` 运行本地导入服务。进入“设置 > 浏览器导入”获取随机配对令牌，然后按 [扩展安装说明](browser_extension/README.md) 在 Edge 或 Chrome 中加载本地扩展。
+桌面客户端启动后会在 `127.0.0.1:27121` 运行本地导入服务。进入“设置 > 浏览器导入”获取随机配对令牌，然后可以按 [扩展安装说明](browser_extension/README.md) 加载本地扩展，或安装带猪头悬浮按钮的 [Tampermonkey 一键存题脚本](browser_extension/tampermonkey/README.md)。未识别的网站也会至少保存当前链接。
 
 ## 备份与迁移
 

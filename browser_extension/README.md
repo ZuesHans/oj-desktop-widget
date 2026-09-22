@@ -1,4 +1,12 @@
-# OJ Float 浏览器导入扩展
+# OJ Float 浏览器导入
+
+这里提供两种 Edge / Chrome 集成方式：
+
+- `manifest.json`：加载解压缩目录的 Manifest V3 扩展；
+- [`tampermonkey/`](tampermonkey/README.md)：带猪头悬浮按钮的 Tampermonkey
+  一键存题脚本。
+
+## Manifest V3 扩展
 
 1. 启动 OJ Float，在“设置 > 浏览器导入”确认本地服务运行中。
 2. 在 Edge 打开 `edge://extensions`，或在 Chrome 打开 `chrome://extensions`。

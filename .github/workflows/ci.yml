@@ -31,8 +31,12 @@ jobs:
         shell: pwsh
         run: ./scripts/check_coverage.ps1
 
-      - name: Test browser extension fixtures
-        run: node browser_extension/test/extractor.test.js
+      - name: Test browser integration fixtures
+        shell: pwsh
+        run: |
+          ./browser_extension/tampermonkey/build.ps1 -Check
+          node browser_extension/test/extractor.test.js
+          node browser_extension/tampermonkey/test/importer.test.js
 
       - name: Build and test native C++ companion
         shell: pwsh
