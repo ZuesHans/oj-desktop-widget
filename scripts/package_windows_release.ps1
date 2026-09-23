@@ -1,5 +1,6 @@
 param(
-  [switch]$SkipBuild
+  [switch]$SkipBuild,
+  [switch]$SkipDesktopShortcuts
 )
 
 $ErrorActionPreference = 'Stop'
@@ -70,6 +71,31 @@ Copy-Item -LiteralPath (Join-Path $repositoryRoot 'LICENSE') -Destination $stage
 
 Compress-Archive -Path (Join-Path $stagePath '*') -DestinationPath $zipPath -CompressionLevel Optimal
 $hash = Get-FileHash -LiteralPath $zipPath -Algorithm SHA256
+
+if (-not $SkipDesktopShortcuts) {
+  $desktopPath = [Environment]::GetFolderPath('Desktop')
+  $shell = New-Object -ComObject WScript.Shell
+
+  $clientShortcut = $shell.CreateShortcut(
+    (Join-Path $desktopPath 'oj_float.exe.lnk')
+  )
+  $clientShortcut.TargetPath = Join-Path $stagePath 'oj_float.exe'
+  $clientShortcut.WorkingDirectory = $stagePath
+  $clientShortcut.IconLocation = "$(Join-Path $stagePath 'oj_float.exe'),0"
+  $clientShortcut.Description = "OJ Float $version"
+  $clientShortcut.Save()
+
+  $companionShortcut = $shell.CreateShortcut(
+    (Join-Path $desktopPath 'OJ 题库小程序.lnk')
+  )
+  $companionShortcut.TargetPath = Join-Path $stagePath 'oj_problem_companion.exe'
+  $companionShortcut.WorkingDirectory = $stagePath
+  $companionShortcut.IconLocation = "$(Join-Path $stagePath 'oj_problem_companion.exe'),0"
+  $companionShortcut.Description = "OJ Float C++ 题库小程序 $version"
+  $companionShortcut.Save()
+
+  Write-Host "Desktop shortcuts updated: $desktopPath"
+}
 
 Write-Host "Windows package created: $zipPath"
 Write-Host "SHA256: $($hash.Hash)"

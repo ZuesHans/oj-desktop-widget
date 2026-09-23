@@ -195,6 +195,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_windows_releas
 .\scripts\package_windows_release.ps1
 ```
 
+打包完成后会自动把桌面的 `oj_float.exe` 和 `OJ 题库小程序` 快捷方式更新到
+最新版本目录。如不希望修改桌面快捷方式，可添加 `-SkipDesktopShortcuts`。
+
 确认 zip 内至少包含：
 
 - `oj_float.exe`
