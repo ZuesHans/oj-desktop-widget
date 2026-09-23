@@ -1,3 +1,4 @@
+#include "browser_import.hpp"
 #include "problem_database.hpp"
 #include "resource.h"
 
@@ -23,6 +24,7 @@ namespace {
 
 using oj_companion::ProblemDatabase;
 using oj_companion::ProblemRecord;
+using oj_companion::BrowserImportServer;
 using oj_companion::Utf8ToWide;
 using oj_companion::WideToUtf8;
 
@@ -335,7 +337,9 @@ void MigrateDefaultDatabase(const std::filesystem::path& database_path) {
 class Application {
  public:
   explicit Application(std::filesystem::path database_path)
-      : database_path_(std::move(database_path)), database_(database_path_) {}
+      : database_path_(std::move(database_path)),
+        database_(database_path_),
+        browser_import_server_(database_path_) {}
 
   bool Create(HINSTANCE instance, int show_command) {
     WNDCLASSEXW window_class{};
@@ -400,6 +404,14 @@ class Application {
       case WM_CREATE:
         CreateControls();
         ReloadProblems();
+        try {
+          browser_import_server_.Start();
+          SetStatus("已加载 " + std::to_string(problems_.size()) +
+                    " 道题；浏览器导入监听 127.0.0.1:" +
+                    std::to_string(browser_import_server_.Port()));
+        } catch (const std::exception& error) {
+          SetStatus(std::string("浏览器导入服务未启动：") + error.what());
+        }
         SetTimer(window_, kRefreshTimer, kRefreshIntervalMs, nullptr);
         return 0;
       case WM_SIZE:
@@ -423,6 +435,7 @@ class Application {
         return 0;
       case WM_DESTROY:
         KillTimer(window_, kRefreshTimer);
+        browser_import_server_.Stop();
         PostQuitMessage(0);
         return 0;
       default:
@@ -650,8 +663,14 @@ class Application {
       ClearEditor();
     }
     reloading_list_ = false;
-    SetStatus("已加载 " + std::to_string(problems_.size()) + " 道题；修订号 " +
-              std::to_string(known_revision_));
+    std::string status =
+        "已加载 " + std::to_string(problems_.size()) + " 道题；修订号 " +
+        std::to_string(known_revision_);
+    if (browser_import_server_.IsRunning()) {
+      status += "；浏览器导入 127.0.0.1:" +
+                std::to_string(browser_import_server_.Port());
+    }
+    SetStatus(status);
   }
 
   void RefreshIfChanged() {
@@ -798,6 +817,7 @@ class Application {
 
   std::filesystem::path database_path_;
   ProblemDatabase database_;
+  BrowserImportServer browser_import_server_;
   HWND window_ = nullptr;
   HWND path_text_ = nullptr;
   HWND list_ = nullptr;

@@ -20,6 +20,7 @@
 - Added row-level problem writes and trigger-backed change revisions so native companion edits refresh in Flutter without unrelated records being overwritten.
 - Added the first Win32/C++ problem companion with live SQLite refresh, row editing, links, tags, notes, and native database contract tests.
 - Added a headless Flutter migration entry point so the native companion can initialize the default SQLite database automatically on first launch.
+- Added a loopback-only HTTP import service to the C++ companion and a pig-button Tampermonkey script, allowing one-click browser capture without keeping Flutter running.
 
 ## v0.1.3beta - 2026-07-10
 

@@ -30,6 +30,8 @@ flowchart LR
     Trigger --> Poll[两端每秒检查 revision]
     Poll --> UI
     Poll --> Flutter
+    Userscript[Edge 油猴脚本] -->|HTTP 127.0.0.1:27122| Import[BrowserImportServer]
+    Import --> Repository
 ```
 
 它是一个简单的三层结构：
@@ -39,6 +41,10 @@ flowchart LR
 | 表现层 | `src/main.cpp` | 创建窗口和控件，响应按钮、列表、定时器事件 |
 | 数据访问层 | `src/problem_database.*` | 把题目对象转换成 SQL，管理事务并校验 schema |
 | SQLite 适配层 | `src/sqlite_api.*` | 动态加载 `sqlite3.dll`，解析函数并处理 UTF-8/UTF-16 |
+
+`src/browser_import.*` 是一个独立的输入适配器：后台线程只监听本机回环地址，解析
+受限大小的 HTTP/JSON 请求，再通过自己的 `ProblemDatabase` 连接执行行级 upsert。
+因此浏览器存题时不需要启动 Flutter，也不会跨线程共享 UI 的 SQLite 连接。
 
 资源和测试不属于运行时分层：
 
@@ -57,6 +63,9 @@ flowchart LR
 5. 注册窗口类；这里也会从 EXE 资源加载猪猪大图标和小图标。
 6. 创建控件，读取题目列表，并启动一秒一次的刷新定时器。
 7. 进入 Windows 消息循环，直到窗口关闭。
+
+窗口创建后还会启动 `BrowserImportServer`。它监听 `127.0.0.1:27122`；关闭窗口时先
+停止监听线程，再退出消息循环。
 
 自定义 `--database` 路径是一个安全例外：如果文件缺失或结构不完整，程序会拒绝
 写入，而不会擅自创建一个看似可用、实际不兼容的库。

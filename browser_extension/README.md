@@ -3,8 +3,8 @@
 这里提供两种 Edge / Chrome 集成方式：
 
 - `manifest.json`：加载解压缩目录的 Manifest V3 扩展；
-- [`tampermonkey/`](tampermonkey/README.md)：带猪头悬浮按钮的 Tampermonkey
-  一键存题脚本。
+- [`tampermonkey/`](tampermonkey/README.md)：带猪头悬浮按钮、直接连接 C++
+  题库小程序的 Tampermonkey 一键存题脚本。
 
 ## Manifest V3 扩展
 

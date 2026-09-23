@@ -1,3 +1,6 @@
+#include <winsock2.h>
+
+#include "browser_import.hpp"
 #include "problem_database.hpp"
 
 #include <objbase.h>
@@ -6,6 +9,7 @@
 #include <array>
 #include <filesystem>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 
 namespace {
@@ -61,6 +65,63 @@ void Require(bool condition, const char* message) {
   }
 }
 
+std::string SendImportRequest(std::uint16_t port, const std::string& body,
+                              bool include_client_header = true) {
+  WSADATA winsock{};
+  if (WSAStartup(MAKEWORD(2, 2), &winsock) != 0) {
+    throw std::runtime_error("Unable to initialize test Winsock.");
+  }
+  SOCKET socket_handle = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (socket_handle == INVALID_SOCKET) {
+    WSACleanup();
+    throw std::runtime_error("Unable to create test socket.");
+  }
+  sockaddr_in address{};
+  address.sin_family = AF_INET;
+  address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  address.sin_port = htons(port);
+  if (connect(socket_handle, reinterpret_cast<const sockaddr*>(&address),
+              sizeof(address)) == SOCKET_ERROR) {
+    closesocket(socket_handle);
+    WSACleanup();
+    throw std::runtime_error("Unable to connect to browser import server.");
+  }
+  std::ostringstream request;
+  request << "POST /v1/problems/import HTTP/1.1\r\n"
+          << "Host: 127.0.0.1\r\n"
+          << "Content-Type: application/json\r\n";
+  if (include_client_header) {
+    request << "X-OJ-Companion: userscript-v1\r\n";
+  }
+  request << "Content-Length: " << body.size()
+          << "\r\nConnection: close\r\n\r\n"
+          << body;
+  const std::string bytes = request.str();
+  std::size_t sent = 0;
+  while (sent < bytes.size()) {
+    const int result = send(socket_handle, bytes.data() + sent,
+                            static_cast<int>(bytes.size() - sent), 0);
+    if (result <= 0) {
+      closesocket(socket_handle);
+      WSACleanup();
+      throw std::runtime_error("Unable to send browser import request.");
+    }
+    sent += static_cast<std::size_t>(result);
+  }
+  shutdown(socket_handle, SD_SEND);
+  std::string response;
+  std::array<char, 4096> buffer{};
+  while (true) {
+    const int received = recv(socket_handle, buffer.data(),
+                              static_cast<int>(buffer.size()), 0);
+    if (received <= 0) break;
+    response.append(buffer.data(), static_cast<std::size_t>(received));
+  }
+  closesocket(socket_handle);
+  WSACleanup();
+  return response;
+}
+
 }  // namespace
 
 int main() {
@@ -102,6 +163,59 @@ int main() {
       Require(database.Delete(problem.id), "delete should report a row");
       Require(database.Revision() == 3, "delete should advance revision");
       Require(database.LoadProblems().empty(), "deleted row should be absent");
+
+      const auto parsed = oj_companion::ParseBrowserProblemImport(R"json({
+        "url":"https://codeforces.com/contest/1799/problem/A",
+        "title":"A. Recent Actions",
+        "platform":"cf",
+        "externalId":"1799:A",
+        "tags":["implementation","implementation"],
+        "difficulty":"800"
+      })json");
+      Require(parsed.tags.size() == 1, "import tags should be normalized");
+      const auto direct =
+          oj_companion::SaveBrowserProblemImport(database, parsed);
+      Require(direct.created, "first direct import should create a problem");
+      Require(database.Revision() == 4,
+              "direct browser import should advance revision");
+
+      oj_companion::BrowserImportServer server(path, 0);
+      server.Start();
+      Require(server.IsRunning(), "browser import server should start");
+      Require(server.Port() != 0, "browser import server should expose port");
+      const auto merged_response = SendImportRequest(
+          server.Port(), R"json({
+            "url":"https://codeforces.com/problemset/problem/1799/A",
+            "title":"A. Recent Actions (updated)",
+            "platform":"cf",
+            "externalId":"1799:A",
+            "tags":["greedy"],
+            "difficulty":"900"
+          })json");
+      Require(merged_response.find("HTTP/1.1 200 OK") != std::string::npos,
+              "valid userscript request should return 200");
+      Require(merged_response.find("\"status\":\"existing\"") !=
+                  std::string::npos,
+              "same platform problem should merge");
+      const auto forbidden =
+          SendImportRequest(server.Port(), R"json({"url":"https://bad"})json",
+                            false);
+      Require(forbidden.find("HTTP/1.1 403 Forbidden") != std::string::npos,
+              "ordinary page request without client header should fail");
+      server.Stop();
+
+      const auto imported = database.LoadProblems();
+      Require(imported.size() == 1,
+              "browser import should not duplicate an existing problem");
+      Require(imported.front().title == "A. Recent Actions (updated)",
+              "browser import should merge updated title");
+      Require(imported.front().difficulty == "900",
+              "browser import should merge difficulty");
+      Require(imported.front().tags_json.find("implementation") !=
+                  std::string::npos &&
+                  imported.front().tags_json.find("greedy") !=
+                      std::string::npos,
+              "browser import should merge tags");
     }
     std::filesystem::remove_all(directory);
     std::cout << "native companion database contract passed\n";

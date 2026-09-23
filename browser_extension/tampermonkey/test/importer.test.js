@@ -40,9 +40,9 @@ assert.deepEqual(
 
 assert.equal(
   importer.explainFailure(401, {}),
-  "配对令牌不正确，请从 OJ Float 设置页重新复制。"
+  "C++ 小程序拒绝了导入请求，请更新油猴脚本。"
 );
-assert.match(importer.explainFailure(0, {}), /启动桌面客户端/);
+assert.match(importer.explainFailure(0, {}), /启动 OJ 题库 C\+\+ 小程序/);
 
 const scriptPath = path.join(__dirname, "..", "oj-float-importer.user.js");
 const script = fs.readFileSync(scriptPath, "utf8");
@@ -50,6 +50,9 @@ assert.match(script, /@grant\s+GM_xmlhttpRequest/);
 assert.match(script, /@connect\s+127\.0\.0\.1/);
 assert.match(script, /@noframes/);
 assert.match(script, /@icon\s+data:image\/png;base64,/);
+assert.match(script, /127\.0\.0\.1:27122\/v1\/problems\/import/);
+assert.match(script, /"X-OJ-Companion": "userscript-v1"/);
+assert.doesNotMatch(script, /GM_getValue|GM_setValue|Authorization/);
 assert.ok(!script.includes("__PIG_ICON_DATA_URL__"));
 
 console.log(`tampermonkey importer fixtures passed: ${cases.length}`);

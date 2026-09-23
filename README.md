@@ -2,14 +2,14 @@
 
 OJ Float 是一个 Windows 桌面训练客户端，用来集中查看多个 Online Judge 账号的刷题进度、今日增量、补题记录、比赛记录、队友观察和刷新日志。
 
-当前预发行版本：`v0.2.0-beta`
+当前预发行版本：`v0.2.0-beta+7`
 
 ## 下载
 
 请在 GitHub Releases 下载最新 Windows x64 免安装包：
 
 ```text
-oj-desktop-widget-v0.2.0-beta-windows-x64.zip
+OJ-Float-v0.2.0-beta+7-windows-x64.zip
 ```
 
 使用方式：
@@ -91,7 +91,7 @@ oj-desktop-widget-v0.2.0-beta-windows-x64.zip
 
 ## 浏览器导入
 
-桌面客户端启动后会在 `127.0.0.1:27121` 运行本地导入服务。进入“设置 > 浏览器导入”获取随机配对令牌，然后可以按 [扩展安装说明](browser_extension/README.md) 加载本地扩展，或安装带猪头悬浮按钮的 [Tampermonkey 一键存题脚本](browser_extension/tampermonkey/README.md)。未识别的网站也会至少保存当前链接。
+浏览器扩展可以连接 Flutter 客户端的 `127.0.0.1:27121` 导入服务。更轻量的用法是只启动 C++ 题库小程序，然后安装带猪头悬浮按钮的 [Tampermonkey 一键存题脚本](browser_extension/tampermonkey/README.md)；脚本直接连接 `127.0.0.1:27122`，不要求 Flutter 主程序运行，未识别的网站也会至少保存当前链接。
 
 ## 备份与迁移
 
@@ -187,6 +187,12 @@ build\windows\ninja\runner
 flutter analyze
 flutter test
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_windows_release_ninja.ps1
+```
+
+构建并生成包含 Flutter 客户端、C++ 题库小程序和油猴脚本的发行 zip：
+
+```powershell
+.\scripts\package_windows_release.ps1
 ```
 
 确认 zip 内至少包含：

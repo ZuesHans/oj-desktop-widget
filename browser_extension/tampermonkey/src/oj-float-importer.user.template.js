@@ -1,14 +1,12 @@
 // ==UserScript==
 // @name         OJ Float 猪猪一键存题
 // @namespace    https://github.com/ZuesHans/oj-desktop-widget
-// @version      1.0.0
+// @version      1.1.0
 // @description  点击猪猪按钮，把当前题目或链接存入 OJ Float 题库。
 // @author       zueshans
 // @match        http://*/*
 // @match        https://*/*
 // @connect      127.0.0.1
-// @grant        GM_getValue
-// @grant        GM_setValue
 // @grant        GM_registerMenuCommand
 // @grant        GM_xmlhttpRequest
 // @run-at       document-idle
@@ -28,8 +26,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  const endpoint = "http://127.0.0.1:27121/v1/problems/import";
-  const tokenKey = "ojFloatPairingToken";
+  const endpoint = "http://127.0.0.1:27122/v1/problems/import";
   const iconDataUrl = "__PIG_ICON_DATA_URL__";
   const uiId = "oj-float-pig-importer";
   let busy = false;
@@ -191,52 +188,22 @@
 
   function explainFailure(statusCode, body) {
     if (statusCode === 401) {
-      return "配对令牌不正确，请从 OJ Float 设置页重新复制。";
+      return "C++ 小程序拒绝了导入请求，请更新油猴脚本。";
     }
     if (statusCode === 0) {
-      return "连接不到 OJ Float，请先启动桌面客户端。";
+      return "连接不到题库，请先启动 OJ 题库 C++ 小程序。";
     }
     return body?.message || body?.error || `本地服务返回 HTTP ${statusCode}`;
   }
 
-  function readToken() {
-    return Promise.resolve(GM_getValue(tokenKey, ""))
-      .then((value) => String(value || "").trim());
-  }
-
-  function writeToken(value) {
-    return Promise.resolve(GM_setValue(tokenKey, value));
-  }
-
-  async function configureToken() {
-    const current = await readToken();
-    const value = window.prompt(
-      "粘贴 OJ Float「设置 → 浏览器导入」里的配对令牌：",
-      current
-    );
-    if (value === null) return "";
-    const token = value.trim();
-    if (!token) {
-      showStatus("配对令牌不能为空。", "error");
-      return "";
-    }
-    await writeToken(token);
-    showStatus("配对令牌已保存。", "success");
-    return token;
-  }
-
-  async function requireToken() {
-    return (await readToken()) || configureToken();
-  }
-
-  function requestImport(payload, token) {
+  function requestImport(payload) {
     return new Promise((resolve, reject) => {
       GM_xmlhttpRequest({
         method: "POST",
         url: endpoint,
         headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "X-OJ-Companion": "userscript-v1"
         },
         data: JSON.stringify(payload),
         timeout: 10000,
@@ -254,7 +221,7 @@
           reject(new Error(explainFailure(response.status, body)));
         },
         ontimeout() {
-          reject(new Error("连接 OJ Float 超时，请确认桌面客户端正在运行。"));
+          reject(new Error("连接题库超时，请确认 C++ 小程序正在运行。"));
         },
         onerror() {
           reject(new Error(explainFailure(0, {})));
@@ -292,14 +259,12 @@
     if (busy) return;
     setBusy(true);
     try {
-      const token = await requireToken();
-      if (!token) return;
       const payload = buildPayload(collectPage(document, window.location));
       if (!/^https?:\/\//i.test(payload.url)) {
         throw new Error("当前页面不是可以保存的 HTTP/HTTPS 链接。");
       }
       showStatus("猪猪正在存题…");
-      const result = await requestImport(payload, token);
+      const result = await requestImport(payload);
       showStatus(
         result.status === "created"
           ? "已存入题库 ✓"
@@ -396,7 +361,6 @@
   function install() {
     createUi();
     GM_registerMenuCommand("保存当前题目", saveCurrentPage);
-    GM_registerMenuCommand("设置 OJ Float 配对令牌", configureToken);
   }
 
   return {

@@ -7,6 +7,8 @@ book. It does not embed Flutter. The first version supports:
 - row-level insert/update/delete operations;
 - title, URL, platform, workflow status, tags, and note editing;
 - one-second revision polling so Flutter and the companion refresh each other;
+- a loopback-only browser import service on `127.0.0.1:27122` for the pig
+  Tampermonkey userscript, with no Flutter process required;
 - Unicode database paths and UTF-8 problem content.
 
 For a learner-oriented map of the modules, startup sequence, data flow, and
@@ -44,6 +46,16 @@ To open an isolated or portable database, pass its full path:
 Only schema version 2 databases are accepted. See
 [`docs/problem-database.md`](../docs/problem-database.md) for the shared storage
 contract.
+
+## Browser import
+
+While the companion is running, it accepts the bundled Tampermonkey script at
+`POST http://127.0.0.1:27122/v1/problems/import`. The listener binds only to
+IPv4 loopback, requires `Content-Type: application/json` and the dedicated
+`X-OJ-Companion: userscript-v1` header, caps request sizes, and deliberately
+does not return CORS headers. Ordinary page JavaScript therefore cannot use the
+endpoint. See [`browser_extension/tampermonkey/README.md`](../browser_extension/tampermonkey/README.md)
+for installation.
 
 ## Application icon
 

@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(oj_companion_database STATIC
+  src/browser_import.cpp
   src/problem_database.cpp
   src/sqlite_api.cpp
 )
@@ -24,13 +25,18 @@ target_link_libraries(oj_problem_companion PRIVATE
   comctl32
   ole32
   shell32
+  ws2_32
 )
 
 add_executable(oj_companion_tests
   tests/problem_database_test.cpp
 )
 target_compile_definitions(oj_companion_tests PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
-target_link_libraries(oj_companion_tests PRIVATE oj_companion_database ole32)
+target_link_libraries(oj_companion_tests PRIVATE
+  oj_companion_database
+  ole32
+  ws2_32
+)
 
 if(MSVC)
   target_compile_options(oj_companion_database PRIVATE /W4 /permissive- /utf-8)
