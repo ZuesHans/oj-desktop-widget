@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../models/fetch_result.dart';
 import '../../services/heatmap_service.dart';
 import '../app_theme.dart';
 
@@ -49,24 +50,45 @@ class HeatmapStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 72,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: 11,
-            ),
+      width: 112,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: cardMutedColor,
+          borderRadius: BorderRadius.circular(appRadiusControl),
+          border: Border.all(color: borderColor),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: appSpace3,
+            vertical: appSpace2,
           ),
-          Text(
-            value,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w600),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: textSecondaryColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: textPrimaryColor,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -96,7 +118,11 @@ class _HeatmapCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: '${day.date}: +${day.delta}',
+      message: switch (day.accuracy) {
+        DailyActivityAccuracy.exact => '${day.date}: +${day.delta}',
+        DailyActivityAccuracy.estimated => '${day.date}: 约 +${day.delta}',
+        DailyActivityAccuracy.unknown => '${day.date}: 数据未知',
+      },
       child: Container(
         width: 12,
         height: 12,

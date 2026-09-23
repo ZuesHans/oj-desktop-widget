@@ -1,0 +1,3 @@
+#include "resource.h"
+
+IDI_OJ_PROBLEM_COMPANION ICON "oj_problem_companion.ico"

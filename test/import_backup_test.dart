@@ -48,9 +48,27 @@ void main() {
 
   test('schemaVersion mismatch is rejected', () {
     expect(
-      () => parsePortableBackupJson(_backupJson(schemaVersion: 2)),
+      () => parsePortableBackupJson(_backupJson(schemaVersion: 3)),
       throwsFormatException,
     );
+  });
+
+  test('schemaVersion 2 restores training data while v1 stays compatible', () {
+    final v1 = parsePortableBackupJson(_backupJson(schemaVersion: 1));
+    final active = ActiveTrainingAttempt.create(
+      problemId: 'p1',
+      origin: TrainingAttemptOrigin.browserImport,
+      now: DateTime(2026, 7, 27, 8),
+    );
+    final v2 = parsePortableBackupJson(
+      _backupJson(
+        schemaVersion: 2,
+        training: TrainingStoreData(activeAttempt: active).toJson(),
+      ),
+    );
+
+    expect(v1.training.activeAttempt, isNull);
+    expect(v2.training.activeAttempt?.problemId, 'p1');
   });
 
   test('app mismatch is rejected', () {
@@ -112,6 +130,25 @@ void main() {
     expect(backup.snapshots.single.username, 'alice');
   });
 
+  test('old backup import keeps only the latest 6000 snapshots', () {
+    final base = DateTime.parse('2026-01-01T00:00:00');
+    final backup = parsePortableBackupJson(
+      _backupJson(
+        snapshots: [
+          for (var i = 6004; i >= 0; i--)
+            {
+              ..._snapshotJson('2026-01-01', 'alice', i),
+              'fetchedAt': base.add(Duration(minutes: i)).toIso8601String(),
+            },
+        ],
+      ),
+    );
+
+    expect(backup.snapshots, hasLength(maxStoredSnapshots));
+    expect(backup.snapshots.first.solvedCount, 5);
+    expect(backup.snapshots.last.solvedCount, 6004);
+  });
+
   test('import replaces config and snapshots after safety backup', () async {
     final directory = await Directory.systemTemp.createTemp('oj_import_test_');
     try {
@@ -149,6 +186,7 @@ void main() {
         importFile,
         safetyBackupDirectory: directory,
       );
+      expect(result.scope, BackupImportScope.portable);
       final loadedConfig = await store.loadConfig();
       final loadedSnapshots = await store.loadSnapshots();
       final loadedProblems = await store.loadProblems();
@@ -229,6 +267,115 @@ void main() {
       await directory.delete(recursive: true);
     }
   });
+
+  test('core automatic backup restores authored data and preserves OJ data',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('oj_import_test_');
+    final backupDirectory = Directory(
+      '${directory.path}${Platform.pathSeparator}selected_backups',
+    );
+    final store = LocalStore(supportDirectory: directory);
+    final backupService = AutomaticBackupService(
+      defaultDirectoryProvider: () async => backupDirectory,
+      now: () => DateTime(2026, 8, 1, 10),
+    );
+    final config = _localConfig('kept-user').copyWith(
+      automaticBackup: AutomaticBackupConfig(
+        enabled: true,
+        timeMinutes: 23 * 60,
+        directoryPath: backupDirectory.path,
+      ),
+    );
+    await store.saveConfig(config);
+    await store.replaceSnapshots([
+      _snapshot('2026-08-01', 'kept-user', 99),
+    ]);
+    await store.replaceProblems([_problem(id: 'old-problem')]);
+    await store.replaceContests([_contest(id: 'old-contest')]);
+
+    final newProblem = _problem(id: 'new-core-problem');
+    final newTraining = TrainingStoreData(
+      attempts: [
+        TrainingAttempt.create(
+          id: 'new-attempt',
+          problemId: newProblem.id,
+          origin: TrainingAttemptOrigin.manual,
+          startedAt: DateTime(2026, 8, 1, 8),
+          endedAt: DateTime(2026, 8, 1, 8, 30),
+          durationSeconds: 1500,
+          result: AttemptResult.ac,
+          assistance: AssistanceLevel.hint,
+          mistakes: const [MistakeCategory.idea],
+          reflection: 'important reflection',
+        ),
+      ],
+      lists: [
+        TrainingList.create(
+          id: 'new-default-list',
+          title: 'My list',
+          problemIds: [newProblem.id],
+          isDefault: true,
+          now: DateTime(2026, 8, 1, 9),
+        ),
+      ],
+      tasks: [
+        DailyTrainingTask.create(
+          id: 'new-task',
+          problemId: newProblem.id,
+          trainingDate: '2026-08-02',
+          now: DateTime(2026, 8, 1, 9),
+        ).copyWith(status: DailyTaskStatus.inProgress),
+      ],
+      activeAttempt: ActiveTrainingAttempt.create(
+        problemId: newProblem.id,
+        taskId: 'new-task',
+        origin: TrainingAttemptOrigin.manual,
+        now: DateTime(2026, 8, 1, 9, 30),
+      ),
+    );
+    final generated = await backupService.createBackup(
+      config: config.automaticBackup,
+      problems: [newProblem],
+      training: newTraining,
+      contests: [_contest(id: 'new-core-contest')],
+    );
+    final controller = OjController(
+      storage: store,
+      service: RefreshService(client: http.Client(), providers: const {}),
+      startupService: NoopStartupService(),
+      syncSecretStore: MemorySyncSecretStore(),
+      automaticBackupService: backupService,
+    );
+
+    try {
+      await controller.init();
+      final result = await controller.importPortableBackup(
+        File(generated.filePath!),
+      );
+      expect(result.scope, BackupImportScope.coreTraining);
+
+      expect(controller.state.config.accounts['codeforces']!.usernames,
+          ['kept-user']);
+      expect(controller.state.config.automaticBackup.directoryPath,
+          backupDirectory.path);
+      expect(controller.state.snapshots.single.solvedCount, 99);
+      expect(controller.state.problems.single.id, 'new-core-problem');
+      expect(controller.state.training.attempts.single.reflection,
+          'important reflection');
+      expect(controller.state.training.lists.single.title, 'My list');
+      expect(controller.state.training.tasks.single.id, 'new-task');
+      expect(controller.state.training.activeAttempt?.problemId,
+          'new-core-problem');
+      expect(controller.state.contests.single.id, 'new-core-contest');
+      expect(result.safetyBackupFile.parent.path, backupDirectory.path);
+      expect(result.safetyBackupFile.path,
+          contains('oj_float_pre_import_backup_'));
+      expect(await result.safetyBackupFile.exists(), isTrue);
+    } finally {
+      controller.dispose();
+      await directory.delete(recursive: true);
+    }
+  });
 }
 
 Matcher get throwsFormatException => throwsA(isA<FormatException>());
@@ -242,6 +389,7 @@ String _backupJson({
   List<Object?> dailyStats = const [],
   List<Object?>? problems,
   List<Object?>? contests,
+  Map<String, dynamic>? training,
 }) {
   return jsonEncode({
     'schemaVersion': schemaVersion,
@@ -252,6 +400,7 @@ String _backupJson({
     'snapshots': snapshots,
     if (problems != null) 'problems': problems,
     if (contests != null) 'contests': contests,
+    if (training != null) 'training': training,
     'dailyStats': dailyStats,
   });
 }

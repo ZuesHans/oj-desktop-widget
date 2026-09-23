@@ -10,6 +10,7 @@ class HomeSummaryViewModel {
   const HomeSummaryViewModel({
     required this.totalSolved,
     required this.todayDelta,
+    required this.todayDeltaLabel,
     required this.enabledAccountCount,
     required this.platformCount,
     required this.updatedAt,
@@ -54,21 +55,32 @@ class HomeSummaryViewModel {
       syncing: syncing,
       lastSyncResult: lastSyncResult,
     );
+    final todayDeltaLabel = state.todaySummary.hasUnknown
+        ? '未知'
+        : state.todaySummary.hasEstimated
+            ? '约 +${state.todaySummary.totalDelta}'
+            : state.todaySummary.totalDelta > 0
+                ? '+${state.todaySummary.totalDelta}'
+                : '${state.todaySummary.totalDelta}';
 
     return HomeSummaryViewModel(
       totalSolved: totalSolvedFromLatest(state.latest),
       todayDelta: state.todaySummary.totalDelta,
+      todayDeltaLabel: todayDeltaLabel,
       enabledAccountCount: enabledAccounts,
       platformCount: enabledPlatforms,
       updatedAt: updatedAt,
       statusCards: [
         HomeStatusCard(
           title: '今日进度',
-          value: state.todaySummary.totalDelta > 0
-              ? '+${state.todaySummary.totalDelta}'
-              : '${state.todaySummary.totalDelta}',
-          description:
-              state.todaySummary.totalDelta > 0 ? '今天已经有新的通过记录' : '今天还没有新增通过',
+          value: todayDeltaLabel,
+          description: state.todaySummary.hasUnknown
+              ? '缺少可靠基线，等待下一次刷新'
+              : state.todaySummary.hasEstimated
+                  ? '部分平台根据累计通过数估算'
+                  : state.todaySummary.totalDelta > 0
+                      ? '今天已经有新的通过记录'
+                      : '今天还没有新增通过',
           tone: state.todaySummary.totalDelta > 0
               ? HomeCardTone.good
               : HomeCardTone.neutral,
@@ -104,6 +116,14 @@ class HomeSummaryViewModel {
         ),
       ],
       actionCards: [
+        HomeActionCard(
+          title: '今日训练',
+          description:
+              '${state.training.tasks.where((item) => item.trainingDate == trainingDateFor(DateTime.now())).length} 项任务，按自己的计划开始训练',
+          metric:
+              '${state.training.tasks.where((item) => item.trainingDate == trainingDateFor(DateTime.now())).length}',
+          target: HomeActionTarget.training,
+        ),
         HomeActionCard(
           title: '补题清单',
           description: '${state.problems.length} 道题，继续整理训练线索',
@@ -145,6 +165,7 @@ class HomeSummaryViewModel {
 
   final int totalSolved;
   final int todayDelta;
+  final String todayDeltaLabel;
   final int enabledAccountCount;
   final int platformCount;
   final DateTime? updatedAt;
@@ -216,7 +237,14 @@ class HomeActionCard {
   final HomeActionTarget target;
 }
 
-enum HomeActionTarget { heatmap, problems, refreshLogs, contests, teammates }
+enum HomeActionTarget {
+  training,
+  heatmap,
+  problems,
+  refreshLogs,
+  contests,
+  teammates,
+}
 
 enum HomeCardTone { good, neutral, warning, info }
 

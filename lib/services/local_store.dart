@@ -11,6 +11,35 @@ import '../models/problem_record.dart';
 import '../models/refresh_log_entry.dart';
 import '../models/solved_snapshot.dart';
 import '../models/teammate.dart';
+import '../models/training.dart';
+import 'problem_database.dart';
+
+const maxStoredSnapshots = 6000;
+
+class CoreStoreSnapshot {
+  const CoreStoreSnapshot({
+    required this.problems,
+    required this.training,
+    required this.contests,
+  });
+
+  final List<ProblemRecord> problems;
+  final TrainingStoreData training;
+  final List<ContestRecord> contests;
+}
+
+List<SolvedSnapshot> retainRecentSnapshots(
+  Iterable<SolvedSnapshot> snapshots,
+) {
+  final items = snapshots.toList();
+  if (items.length <= maxStoredSnapshots) {
+    return List.unmodifiable(items);
+  }
+  items.sort((a, b) => a.fetchedAt.compareTo(b.fetchedAt));
+  return List.unmodifiable(
+    items.sublist(items.length - maxStoredSnapshots),
+  );
+}
 
 class LocalStore {
   LocalStore({Directory? supportDirectory})
@@ -21,10 +50,20 @@ class LocalStore {
   static const _problemsFile = 'problems_v1.json';
   static const _contestsFile = 'contests_v1.json';
   static const _teammatesFile = 'teammates_v1.json';
+  static const _trainingFile = 'training_v1.json';
+  static const _problemTrainingTransactionFile =
+      'problem_training_transaction_v1.json';
   static const _refreshLogsFile = 'refresh_logs_v1.json';
   static const _maxRefreshLogs = 200;
 
   final Directory? _supportDirectory;
+  Future<void>? _problemDatabaseInitialization;
+  Future<void> _problemTrainingTransactionTail = Future.value();
+  Future<void> _coreWriteTail = Future.value();
+
+  Future<Directory> supportDirectory() async {
+    return _supportDirectory ?? await getApplicationSupportDirectory();
+  }
 
   Future<AppConfig> loadConfig() async {
     final prefs = await SharedPreferences.getInstance();
@@ -38,7 +77,12 @@ class LocalStore {
         debugPrint('应用配置 JSON 无效：应为对象。');
         return AppConfig.defaults();
       }
-      return AppConfig.fromJson(Map<String, dynamic>.from(data));
+      final json = Map<String, dynamic>.from(data);
+      final config = AppConfig.fromJson(json);
+      if (json['configVersion'] != currentAppConfigVersion) {
+        await prefs.setString(_configKey, jsonEncode(config.toJson()));
+      }
+      return config;
     } catch (_) {
       debugPrint('解析应用配置失败，已使用默认值。');
       return AppConfig.defaults();
@@ -52,11 +96,11 @@ class LocalStore {
 
   Future<List<SolvedSnapshot>> loadSnapshots() async {
     final file = await _snapshotFile();
-    if (!await file.exists()) {
+    if (!await _hasStoredFile(file)) {
       return [];
     }
     try {
-      final data = jsonDecode(await file.readAsString());
+      final data = await _readJsonWithBackup(file);
       if (data is! List) {
         debugPrint('快照 JSON 无效：应为列表。');
         return [];
@@ -81,7 +125,14 @@ class LocalStore {
           continue;
         }
       }
-      return snapshots;
+      final kept = retainRecentSnapshots(snapshots);
+      if (kept.length != snapshots.length) {
+        await _writeJsonAtomically(
+          file,
+          kept.map((item) => item.toJson()).toList(),
+        );
+      }
+      return kept;
     } catch (_) {
       debugPrint('解析快照失败，已使用空列表。');
       return [];
@@ -91,33 +142,30 @@ class LocalStore {
   Future<void> saveSnapshots(List<SolvedSnapshot> snapshots) async {
     final file = await _snapshotFile();
     await file.parent.create(recursive: true);
-    final kept = snapshots.length > 6000
-        ? snapshots.sublist(snapshots.length - 6000)
-        : snapshots;
-    await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(
-        kept.map((item) => item.toJson()).toList(),
-      ),
+    final kept = retainRecentSnapshots(snapshots);
+    await _writeJsonAtomically(
+      file,
+      kept.map((item) => item.toJson()).toList(),
     );
   }
 
   Future<void> replaceSnapshots(List<SolvedSnapshot> snapshots) async {
     final file = await _snapshotFile();
     await file.parent.create(recursive: true);
-    await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(
-        snapshots.map((item) => item.toJson()).toList(),
-      ),
+    final kept = retainRecentSnapshots(snapshots);
+    await _writeJsonAtomically(
+      file,
+      kept.map((item) => item.toJson()).toList(),
     );
   }
 
   Future<List<RefreshLogEntry>> loadRefreshLogs() async {
     final file = await _refreshLogsFileHandle();
-    if (!await file.exists()) {
+    if (!await _hasStoredFile(file)) {
       return [];
     }
     try {
-      final data = jsonDecode(await file.readAsString());
+      final data = await _readJsonWithBackup(file);
       if (data is! List) {
         debugPrint('刷新日志 JSON 无效：应为列表。');
         return [];
@@ -155,71 +203,49 @@ class LocalStore {
     final sorted = [...entries]
       ..sort((a, b) => b.fetchedAt.compareTo(a.fetchedAt));
     final kept = sorted.take(_maxRefreshLogs).toList();
-    await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(
-        kept.map((item) => item.toJson()).toList(),
-      ),
+    await _writeJsonAtomically(
+      file,
+      kept.map((item) => item.toJson()).toList(),
     );
   }
 
   Future<List<ProblemRecord>> loadProblems() async {
-    final file = await _problemsFileHandle();
-    if (!await file.exists()) {
-      return [];
-    }
-    try {
-      final data = jsonDecode(await file.readAsString());
-      if (data is! List) {
-        debugPrint('题单 JSON 无效：应为列表。');
-        return [];
-      }
-      final problems = <ProblemRecord>[];
-      for (final item in data) {
-        try {
-          if (item is! Map) {
-            debugPrint('已跳过无效题目：应为对象。');
-            continue;
-          }
-          final problem = ProblemRecord.tryFromJson(
-            Map<String, dynamic>.from(item),
-          );
-          if (problem == null) {
-            debugPrint('已跳过无效题目条目。');
-            continue;
-          }
-          problems.add(problem);
-        } catch (_) {
-          debugPrint('已跳过无效题目条目。');
-        }
-      }
-      problems.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      return List.unmodifiable(problems);
-    } catch (_) {
-      debugPrint('解析题单失败，已使用空列表。');
-      return [];
-    }
+    return (await loadProblemSnapshot()).problems;
+  }
+
+  Future<ProblemDatabaseSnapshot> loadProblemSnapshot() async {
+    await _ensureProblemDatabase();
+    return (await _problemDatabaseHandle()).loadSnapshot();
+  }
+
+  Future<int> problemRevision() async {
+    await _ensureProblemDatabase();
+    return (await _problemDatabaseHandle()).readRevision();
+  }
+
+  Future<void> saveProblem(ProblemRecord problem) async {
+    await _enqueueCoreWrite(() => _upsertProblems([problem]));
   }
 
   Future<void> saveProblems(List<ProblemRecord> problems) async {
-    final file = await _problemsFileHandle();
-    await file.parent.create(recursive: true);
-    await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(
-        problems.map((item) => item.toStorageJson()).toList(),
-      ),
-    );
+    await _enqueueCoreWrite(() => _upsertProblems(problems));
   }
 
-  Future<void> replaceProblems(List<ProblemRecord> problems) =>
-      saveProblems(problems);
+  Future<void> replaceProblems(List<ProblemRecord> problems) async {
+    await _enqueueCoreWrite(() => _replaceProblems(problems));
+  }
+
+  Future<void> deleteProblem(String id) async {
+    await _enqueueCoreWrite(() => _deleteProblem(id));
+  }
 
   Future<List<ContestRecord>> loadContests() async {
     final file = await _contestsFileHandle();
-    if (!await file.exists()) {
+    if (!await _hasStoredFile(file)) {
       return [];
     }
     try {
-      final data = jsonDecode(await file.readAsString());
+      final data = await _readJsonWithBackup(file);
       if (data is! List) {
         debugPrint('比赛记录 JSON 无效：应为列表。');
         return [];
@@ -258,13 +284,7 @@ class LocalStore {
   }
 
   Future<void> saveContests(List<ContestRecord> contests) async {
-    final file = await _contestsFileHandle();
-    await file.parent.create(recursive: true);
-    await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(
-        contests.map((item) => item.toStorageJson()).toList(),
-      ),
-    );
+    await _enqueueCoreWrite(() => _writeContests(contests));
   }
 
   Future<void> replaceContests(List<ContestRecord> contests) =>
@@ -272,11 +292,11 @@ class LocalStore {
 
   Future<TeammateStoreData> loadTeammates() async {
     final file = await _teammatesFileHandle();
-    if (!await file.exists()) {
+    if (!await _hasStoredFile(file)) {
       return const TeammateStoreData();
     }
     try {
-      final data = jsonDecode(await file.readAsString());
+      final data = await _readJsonWithBackup(file);
       if (data is! Map) {
         debugPrint('队友数据 JSON 无效：应为对象。');
         return const TeammateStoreData();
@@ -292,19 +312,301 @@ class LocalStore {
   Future<void> saveTeammates(TeammateStoreData teammates) async {
     final file = await _teammatesFileHandle();
     await file.parent.create(recursive: true);
-    await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(
-        trimTeammateStoreData(teammates).toJson(),
-      ),
+    await _writeJsonAtomically(
+      file,
+      trimTeammateStoreData(teammates).toJson(),
     );
   }
 
   Future<void> replaceTeammates(TeammateStoreData teammates) async {
     final file = await _teammatesFileHandle();
     await file.parent.create(recursive: true);
-    await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(teammates.toJson()),
+    await _writeJsonAtomically(file, teammates.toJson());
+  }
+
+  Future<TrainingStoreData> loadTraining() async {
+    final file = await _trainingFileHandle();
+    if (!await _hasStoredFile(file)) {
+      return const TrainingStoreData();
+    }
+    try {
+      final data = await _readJsonWithBackup(file);
+      if (data is! Map) {
+        debugPrint('训练数据 JSON 无效：应为对象。');
+        return const TrainingStoreData();
+      }
+      return TrainingStoreData.tryFromJson(Map<String, dynamic>.from(data)) ??
+          const TrainingStoreData();
+    } catch (_) {
+      debugPrint('解析训练数据失败，已使用空数据。');
+      return const TrainingStoreData();
+    }
+  }
+
+  Future<void> saveTraining(TrainingStoreData training) async {
+    await _enqueueCoreWrite(() => _writeTraining(training));
+  }
+
+  Future<void> replaceTraining(TrainingStoreData training) =>
+      saveTraining(training);
+
+  Future<void> recoverPendingProblemTrainingTransaction() {
+    return _enqueueCoreWrite(
+      () => _enqueueProblemTrainingTransaction(
+        _recoverPendingProblemTrainingTransaction,
+      ),
     );
+  }
+
+  Future<void> saveProblemsAndTraining(
+    List<ProblemRecord> problems,
+    TrainingStoreData training,
+  ) {
+    return _enqueueCoreWrite(
+      () => _enqueueProblemTrainingTransaction(
+        () => _commitCoreTransaction(
+          _ProblemMutation.replace(problems),
+          training,
+        ),
+      ),
+    );
+  }
+
+  Future<void> saveProblemAndTraining(
+    ProblemRecord problem,
+    TrainingStoreData training,
+  ) {
+    return _enqueueCoreWrite(
+      () => _enqueueProblemTrainingTransaction(
+        () => _commitCoreTransaction(
+          _ProblemMutation.upsert([problem]),
+          training,
+        ),
+      ),
+    );
+  }
+
+  Future<void> deleteProblemAndSaveTraining(
+    String problemId,
+    TrainingStoreData training,
+  ) {
+    return _enqueueCoreWrite(
+      () => _enqueueProblemTrainingTransaction(
+        () => _commitCoreTransaction(
+          _ProblemMutation.delete([problemId]),
+          training,
+        ),
+      ),
+    );
+  }
+
+  Future<void> replaceCoreData(
+    List<ProblemRecord> problems,
+    TrainingStoreData training,
+    List<ContestRecord> contests,
+  ) {
+    return _enqueueCoreWrite(
+      () => _enqueueProblemTrainingTransaction(
+        () => _commitCoreTransaction(
+          _ProblemMutation.replace(problems),
+          training,
+          contests: contests,
+        ),
+      ),
+    );
+  }
+
+  Future<void> waitForCoreWrites() => _coreWriteTail;
+
+  Future<CoreStoreSnapshot> loadCoreBackupSnapshot() {
+    return _enqueueCoreWrite(() async {
+      return CoreStoreSnapshot(
+        problems: await _loadCoreProblemsStrict(),
+        training: await _loadCoreTrainingStrict(),
+        contests: await _loadCoreContestsStrict(),
+      );
+    });
+  }
+
+  Future<List<ProblemRecord>> _loadCoreProblemsStrict() async {
+    return (await loadProblemSnapshot()).problems;
+  }
+
+  Future<TrainingStoreData> _loadCoreTrainingStrict() async {
+    final file = await _trainingFileHandle();
+    if (!await _hasStoredFile(file)) {
+      return const TrainingStoreData();
+    }
+    return _readParsedJsonWithBackup(file, _parseCoreTrainingDataStrict);
+  }
+
+  Future<List<ContestRecord>> _loadCoreContestsStrict() async {
+    final file = await _contestsFileHandle();
+    if (!await _hasStoredFile(file)) {
+      return const [];
+    }
+    final contests = await _readParsedJsonWithBackup(
+      file,
+      _parseCoreContestsStrict,
+    );
+    final sorted = [...contests]..sort((left, right) {
+        final byDate = right.date.compareTo(left.date);
+        return byDate != 0 ? byDate : right.updatedAt.compareTo(left.updatedAt);
+      });
+    return List.unmodifiable(sorted);
+  }
+
+  Future<void> _recoverPendingProblemTrainingTransaction() async {
+    final transaction = await _problemTrainingTransactionFileHandle();
+    if (!await _hasStoredFile(transaction)) {
+      return;
+    }
+    final decoded = await _readJsonWithBackup(transaction);
+    if (decoded is! Map) {
+      throw const FormatException('Problem/training transaction is invalid.');
+    }
+    final json = Map<String, dynamic>.from(decoded);
+    final schemaVersion = json['schemaVersion'];
+    if (schemaVersion != 1 && schemaVersion != 2 && schemaVersion != 3) {
+      throw const FormatException(
+        'Problem/training transaction version is unsupported.',
+      );
+    }
+    final problemMutation = schemaVersion == 3
+        ? _ProblemMutation.fromJson(json['problemMutation'])
+        : _ProblemMutation.replace(
+            _parseTransactionProblems(json['problems']),
+          );
+    final rawTraining = json['training'];
+    if (rawTraining is! Map) {
+      throw const FormatException('Transaction training data is invalid.');
+    }
+    final training = TrainingStoreData.tryFromJson(
+      Map<String, dynamic>.from(rawTraining),
+    );
+    if (training == null) {
+      throw const FormatException('Transaction training data is invalid.');
+    }
+    final contests =
+        schemaVersion == 2 ? _parseCoreContestsStrict(json['contests']) : null;
+    await _applyProblemMutation(problemMutation);
+    await _writeTraining(training);
+    if (contests != null) {
+      await _writeContests(contests);
+    }
+    await _clearProblemTrainingTransaction(transaction);
+  }
+
+  Future<void> _commitCoreTransaction(
+    _ProblemMutation problemMutation,
+    TrainingStoreData training, {
+    List<ContestRecord>? contests,
+  }) async {
+    await _recoverPendingProblemTrainingTransaction();
+    final transaction = await _problemTrainingTransactionFileHandle();
+    final usesRowMutation =
+        problemMutation.type != _ProblemMutationType.replace;
+    await _writeJsonAtomically(transaction, {
+      'schemaVersion': usesRowMutation ? 3 : (contests == null ? 1 : 2),
+      if (usesRowMutation) 'problemMutation': problemMutation.toJson(),
+      if (!usesRowMutation)
+        'problems': problemMutation.problems
+            .map((item) => item.toStorageJson())
+            .toList(),
+      'training': training.toJson(),
+      if (contests != null)
+        'contests': contests.map((item) => item.toStorageJson()).toList(),
+    });
+    try {
+      await _applyProblemMutation(problemMutation);
+      await _writeTraining(training);
+      if (contests != null) {
+        await _writeContests(contests);
+      }
+    } catch (error, stackTrace) {
+      try {
+        await _recoverPendingProblemTrainingTransaction();
+      } catch (_) {
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+    }
+    await _clearProblemTrainingTransaction(transaction);
+  }
+
+  Future<void> _replaceProblems(List<ProblemRecord> problems) async {
+    await _ensureProblemDatabase();
+    (await _problemDatabaseHandle()).replaceProblems(problems);
+  }
+
+  Future<void> _upsertProblems(Iterable<ProblemRecord> problems) async {
+    await _ensureProblemDatabase();
+    (await _problemDatabaseHandle()).upsertProblems(problems);
+  }
+
+  Future<void> _deleteProblem(String id) async {
+    await _ensureProblemDatabase();
+    (await _problemDatabaseHandle()).deleteProblem(id);
+  }
+
+  Future<void> _applyProblemMutation(_ProblemMutation mutation) async {
+    switch (mutation.type) {
+      case _ProblemMutationType.replace:
+        await _replaceProblems(mutation.problems);
+        return;
+      case _ProblemMutationType.upsert:
+        await _upsertProblems(mutation.problems);
+        return;
+      case _ProblemMutationType.delete:
+        for (final id in mutation.problemIds) {
+          await _deleteProblem(id);
+        }
+        return;
+    }
+  }
+
+  Future<void> _writeTraining(TrainingStoreData training) async {
+    final file = await _trainingFileHandle();
+    await _writeJsonAtomically(file, training.toJson());
+  }
+
+  Future<void> _writeContests(List<ContestRecord> contests) async {
+    final file = await _contestsFileHandle();
+    await _writeJsonAtomically(
+      file,
+      contests.map((item) => item.toStorageJson()).toList(),
+    );
+  }
+
+  Future<void> _clearProblemTrainingTransaction(File transaction) async {
+    for (final file in [
+      transaction,
+      File('${transaction.path}.bak'),
+      File('${transaction.path}.tmp'),
+    ]) {
+      if (await file.exists()) {
+        await file.delete();
+      }
+    }
+  }
+
+  Future<void> _enqueueProblemTrainingTransaction(
+    Future<void> Function() operation,
+  ) {
+    final next = _problemTrainingTransactionTail.then((_) => operation());
+    _problemTrainingTransactionTail = next.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return next;
+  }
+
+  Future<T> _enqueueCoreWrite<T>(Future<T> Function() operation) {
+    final next = _coreWriteTail.then((_) => operation());
+    _coreWriteTail = next.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return next;
   }
 
   Future<File> _snapshotFile() async {
@@ -317,6 +619,35 @@ class LocalStore {
     final directory =
         _supportDirectory ?? await getApplicationSupportDirectory();
     return File('${directory.path}${Platform.pathSeparator}$_problemsFile');
+  }
+
+  Future<ProblemDatabase> _problemDatabaseHandle() async {
+    final directory = await supportDirectory();
+    return ProblemDatabase(
+      File(
+        '${directory.path}${Platform.pathSeparator}$problemDatabaseFileName',
+      ),
+    );
+  }
+
+  Future<void> _ensureProblemDatabase() {
+    return _problemDatabaseInitialization ??= _initializeProblemDatabase();
+  }
+
+  Future<void> _initializeProblemDatabase() async {
+    final database = await _problemDatabaseHandle();
+    if (!database.needsLegacyMigration) {
+      return;
+    }
+
+    final legacyFile = await _problemsFileHandle();
+    final legacyProblems = await _hasStoredFile(legacyFile)
+        ? await _readParsedJsonWithBackup(
+            legacyFile,
+            _parseTransactionProblems,
+          )
+        : const <ProblemRecord>[];
+    database.migrateLegacy(legacyProblems);
   }
 
   Future<File> _contestsFileHandle() async {
@@ -335,5 +666,237 @@ class LocalStore {
     final directory =
         _supportDirectory ?? await getApplicationSupportDirectory();
     return File('${directory.path}${Platform.pathSeparator}$_refreshLogsFile');
+  }
+
+  Future<File> _trainingFileHandle() async {
+    final directory =
+        _supportDirectory ?? await getApplicationSupportDirectory();
+    return File('${directory.path}${Platform.pathSeparator}$_trainingFile');
+  }
+
+  Future<File> _problemTrainingTransactionFileHandle() async {
+    final directory =
+        _supportDirectory ?? await getApplicationSupportDirectory();
+    return File(
+      '${directory.path}${Platform.pathSeparator}'
+      '$_problemTrainingTransactionFile',
+    );
+  }
+}
+
+enum _ProblemMutationType { replace, upsert, delete }
+
+class _ProblemMutation {
+  const _ProblemMutation._({
+    required this.type,
+    this.problems = const [],
+    this.problemIds = const [],
+  });
+
+  factory _ProblemMutation.replace(List<ProblemRecord> problems) {
+    return _ProblemMutation._(
+      type: _ProblemMutationType.replace,
+      problems: List.unmodifiable(problems),
+    );
+  }
+
+  factory _ProblemMutation.upsert(List<ProblemRecord> problems) {
+    return _ProblemMutation._(
+      type: _ProblemMutationType.upsert,
+      problems: List.unmodifiable(problems),
+    );
+  }
+
+  factory _ProblemMutation.delete(List<String> problemIds) {
+    return _ProblemMutation._(
+      type: _ProblemMutationType.delete,
+      problemIds: List.unmodifiable(problemIds),
+    );
+  }
+
+  factory _ProblemMutation.fromJson(Object? value) {
+    if (value is! Map) {
+      throw const FormatException('Problem mutation is invalid.');
+    }
+    final json = Map<String, dynamic>.from(value);
+    switch (json['operation']) {
+      case 'upsert':
+        return _ProblemMutation.upsert(
+          _parseTransactionProblems(json['problems']),
+        );
+      case 'delete':
+        final rawIds = json['problemIds'];
+        if (rawIds is! List ||
+            rawIds.any(
+              (id) => id is! String || id.trim().isEmpty,
+            )) {
+          throw const FormatException('Problem deletion is invalid.');
+        }
+        return _ProblemMutation.delete(
+          rawIds.cast<String>().map((id) => id.trim()).toList(),
+        );
+      default:
+        throw const FormatException('Problem mutation operation is invalid.');
+    }
+  }
+
+  final _ProblemMutationType type;
+  final List<ProblemRecord> problems;
+  final List<String> problemIds;
+
+  Map<String, dynamic> toJson() => {
+        'operation': type.name,
+        if (type == _ProblemMutationType.upsert)
+          'problems': problems.map((item) => item.toStorageJson()).toList(),
+        if (type == _ProblemMutationType.delete) 'problemIds': problemIds,
+      };
+}
+
+List<ProblemRecord> _parseTransactionProblems(Object? value) {
+  if (value is! List) {
+    throw const FormatException('Transaction problem data is invalid.');
+  }
+  final problems = <ProblemRecord>[];
+  for (final item in value) {
+    if (item is! Map) {
+      throw const FormatException('Transaction problem data is invalid.');
+    }
+    final problem = ProblemRecord.tryFromJson(Map<String, dynamic>.from(item));
+    if (problem == null) {
+      throw const FormatException('Transaction problem data is invalid.');
+    }
+    problems.add(problem);
+  }
+  return List.unmodifiable(problems);
+}
+
+TrainingStoreData _parseCoreTrainingDataStrict(Object? value) {
+  if (value is! Map) {
+    throw const FormatException('Stored training data is invalid.');
+  }
+  final json = Map<String, dynamic>.from(value);
+  final rawAttempts = json['attempts'];
+  final rawLists = json['lists'];
+  final rawTasks = json['tasks'];
+  if (rawAttempts is! List || rawLists is! List || rawTasks is! List) {
+    throw const FormatException('Stored training collections are invalid.');
+  }
+  final training = TrainingStoreData.tryFromJson(json);
+  if (training == null ||
+      training.attempts.length != rawAttempts.length ||
+      training.lists.length != rawLists.length ||
+      training.tasks.length != rawTasks.length ||
+      (json['activeAttempt'] != null && training.activeAttempt == null)) {
+    throw const FormatException('Stored training entry is invalid.');
+  }
+  return training;
+}
+
+List<ContestRecord> _parseCoreContestsStrict(Object? value) {
+  if (value is! List) {
+    throw const FormatException('Stored contest data is invalid.');
+  }
+  final contests = <ContestRecord>[];
+  for (final item in value) {
+    if (item is! Map) {
+      throw const FormatException('Stored contest entry is invalid.');
+    }
+    final contest = ContestRecord.tryFromJson(
+      Map<String, dynamic>.from(item),
+    );
+    if (contest == null) {
+      throw const FormatException('Stored contest entry is invalid.');
+    }
+    contests.add(contest);
+  }
+  return List.unmodifiable(contests);
+}
+
+Future<T> _readParsedJsonWithBackup<T>(
+  File file,
+  T Function(Object? value) parse,
+) async {
+  Object? primaryError;
+  for (final candidate in [file, File('${file.path}.bak')]) {
+    if (!await candidate.exists()) {
+      continue;
+    }
+    try {
+      final text = await candidate.readAsString();
+      final parsed = parse(jsonDecode(text));
+      if (candidate.path != file.path) {
+        await _writeTextAtomically(file, text, rotateBackup: false);
+      }
+      return parsed;
+    } catch (error) {
+      primaryError ??= error;
+    }
+  }
+  throw primaryError ?? const FormatException('Stored JSON is unavailable.');
+}
+
+Future<bool> _hasStoredFile(File file) async {
+  return await file.exists() || await File('${file.path}.bak').exists();
+}
+
+Future<dynamic> _readJsonWithBackup(File file) async {
+  Object? primaryError;
+  for (final candidate in [file, File('${file.path}.bak')]) {
+    if (!await candidate.exists()) {
+      continue;
+    }
+    try {
+      final text = await candidate.readAsString();
+      final decoded = jsonDecode(text);
+      if (candidate.path != file.path) {
+        await _writeTextAtomically(file, text, rotateBackup: false);
+      }
+      return decoded;
+    } catch (error) {
+      primaryError ??= error;
+    }
+  }
+  throw primaryError ?? const FormatException('Stored JSON is unavailable.');
+}
+
+Future<void> _writeJsonAtomically(File file, Object? value) {
+  return _writeTextAtomically(
+    file,
+    const JsonEncoder.withIndent('  ').convert(value),
+  );
+}
+
+Future<void> _writeTextAtomically(
+  File file,
+  String contents, {
+  bool rotateBackup = true,
+}) async {
+  await file.parent.create(recursive: true);
+  final temporary = File('${file.path}.tmp');
+  final backup = File('${file.path}.bak');
+  if (await temporary.exists()) {
+    await temporary.delete();
+  }
+  await temporary.writeAsString(contents, flush: true);
+  var rotated = false;
+  try {
+    if (rotateBackup && await file.exists()) {
+      if (await backup.exists()) {
+        await backup.delete();
+      }
+      await file.rename(backup.path);
+      rotated = true;
+    } else if (await file.exists()) {
+      await file.delete();
+    }
+    await temporary.rename(file.path);
+  } catch (_) {
+    if (await temporary.exists()) {
+      await temporary.delete();
+    }
+    if (rotated && !await file.exists() && await backup.exists()) {
+      await backup.rename(file.path);
+    }
+    rethrow;
   }
 }

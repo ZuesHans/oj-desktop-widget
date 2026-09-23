@@ -5,12 +5,31 @@ import 'package:path_provider/path_provider.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../app/app_display_mode.dart';
-import '../models/app_config.dart';
 import '../ui/app_labels.dart';
-import '../ui/app_theme.dart';
 
-class WindowShellService {
+abstract interface class WindowShell {
+  void addTrayListener(TrayListener listener);
+
+  void removeTrayListener(TrayListener listener);
+
+  void addWindowListener(WindowListener listener);
+
+  void removeWindowListener(WindowListener listener);
+
+  Future<void> setTrayEnabled(bool enabled);
+
+  /// Enables app-managed close handling so the UI can confirm unsaved work
+  /// before either hiding to the tray or exiting.
+  Future<void> setCloseInterceptionEnabled(bool enabled);
+
+  Future<void> showAndFocus();
+
+  Future<void> hide();
+
+  Future<void> exitApp();
+}
+
+class WindowShellService implements WindowShell {
   WindowShellService({
     TrayManager? tray,
     WindowManager? window,
@@ -23,83 +42,89 @@ class WindowShellService {
   final WindowManager window;
   final AssetBundle assets;
 
-  Future<void> setupTray() async {
-    if (!isDesktopPlatform) {
+  bool _trayReady = false;
+
+  @override
+  void addTrayListener(TrayListener listener) => tray.addListener(listener);
+
+  @override
+  void removeTrayListener(TrayListener listener) =>
+      tray.removeListener(listener);
+
+  @override
+  void addWindowListener(WindowListener listener) =>
+      window.addListener(listener);
+
+  @override
+  void removeWindowListener(WindowListener listener) =>
+      window.removeListener(listener);
+
+  @override
+  Future<void> setTrayEnabled(bool enabled) async {
+    if (!enabled) {
+      if (_trayReady) {
+        await tray.destroy();
+        _trayReady = false;
+      }
       return;
     }
-    if (Platform.isWindows) {
-      final iconFile = await _extractTrayIcon();
-      await tray.setIcon(iconFile.path);
-    }
-    await tray.setToolTip(AppLabels.appTitle);
-    await setupTrayMenu();
-  }
 
-  Future<void> setupTrayMenu() async {
+    if (!_trayReady) {
+      final iconPath = Platform.isWindows
+          ? (await _extractTrayIcon()).path
+          : 'assets/app_icon.png';
+      await tray.setIcon(iconPath);
+      await tray.setToolTip(AppLabels.appTitle);
+      _trayReady = true;
+    }
     await tray.setContextMenu(
       Menu(
         items: [
           MenuItem(
-              key: WindowShellTrayCommand.show.key,
-              label: AppLabels.trayShowWindow),
+            key: WindowShellTrayCommand.show.key,
+            label: AppLabels.trayShowWindow,
+          ),
           MenuItem(
-              key: WindowShellTrayCommand.hide.key,
-              label: AppLabels.trayHideWindow),
-          MenuItem(
-            key: WindowShellTrayCommand.toggleOnTop.key,
-            label: AppLabels.trayToggleOnTop,
+            key: WindowShellTrayCommand.refresh.key,
+            label: AppLabels.trayRefreshNow,
           ),
           MenuItem.separator(),
           MenuItem(
-              key: WindowShellTrayCommand.refresh.key,
-              label: AppLabels.trayRefreshNow),
-          MenuItem.separator(),
-          MenuItem(
-              key: WindowShellTrayCommand.exit.key, label: AppLabels.trayExit),
+            key: WindowShellTrayCommand.exit.key,
+            label: AppLabels.trayExit,
+          ),
         ],
       ),
     );
   }
 
+  @override
+  Future<void> setCloseInterceptionEnabled(bool enabled) =>
+      window.setPreventClose(enabled);
+
+  @override
   Future<void> showAndFocus() async {
+    if (await window.isMinimized()) {
+      await window.restore();
+    }
     await window.show();
     await window.focus();
   }
 
+  @override
   Future<void> hide() => window.hide();
 
-  Future<void> minimize() => window.minimize();
-
-  Future<void> startDragging() => window.startDragging();
-
-  Future<void> syncMode(AppDisplayMode mode) async {
-    try {
-      final spec = windowSpecForMode(mode);
-      await window.setResizable(spec.resizable);
-      await window.setMinimumSize(spec.minimumSize);
-      await window.setSize(spec.size, animate: true);
-    } on MissingPluginException {
-      // Widget tests do not load the desktop window plugin.
-    }
-  }
-
-  Future<void> applyPreferences(AppConfig config) async {
-    try {
-      await window.setAlwaysOnTop(config.alwaysOnTop);
-      await window.setSkipTaskbar(!config.showInTaskbar);
-    } on MissingPluginException {
-      // Widget tests do not load the desktop window plugin.
-    }
-  }
-
+  @override
   Future<void> exitApp() async {
-    try {
-      await window.setPreventClose(false);
+    if (_trayReady) {
       await tray.destroy();
-      await window.destroy();
-    } on MissingPluginException {
-      // Widget tests do not load the desktop window or tray plugins.
+      _trayReady = false;
     }
+    await window.setPreventClose(false);
+    // close() posts a native close request and lets the method call return
+    // before the Flutter engine is torn down. destroy() quits the Windows
+    // message loop immediately and can crash the engine callback in flight.
+    await window.close();
   }
 
   Future<File> _extractTrayIcon() async {
@@ -114,8 +139,6 @@ class WindowShellService {
 
 enum WindowShellTrayCommand {
   show('show'),
-  hide('hide'),
-  toggleOnTop('toggle_on_top'),
   refresh('refresh'),
   exit('exit');
 
@@ -132,52 +155,3 @@ enum WindowShellTrayCommand {
     return null;
   }
 }
-
-class WindowModeSpec {
-  const WindowModeSpec({
-    required this.size,
-    required this.minimumSize,
-    required this.resizable,
-  });
-
-  final Size size;
-  final Size minimumSize;
-  final bool resizable;
-}
-
-WindowModeSpec windowSpecForMode(AppDisplayMode mode) {
-  return switch (mode) {
-    AppDisplayMode.compact => const WindowModeSpec(
-        size: compactWindowSize,
-        minimumSize: compactMinimumWindowSize,
-        resizable: false,
-      ),
-    AppDisplayMode.largeFloat => const WindowModeSpec(
-        size: largeFloatWindowSize,
-        minimumSize: largeFloatMinimumWindowSize,
-        resizable: true,
-      ),
-    AppDisplayMode.dashboard => const WindowModeSpec(
-        size: dashboardWindowSize,
-        minimumSize: dashboardMinimumWindowSize,
-        resizable: true,
-      ),
-    AppDisplayMode.heatmap => const WindowModeSpec(
-        size: heatmapWindowSize,
-        minimumSize: heatmapMinimumWindowSize,
-        resizable: true,
-      ),
-    AppDisplayMode.problems ||
-    AppDisplayMode.refreshLogs ||
-    AppDisplayMode.contests ||
-    AppDisplayMode.teammates =>
-      const WindowModeSpec(
-        size: Size(760, 620),
-        minimumSize: heatmapMinimumWindowSize,
-        resizable: true,
-      ),
-  };
-}
-
-bool get isDesktopPlatform =>
-    Platform.isWindows || Platform.isLinux || Platform.isMacOS;

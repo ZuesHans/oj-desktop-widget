@@ -5,6 +5,23 @@ String dateKey(DateTime date) {
       '${local.day.toString().padLeft(2, '0')}';
 }
 
+DateTime trainingDayStartFor(DateTime date) {
+  final local = date.toLocal();
+  final todayStart = DateTime(local.year, local.month, local.day, 4);
+  return local.isBefore(todayStart)
+      ? todayStart.subtract(const Duration(days: 1))
+      : todayStart;
+}
+
+DateTime trainingDayStartFromKey(String value) {
+  final date = DateTime.parse(value);
+  return DateTime(date.year, date.month, date.day, 4);
+}
+
+DateTime trainingDayEndFromKey(String value) {
+  return trainingDayStartFromKey(value).add(const Duration(days: 1));
+}
+
 String formatTime(DateTime date) {
   final local = date.toLocal();
   return '${local.hour.toString().padLeft(2, '0')}:'
@@ -12,9 +29,7 @@ String formatTime(DateTime date) {
 }
 
 String trainingDateFor(DateTime now) {
-  final local = now.toLocal();
-  return dateKey(
-      local.hour < 4 ? local.subtract(const Duration(days: 1)) : local);
+  return dateKey(trainingDayStartFor(now));
 }
 
 bool isSameTrainingDate(DateTime a, DateTime b) {

@@ -7,6 +7,7 @@ import 'problem_record.dart';
 import 'refresh_log_entry.dart';
 import 'solved_snapshot.dart';
 import 'teammate.dart';
+import 'training.dart';
 
 class OjState {
   const OjState({
@@ -16,6 +17,7 @@ class OjState {
     required this.problems,
     required this.contests,
     required this.teammates,
+    required this.training,
     required this.refreshLogs,
     required this.todaySummary,
   });
@@ -29,6 +31,7 @@ class OjState {
       problems: const [],
       contests: const [],
       teammates: const TeammateStoreData(),
+      training: const TrainingStoreData(),
       refreshLogs: const [],
       todaySummary: DailySummary.empty(today),
     );
@@ -40,6 +43,7 @@ class OjState {
   final List<ProblemRecord> problems;
   final List<ContestRecord> contests;
   final TeammateStoreData teammates;
+  final TrainingStoreData training;
   final List<RefreshLogEntry> refreshLogs;
   final DailySummary todaySummary;
 
@@ -50,6 +54,7 @@ class OjState {
     List<ProblemRecord>? problems,
     List<ContestRecord>? contests,
     TeammateStoreData? teammates,
+    TrainingStoreData? training,
     List<RefreshLogEntry>? refreshLogs,
     DailySummary? todaySummary,
   }) {
@@ -60,6 +65,7 @@ class OjState {
       problems: problems ?? this.problems,
       contests: contests ?? this.contests,
       teammates: teammates ?? this.teammates,
+      training: training ?? this.training,
       refreshLogs: refreshLogs ?? this.refreshLogs,
       todaySummary: todaySummary ?? this.todaySummary,
     );

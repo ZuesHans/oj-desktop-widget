@@ -6,34 +6,45 @@ class AppSurfaceCard extends StatelessWidget {
   const AppSurfaceCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(14),
+    this.padding = appCardPadding,
     this.onTap,
+    this.color,
   });
 
   final Widget child;
   final EdgeInsetsGeometry padding;
   final VoidCallback? onTap;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
-    final card = Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
-      child: child,
+    final radius = BorderRadius.circular(appRadiusControl);
+    final shape = RoundedRectangleBorder(
+      borderRadius: radius,
+      side: BorderSide(color: borderColor),
     );
     if (onTap == null) {
-      return card;
+      return Material(
+        color: color ?? cardColor,
+        shape: shape,
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: padding,
+          child: child,
+        ),
+      );
     }
     return Material(
-      color: Colors.transparent,
+      color: color ?? cardColor,
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: radius,
         onTap: onTap,
-        child: card,
+        child: Padding(
+          padding: padding,
+          child: child,
+        ),
       ),
     );
   }
@@ -60,7 +71,7 @@ class AppEmptyState extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: accentColor, size: 24),
-          const SizedBox(width: 12),
+          const SizedBox(width: appSpace3),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -72,7 +83,7 @@ class AppEmptyState extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: appSpace1),
                 Text(
                   message,
                   style: TextStyle(color: textSecondaryColor),

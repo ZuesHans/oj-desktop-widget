@@ -62,7 +62,15 @@ class _ContestEditorDialogState extends State<ContestEditorDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       key: const ValueKey('contest-editor-dialog'),
-      title: Text(widget.initial == null ? '新增比赛记录' : '编辑比赛记录'),
+      titlePadding:
+          const EdgeInsets.fromLTRB(appSpace5, appSpace5, appSpace5, 0),
+      contentPadding:
+          const EdgeInsets.fromLTRB(appSpace5, appSpace3, appSpace5, appSpace3),
+      actionsPadding:
+          const EdgeInsets.fromLTRB(appSpace4, 0, appSpace4, appSpace4),
+      title: _ContestEditorTitle(
+        title: widget.initial == null ? '新增比赛记录' : '编辑比赛记录',
+      ),
       content: SizedBox(
         width: 560,
         child: Form(
@@ -297,5 +305,42 @@ class _ContestEditorDialogState extends State<ContestEditorDialog> {
       return null;
     }
     return int.parse(text);
+  }
+}
+
+class _ContestEditorTitle extends StatelessWidget {
+  const _ContestEditorTitle({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: accentColor.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(appRadiusControl),
+            border: Border.all(color: accentColor.withValues(alpha: 0.2)),
+          ),
+          child: Icon(Icons.emoji_events_outlined, color: accentColor),
+        ),
+        const SizedBox(width: appSpace3),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: textPrimaryColor,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

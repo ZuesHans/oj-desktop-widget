@@ -27,22 +27,45 @@ class HomeSummaryPanel extends StatelessWidget {
       children: [
         AppSurfaceCard(
           key: const ValueKey('home-progress-card'),
+          color: cardMutedColor,
           padding: const EdgeInsets.all(18),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: accentColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(appRadiusControl),
+                    ),
+                    child: Icon(
+                      Icons.bolt_outlined,
+                      color: accentColor,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      '今天进度',
+                      '今日训练',
                       style: TextStyle(
-                        color: textSecondaryColor,
-                        fontWeight: FontWeight.w700,
+                        color: textPrimaryColor,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
                   ),
-                  Pill(label: viewModel.syncLabel),
+                  const SizedBox(width: appSpace2),
+                  Flexible(
+                    child: Tooltip(
+                      message: viewModel.syncLabel,
+                      child: Pill(label: viewModel.syncLabel),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -53,14 +76,15 @@ class HomeSummaryPanel extends StatelessWidget {
                     '${viewModel.totalSolved}',
                     style: TextStyle(
                       color: textPrimaryColor,
-                      fontSize: 42,
+                      fontSize: 46,
                       fontWeight: FontWeight.w900,
+                      height: 1,
                     ),
                   ),
                   const SizedBox(width: 10),
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: Pill(label: '今日 +${viewModel.todayDelta}'),
+                    child: Pill(label: '今日 ${viewModel.todayDeltaLabel}'),
                   ),
                 ],
               ),
@@ -303,6 +327,7 @@ IconData _toneIcon(HomeCardTone tone) {
 
 IconData _actionIcon(HomeActionTarget target) {
   return switch (target) {
+    HomeActionTarget.training => Icons.timer_outlined,
     HomeActionTarget.heatmap => Icons.calendar_view_week,
     HomeActionTarget.problems => Icons.bookmark_border,
     HomeActionTarget.refreshLogs => Icons.history,

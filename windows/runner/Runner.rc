@@ -90,10 +90,10 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "oj_float" "\0"
+            VALUE "FileDescription", "OJ Float desktop client" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "oj_float" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 zueshans. All rights reserved." "\0"
             VALUE "OriginalFilename", "oj_float.exe" "\0"
             VALUE "ProductName", "oj_float" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
