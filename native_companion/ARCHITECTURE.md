@@ -59,7 +59,7 @@ flowchart LR
 1. 初始化 COM 和 Windows 通用控件。
 2. 解析 `--database`。没有传参时使用应用数据目录中的默认题库。
 3. 如果默认数据库还不存在，寻找同目录的 Flutter 客户端，请它运行一次无界面迁移。
-4. 构造 `ProblemDatabase`，打开 SQLite 并验证 `PRAGMA user_version == 2`。
+4. 构造 `ProblemDatabase`，打开 SQLite 并验证 `PRAGMA user_version == 3`。
 5. 注册窗口类；这里也会从 EXE 资源加载猪猪大图标和小图标。
 6. 创建控件，读取题目列表，并启动一秒一次的刷新定时器。
 7. 进入 Windows 消息循环，直到窗口关闭。

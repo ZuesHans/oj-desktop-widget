@@ -25,6 +25,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
   late final TextEditingController _titleController;
   late final TextEditingController _urlController;
   late final TextEditingController _tagsController;
+  late final TextEditingController _folderController;
   late final TextEditingController _dateController;
   late final TextEditingController _noteController;
   late final TextEditingController _analysisController;
@@ -42,6 +43,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
     _urlController = TextEditingController(text: initial?.url ?? '');
     _tagsController =
         TextEditingController(text: initial?.tags.join(', ') ?? '');
+    _folderController = TextEditingController(text: initial?.folder ?? '');
     _dateController =
         TextEditingController(text: initial?.date ?? dateKey(DateTime.now()));
     _noteController = TextEditingController(text: initial?.note ?? '');
@@ -56,6 +58,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
     _titleController.dispose();
     _urlController.dispose();
     _tagsController.dispose();
+    _folderController.dispose();
     _dateController.dispose();
     _noteController.dispose();
     _analysisController.dispose();
@@ -214,6 +217,16 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
+                  key: const ValueKey('problem-folder-field'),
+                  controller: _folderController,
+                  decoration: const InputDecoration(
+                    labelText: '文件夹（可选）',
+                    hintText: '例如：动态规划、待复习',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
                   key: const ValueKey('problem-note-field'),
                   controller: _noteController,
                   decoration: const InputDecoration(
@@ -308,6 +321,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
             platform: _platform,
             workflowStatus: _status,
             tags: normalizeProblemTags(_tagsController.text.split(',')),
+            folder: _folderController.text,
             date: _dateController.text.trim(),
             note: _noteController.text,
             analysis: _analysisController.text,
@@ -320,6 +334,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
             platform: _platform,
             workflowStatus: _status,
             tags: normalizeProblemTags(_tagsController.text.split(',')),
+            folder: _folderController.text,
             date: _dateController.text.trim(),
             note: _noteController.text,
             analysis: _analysisController.text,

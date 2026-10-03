@@ -948,7 +948,14 @@ class OjController extends ChangeNotifier {
 
   Future<void> _pollProblemChanges() async {
     try {
-      await refreshProblemsIfChanged();
+      final changed = await refreshProblemsIfChanged();
+      final syncConfig = state.config.sync;
+      if (changed &&
+          syncConfig.enabled &&
+          syncConfig.syncProblems &&
+          syncConfig.autoSyncAfterRefresh) {
+        unawaited(_syncSilently());
+      }
     } catch (error) {
       debugPrint('Failed to refresh external problem changes: $error');
     }

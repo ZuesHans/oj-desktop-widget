@@ -11,6 +11,16 @@ import '../shared/app_surface_card.dart';
 import '../shared/pill.dart';
 import 'problem_editor.dart';
 
+List<String> _problemFolders(Iterable<ProblemRecord> problems) {
+  final folders = problems
+      .map((problem) => problem.folder)
+      .where((folder) => folder.isNotEmpty)
+      .toSet()
+      .toList()
+    ..sort((left, right) => left.toLowerCase().compareTo(right.toLowerCase()));
+  return folders;
+}
+
 class ProblemsPage extends StatefulWidget {
   const ProblemsPage({
     super.key,
@@ -50,8 +60,10 @@ class _ProblemsPageState extends State<ProblemsPage> {
   ProblemWorkflowStatus? _statusFilter;
   ProblemPlatform? _platformFilter;
   String? _tagFilter;
+  String? _folderFilter;
   String _query = '';
   String _specialFilter = '全部';
+  bool _filtersExpanded = false;
   final Set<String> _selectedIds = <String>{};
 
   @override
@@ -59,6 +71,13 @@ class _ProblemsPageState extends State<ProblemsPage> {
     super.didUpdateWidget(oldWidget);
     final availableIds = widget.problems.map((problem) => problem.id).toSet();
     _selectedIds.removeWhere((id) => !availableIds.contains(id));
+    final folders = widget.problems
+        .map((problem) => problem.folder)
+        .where((folder) => folder.isNotEmpty)
+        .toSet();
+    if (_folderFilter != null && !folders.contains(_folderFilter)) {
+      _folderFilter = null;
+    }
   }
 
   @override
@@ -75,6 +94,7 @@ class _ProblemsPageState extends State<ProblemsPage> {
       workflowStatus: _statusFilter,
       platform: _platformFilter,
       tag: _tagFilter,
+      folder: _folderFilter,
     ).where((problem) {
       return switch (_specialFilter) {
         '收藏' => problem.isFavorite,
@@ -110,6 +130,14 @@ class _ProblemsPageState extends State<ProblemsPage> {
         .where(
             (problem) => problem.workflowStatus == ProblemWorkflowStatus.review)
         .length;
+    final activeFilterCount = [
+      _query.trim().isNotEmpty,
+      _specialFilter != '全部',
+      _folderFilter != null,
+      _statusFilter != null,
+      _platformFilter != null,
+      _tagFilter != null,
+    ].where((active) => active).length;
     return Scaffold(
       backgroundColor: appSurfaceColor,
       body: Container(
@@ -127,116 +155,228 @@ class _ProblemsPageState extends State<ProblemsPage> {
               review: review,
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
               child: Column(
                 children: [
-                  TextField(
-                    key: const ValueKey('problem-search-field'),
-                    controller: _queryController,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search),
-                      hintText: '搜索标题、链接、标签或笔记',
-                      isDense: true,
-                    ),
-                    onChanged: (value) => setState(() => _query = value),
-                  ),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    key: const ValueKey('problem-special-filter'),
-                    initialValue: _specialFilter,
-                    decoration: const InputDecoration(labelText: '快速访问'),
-                    items: const [
-                      DropdownMenuItem(value: '全部', child: Text('全部题目')),
-                      DropdownMenuItem(value: '收藏', child: Text('收藏')),
-                      DropdownMenuItem(value: '置顶', child: Text('置顶')),
-                      DropdownMenuItem(value: '最近打开', child: Text('最近打开')),
-                      DropdownMenuItem(value: '最近编辑', child: Text('最近编辑')),
-                    ],
-                    onChanged: (value) =>
-                        setState(() => _specialFilter = value ?? '全部'),
-                  ),
-                  const SizedBox(height: 8),
                   Row(
                     children: [
                       Expanded(
-                        child: DropdownButtonFormField<ProblemWorkflowStatus?>(
-                          isExpanded: true,
-                          key: const ValueKey('problem-status-filter'),
-                          initialValue: _statusFilter,
-                          decoration: const InputDecoration(
-                            labelText: '状态',
+                        child: TextField(
+                          key: const ValueKey('problem-search-field'),
+                          controller: _queryController,
+                          decoration: InputDecoration(
+                            prefixIcon: const Icon(Icons.search),
+                            hintText: '搜索标题、链接、标签或笔记',
+                            isDense: true,
+                            suffixIcon: _query.isEmpty
+                                ? null
+                                : IconButton(
+                                    tooltip: '清除搜索',
+                                    onPressed: () {
+                                      _queryController.clear();
+                                      setState(() => _query = '');
+                                    },
+                                    icon: const Icon(Icons.clear),
+                                  ),
                           ),
-                          items: [
-                            const DropdownMenuItem<ProblemWorkflowStatus?>(
-                              value: null,
-                              child: Text('全部状态'),
-                            ),
-                            for (final status in ProblemWorkflowStatus.values)
-                              DropdownMenuItem<ProblemWorkflowStatus?>(
-                                value: status,
-                                child: Text(problemWorkflowStatusLabel(status)),
-                              ),
-                          ],
-                          onChanged: (value) =>
-                              setState(() => _statusFilter = value),
+                          onChanged: (value) => setState(() => _query = value),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: DropdownButtonFormField<ProblemPlatform?>(
-                          isExpanded: true,
-                          key: const ValueKey('problem-platform-filter'),
-                          initialValue: _platformFilter,
-                          decoration: const InputDecoration(
-                            labelText: '平台',
+                      const SizedBox(width: 6),
+                      IconButton.outlined(
+                        key: const ValueKey('problem-filters-toggle'),
+                        tooltip: _filtersExpanded ? '收起筛选' : '展开筛选',
+                        onPressed: () =>
+                            setState(() => _filtersExpanded = !_filtersExpanded),
+                        icon: Badge(
+                          isLabelVisible: activeFilterCount > 0,
+                          label: Text('$activeFilterCount'),
+                          child: Icon(
+                            _filtersExpanded
+                                ? Icons.filter_list_off
+                                : Icons.filter_list,
                           ),
-                          items: [
-                            const DropdownMenuItem<ProblemPlatform?>(
-                              value: null,
-                              child: Text('全部平台'),
-                            ),
-                            for (final platform in ProblemPlatform.values)
-                              DropdownMenuItem<ProblemPlatform?>(
-                                value: platform,
-                                child: Text(problemPlatformLabel(platform)),
-                              ),
-                          ],
-                          onChanged: (value) => setState(() {
-                            _platformFilter = value;
-                            _tagFilter = null;
-                          }),
                         ),
                       ),
                     ],
                   ),
+                  if (activeFilterCount > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 5),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '已应用 $activeFilterCount 个筛选条件',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    alignment: Alignment.topCenter,
+                    child: _filtersExpanded
+                        ? Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: DropdownButtonFormField<String>(
+                                        key: const ValueKey(
+                                            'problem-special-filter'),
+                                        initialValue: _specialFilter,
+                                        decoration: const InputDecoration(
+                                            labelText: '快速访问'),
+                                        items: const [
+                                          DropdownMenuItem(
+                                              value: '全部',
+                                              child: Text('全部题目')),
+                                          DropdownMenuItem(
+                                              value: '收藏', child: Text('收藏')),
+                                          DropdownMenuItem(
+                                              value: '置顶', child: Text('置顶')),
+                                          DropdownMenuItem(
+                                              value: '最近打开',
+                                              child: Text('最近打开')),
+                                          DropdownMenuItem(
+                                              value: '最近编辑',
+                                              child: Text('最近编辑')),
+                                        ],
+                                        onChanged: (value) => setState(() =>
+                                            _specialFilter = value ?? '全部'),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: DropdownButtonFormField<String?>(
+                                        key: const ValueKey(
+                                            'problem-folder-filter'),
+                                        initialValue: _folderFilter,
+                                        decoration: const InputDecoration(
+                                            labelText: '文件夹'),
+                                        items: [
+                                          const DropdownMenuItem<String?>(
+                                            value: null,
+                                            child: Text('全部文件夹'),
+                                          ),
+                                          for (final folder
+                                              in _problemFolders(widget.problems))
+                                            DropdownMenuItem<String?>(
+                                              value: folder,
+                                              child: Text(folder),
+                                            ),
+                                        ],
+                                        onChanged: (value) => setState(
+                                            () => _folderFilter = value),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: DropdownButtonFormField<
+                                          ProblemWorkflowStatus?>(
+                                        isExpanded: true,
+                                        key: const ValueKey(
+                                            'problem-status-filter'),
+                                        initialValue: _statusFilter,
+                                        decoration: const InputDecoration(
+                                            labelText: '状态'),
+                                        items: [
+                                          const DropdownMenuItem<
+                                              ProblemWorkflowStatus?>(
+                                            value: null,
+                                            child: Text('全部状态'),
+                                          ),
+                                          for (final status
+                                              in ProblemWorkflowStatus.values)
+                                            DropdownMenuItem<
+                                                ProblemWorkflowStatus?>(
+                                              value: status,
+                                              child: Text(
+                                                  problemWorkflowStatusLabel(
+                                                      status)),
+                                            ),
+                                        ],
+                                        onChanged: (value) => setState(
+                                            () => _statusFilter = value),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: DropdownButtonFormField<ProblemPlatform?>(
+                                        isExpanded: true,
+                                        key: const ValueKey(
+                                            'problem-platform-filter'),
+                                        initialValue: _platformFilter,
+                                        decoration: const InputDecoration(
+                                            labelText: '平台'),
+                                        items: [
+                                          const DropdownMenuItem<
+                                              ProblemPlatform?>(
+                                            value: null,
+                                            child: Text('全部平台'),
+                                          ),
+                                          for (final platform
+                                              in ProblemPlatform.values)
+                                            DropdownMenuItem<ProblemPlatform?>(
+                                              value: platform,
+                                              child: Text(
+                                                  problemPlatformLabel(platform)),
+                                            ),
+                                        ],
+                                        onChanged: (value) => setState(() {
+                                          _platformFilter = value;
+                                          _tagFilter = null;
+                                        }),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
                   if (tagStats.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          for (final stat in tagStats.take(12))
-                            _TagStatChip(
-                              stat: stat,
-                              selected: stat.tag.toLowerCase() ==
-                                  _tagFilter?.toLowerCase(),
-                              onTap: () => setState(() {
-                                final selected = stat.tag.toLowerCase() ==
-                                    _tagFilter?.toLowerCase();
-                                _tagFilter = selected ? null : stat.tag;
-                              }),
-                            ),
-                          if (_tagFilter != null)
-                            ActionChip(
-                              key: const ValueKey('clear-tag-filter-chip'),
-                              avatar: const Icon(Icons.close, size: 16),
-                              label: const Text('清除标签'),
-                              onPressed: () =>
-                                  setState(() => _tagFilter = null),
-                            ),
-                        ],
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      height: 38,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            for (final stat in tagStats.take(12)) ...[
+                              _TagStatChip(
+                                stat: stat,
+                                selected: stat.tag.toLowerCase() ==
+                                    _tagFilter?.toLowerCase(),
+                                onTap: () => setState(() {
+                                  final selected = stat.tag.toLowerCase() ==
+                                      _tagFilter?.toLowerCase();
+                                  _tagFilter = selected ? null : stat.tag;
+                                }),
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            if (_tagFilter != null)
+                              ActionChip(
+                                key: const ValueKey('clear-tag-filter-chip'),
+                                avatar: const Icon(Icons.close, size: 16),
+                                label: const Text('清除标签'),
+                                onPressed: () =>
+                                    setState(() => _tagFilter = null),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -1017,8 +1157,14 @@ class _ProblemListItem extends StatelessWidget {
                           ),
                   ),
                   const Spacer(),
-                  if (problem.tags.isNotEmpty)
-                    _ProblemTagStrip(tags: problem.tags),
+                   if (problem.tags.isNotEmpty || problem.folder.isNotEmpty)
+                     _ProblemTagStrip(
+                       tags: [
+                         if (problem.folder.isNotEmpty)
+                           '文件夹：${problem.folder}',
+                         ...problem.tags,
+                       ],
+                     ),
                   const SizedBox(height: 4),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
@@ -1206,6 +1352,8 @@ class _ProblemDetailsDialog extends StatelessWidget {
                 children: [
                   Pill(label: problemPlatformLabel(problem.platform)),
                   Pill(label: problem.date),
+                  if (problem.folder.isNotEmpty)
+                    Pill(label: '文件夹：${problem.folder}'),
                   for (final tag in problem.tags) Pill(label: tag),
                 ],
               ),

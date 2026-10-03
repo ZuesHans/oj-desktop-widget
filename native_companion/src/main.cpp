@@ -45,6 +45,8 @@ enum ControlId {
   kPlatformCombo,
   kStatusCombo,
   kTagsEdit,
+  kFolderEdit,
+  kFolderFilter,
   kNoteEdit,
   kStatusText,
 };
@@ -456,6 +458,14 @@ class Application {
   }
 
   void CreateControls() {
+    folder_filter_label_ =
+        CreateControl(L"STATIC", L"Folder", SS_LEFT, 0);
+    folder_filter_ = CreateControl(
+        WC_COMBOBOXW, L"", CBS_DROPDOWNLIST | WS_VSCROLL, kFolderFilter,
+        WS_EX_CLIENTEDGE);
+    folder_label_ = CreateControl(L"STATIC", L"Folder", SS_LEFT, 0);
+    folder_edit_ = CreateControl(L"EDIT", L"", ES_AUTOHSCROLL, kFolderEdit,
+                                 WS_EX_CLIENTEDGE);
     path_text_ = CreateControl(L"STATIC", L"", SS_LEFT, kDatabasePath);
     list_ = CreateControl(WC_LISTVIEWW, L"",
                           LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS,
@@ -540,8 +550,10 @@ class Application {
       MoveWindow(button, button_x, 36, button_width, button_height, TRUE);
       button_x += button_width + gap;
     }
+    MoveWindow(folder_filter_label_, button_x, 41, 54, 20, TRUE);
+    MoveWindow(folder_filter_, button_x + 58, 36, 180, 220, TRUE);
 
-    const int editor_height = 206;
+    const int editor_height = 240;
     const int status_height = 22;
     const int list_top = 74;
     const int list_height =
@@ -565,6 +577,9 @@ class Application {
     MoveWindow(tags_edit_, margin + 468, y,
                std::max(80, content_width - 468), 26, TRUE);
     y += 34;
+    MoveWindow(folder_label_, margin, y + 5, label_width - gap, 20, TRUE);
+    MoveWindow(folder_edit_, edit_x, y, edit_width, 26, TRUE);
+    y += 34;
     MoveWindow(note_label_, margin, y + 5, label_width - gap, 20, TRUE);
     MoveWindow(note_edit_, edit_x, y, edit_width, 58, TRUE);
     MoveWindow(status_text_, margin, height - status_height - 4, content_width,
@@ -574,9 +589,16 @@ class Application {
   void HandleCommand(int id, int notification) {
     if (!loading_editor_ &&
         ((id == kTitleEdit || id == kUrlEdit || id == kTagsEdit ||
+          id == kFolderEdit ||
           id == kNoteEdit) &&
          notification == EN_CHANGE)) {
       editor_dirty_ = true;
+      return;
+    }
+    if (id == kFolderFilter && notification == CBN_SELCHANGE) {
+      if (!reloading_list_) {
+        ReloadProblems();
+      }
       return;
     }
     if (!loading_editor_ &&
@@ -621,22 +643,29 @@ class Application {
     }
     const auto* change = reinterpret_cast<NMLISTVIEW*>(header);
     if ((change->uNewState & LVIS_SELECTED) == 0 || change->iItem < 0 ||
-        static_cast<size_t>(change->iItem) >= problems_.size()) {
+        static_cast<size_t>(change->iItem) >= displayed_problems_.size()) {
       return;
     }
-    LoadEditor(problems_[static_cast<size_t>(change->iItem)]);
+    LoadEditor(displayed_problems_[static_cast<size_t>(change->iItem)]);
   }
 
   void ReloadProblems() {
     const std::string preserved_id = selected_id_;
     const bool preserve_dirty_editor = editor_dirty_;
+    const std::string preserved_folder_filter = FolderFilterValue();
     problems_ = database_.LoadProblems();
     known_revision_ = database_.Revision();
     reloading_list_ = true;
+    PopulateFolderFilter(preserved_folder_filter);
     ListView_DeleteAllItems(list_);
+    displayed_problems_.clear();
     int selected_index = -1;
-    for (size_t index = 0; index < problems_.size(); ++index) {
-      const auto& problem = problems_[index];
+    for (const auto& problem : problems_) {
+      if (!MatchesFolderFilter(problem)) {
+        continue;
+      }
+      displayed_problems_.push_back(problem);
+      const size_t index = displayed_problems_.size() - 1;
       const auto title = Utf8ToWide(problem.title);
       LVITEMW item{};
       item.mask = LVIF_TEXT;
@@ -645,7 +674,12 @@ class Application {
       ListView_InsertItem(list_, &item);
       SetListText(static_cast<int>(index), 1, problem.platform);
       SetListText(static_cast<int>(index), 2, problem.workflow_status);
-      SetListText(static_cast<int>(index), 3, JsonToTags(problem.tags_json));
+      SetListText(
+          static_cast<int>(index), 3,
+          problem.folder.empty()
+              ? JsonToTags(problem.tags_json)
+              : "Folder: " + problem.folder + " | " +
+                    JsonToTags(problem.tags_json));
       SetListText(static_cast<int>(index), 4, problem.updated_at);
       if (problem.id == preserved_id) {
         selected_index = static_cast<int>(index);
@@ -657,7 +691,7 @@ class Application {
                             LVIS_SELECTED | LVIS_FOCUSED);
       ListView_EnsureVisible(list_, selected_index, FALSE);
       if (!preserve_dirty_editor) {
-        LoadEditor(problems_[static_cast<size_t>(selected_index)]);
+        LoadEditor(displayed_problems_[static_cast<size_t>(selected_index)]);
       }
     } else if (!preserved_id.empty() && !preserve_dirty_editor) {
       ClearEditor();
@@ -707,6 +741,7 @@ class Application {
     problem.workflow_status =
         ComboValue(status_combo_, kStatuses, "backlog");
     problem.tags_json = TagsToJson(WideToUtf8(WindowText(tags_edit_)));
+    problem.folder = Trim(WideToUtf8(WindowText(folder_edit_)));
     problem.note = WideToUtf8(WindowText(note_edit_));
     problem.updated_at = UtcNowIso8601();
     if (problem.workflow_status == "archived" && problem.archived_at.empty()) {
@@ -755,6 +790,7 @@ class Application {
     SetWindowTextW(title_edit_, L"");
     SetWindowTextW(url_edit_, L"");
     SetWindowTextW(tags_edit_, L"");
+    SetWindowTextW(folder_edit_, L"");
     SetWindowTextW(note_edit_, L"");
     ComboBox_SetCurSel(platform_combo_, static_cast<int>(kPlatforms.size() - 1));
     ComboBox_SetCurSel(status_combo_, 0);
@@ -769,6 +805,7 @@ class Application {
     SetWindowTextUtf8(title_edit_, problem.title);
     SetWindowTextUtf8(url_edit_, problem.url);
     SetWindowTextUtf8(tags_edit_, JsonToTags(problem.tags_json));
+    SetWindowTextUtf8(folder_edit_, problem.folder);
     SetWindowTextUtf8(note_edit_, problem.note);
     SelectCombo(platform_combo_, kPlatforms, problem.platform);
     SelectCombo(status_combo_, kStatuses, problem.workflow_status);
@@ -800,6 +837,40 @@ class Application {
                                  : static_cast<int>(found - values.begin()));
   }
 
+  std::string FolderFilterValue() const {
+    const int index = ComboBox_GetCurSel(folder_filter_);
+    return index <= 0 ? std::string() : Trim(WideToUtf8(WindowText(folder_filter_)));
+  }
+
+  bool MatchesFolderFilter(const ProblemRecord& problem) const {
+    const auto filter = FolderFilterValue();
+    return filter.empty() || problem.folder == filter;
+  }
+
+  void PopulateFolderFilter(const std::string& selected) {
+    ComboBox_ResetContent(folder_filter_);
+    const auto all_folders = Utf8ToWide("All folders");
+    ComboBox_AddString(folder_filter_, all_folders.c_str());
+    std::vector<std::string> folders;
+    for (const auto& problem : problems_) {
+      if (!problem.folder.empty() &&
+          std::find(folders.begin(), folders.end(), problem.folder) ==
+              folders.end()) {
+        folders.push_back(problem.folder);
+      }
+    }
+    std::sort(folders.begin(), folders.end());
+    int selected_index = 0;
+    for (const auto& folder : folders) {
+      const auto value = Utf8ToWide(folder);
+      const int index = ComboBox_AddString(folder_filter_, value.c_str());
+      if (folder == selected) {
+        selected_index = index;
+      }
+    }
+    ComboBox_SetCurSel(folder_filter_, selected_index);
+  }
+
   void SetListText(int row, int column, const std::string& value) {
     auto wide = Utf8ToWide(value);
     ListView_SetItemText(list_, row, column, wide.data());
@@ -826,6 +897,8 @@ class Application {
   HWND delete_button_ = nullptr;
   HWND open_button_ = nullptr;
   HWND refresh_button_ = nullptr;
+  HWND folder_filter_label_ = nullptr;
+  HWND folder_filter_ = nullptr;
   HWND title_label_ = nullptr;
   HWND title_edit_ = nullptr;
   HWND url_label_ = nullptr;
@@ -836,10 +909,13 @@ class Application {
   HWND status_combo_ = nullptr;
   HWND tags_label_ = nullptr;
   HWND tags_edit_ = nullptr;
+  HWND folder_label_ = nullptr;
+  HWND folder_edit_ = nullptr;
   HWND note_label_ = nullptr;
   HWND note_edit_ = nullptr;
   HWND status_text_ = nullptr;
   std::vector<ProblemRecord> problems_;
+  std::vector<ProblemRecord> displayed_problems_;
   std::string selected_id_;
   std::int64_t known_revision_ = -1;
   bool loading_editor_ = false;

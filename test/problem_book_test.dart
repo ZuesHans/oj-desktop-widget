@@ -731,6 +731,35 @@ void main() {
     expect(stats.last.total, 1);
     expect(stats.last.pending, 1);
   });
+
+  test('folder filtering and sync merges preserve classifications', () {
+    final service = ProblemBookService(
+      client: MockClient((_) async => http.Response('', 404)),
+    );
+    addTearDown(service.dispose);
+    final local = _problem(
+      id: 'foldered',
+      updatedAt: DateTime.parse('2026-06-21T12:00:00'),
+    ).copyWith(folder: 'dp');
+    final other = _problem(
+      id: 'uncategorized',
+      url: 'https://example.com/uncategorized',
+    );
+
+    expect(
+      filterProblems([local, other], folder: 'dp').map((item) => item.id),
+      ['foldered'],
+    );
+    final incoming = local.copyWith(
+      title: 'Updated remotely',
+      folder: '',
+      updatedAt: DateTime.parse('2026-06-21T13:00:00'),
+    );
+    expect(
+      service.mergeSyncedProblems([local], [incoming]).single.folder,
+      'dp',
+    );
+  });
 }
 
 ProblemRecord _problem({

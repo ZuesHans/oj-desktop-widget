@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:oj_float/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqlite3/sqlite3.dart';
@@ -83,7 +84,9 @@ void main() {
       }
 
       final upgraded = LocalStore(supportDirectory: directory);
-      expect((await upgraded.loadProblems()).single.id, 'existing');
+      final upgradedProblem = (await upgraded.loadProblems()).single;
+      expect(upgradedProblem.id, 'existing');
+      expect(upgradedProblem.folder, isEmpty);
       expect(await upgraded.problemRevision(), 0);
 
       final verified = sqlite3.open(path);
@@ -121,6 +124,64 @@ void main() {
       expect(await controller.refreshProblemsIfChanged(), isTrue);
       expect(controller.state.problems.single.id, 'external');
       expect(await controller.refreshProblemsIfChanged(), isFalse);
+    } finally {
+      controller.dispose();
+      await deleteTestDirectory(directory);
+    }
+  });
+
+  test('external problem changes trigger configured automatic website sync',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('problem_sync_');
+    final requests = <http.BaseRequest>[];
+    final syncClient = MockClient((request) async {
+      requests.add(request);
+      if (request.method == 'GET') {
+        return http.Response('[]', 200);
+      }
+      return http.Response('{"success":true}', 200);
+    });
+    final store = LocalStore(supportDirectory: directory);
+    final controller = OjController(
+      storage: store,
+      service: RefreshService(client: http.Client(), providers: const {}),
+      startupService: NoopStartupService(),
+      syncService: SyncService(client: syncClient),
+      syncSecretStore: MemorySyncSecretStore('test-token'),
+      problemRefreshInterval: const Duration(milliseconds: 10),
+    );
+    try {
+      await store.saveConfig(
+        AppConfig.defaults().copyWith(
+          sync: const SyncConfig(
+            enabled: true,
+            endpointUrl: 'http://localhost:8787/api/oj-sync',
+            autoSyncAfterRefresh: false,
+          ),
+        ),
+      );
+      await controller.init();
+      controller.state = controller.state.copyWith(
+        config: controller.state.config.copyWith(
+          sync: controller.state.config.sync.copyWith(
+            autoSyncAfterRefresh: true,
+          ),
+        ),
+      );
+
+      await LocalStore(supportDirectory: directory).saveProblem(
+        _problem('external-sync', 'Added by companion'),
+      );
+
+      for (var attempt = 0; attempt < 30; attempt += 1) {
+        if (requests.any((request) => request.method == 'POST')) {
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+
+      expect(requests.any((request) => request.method == 'POST'), isTrue);
+      expect(controller.state.problems.single.id, 'external-sync');
     } finally {
       controller.dispose();
       await deleteTestDirectory(directory);

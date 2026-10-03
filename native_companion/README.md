@@ -5,7 +5,7 @@ book. It does not embed Flutter. The first version supports:
 
 - listing and opening stored problems;
 - row-level insert/update/delete operations;
-- title, URL, platform, workflow status, tags, and note editing;
+- title, URL, platform, workflow status, folder, tags, and note editing;
 - one-second revision polling so Flutter and the companion refresh each other;
 - a loopback-only browser import service on `127.0.0.1:27122` for the pig
   Tampermonkey userscript, with no Flutter process required;
@@ -43,7 +43,7 @@ To open an isolated or portable database, pass its full path:
 .\oj_problem_companion.exe --database "D:\OJ\problem_book.sqlite3"
 ```
 
-Only schema version 2 databases are accepted. See
+Only schema version 3 databases are accepted. See
 [`docs/problem-database.md`](../docs/problem-database.md) for the shared storage
 contract.
 

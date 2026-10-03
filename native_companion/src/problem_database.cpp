@@ -111,10 +111,10 @@ ProblemDatabase::~ProblemDatabase() {
 void ProblemDatabase::VerifySchema() {
   Statement statement(api_, database_, "PRAGMA user_version");
   if (api_.step(statement.get()) != kSqliteRow ||
-      api_.column_int(statement.get(), 0) != 2) {
+      api_.column_int(statement.get(), 0) != 3) {
     throw std::runtime_error(
         "题库数据库版本不受支持。请先打开新版主程序完成迁移；"
-        "当前小程序需要 schema v2。");
+        "当前小程序需要 schema v3。");
   }
   Statement revision(api_, database_,
                      "SELECT revision FROM problem_change_state "
@@ -137,7 +137,7 @@ std::int64_t ProblemDatabase::Revision() {
 
 std::vector<ProblemRecord> ProblemDatabase::LoadProblems() {
   Statement statement(api_, database_, R"sql(
-    SELECT id, title, url, platform, workflow_status, tags_json, date, note,
+    SELECT id, title, url, platform, workflow_status, tags_json, folder, date, note,
            analysis, difficulty, external_id, review_stage, next_review_at,
            archived_at, is_favorite, is_pinned, last_opened_at, created_at,
            updated_at
@@ -160,19 +160,20 @@ std::vector<ProblemRecord> ProblemDatabase::LoadProblems() {
     problem.platform = ColumnText(api_, statement.get(), 3);
     problem.workflow_status = ColumnText(api_, statement.get(), 4);
     problem.tags_json = ColumnText(api_, statement.get(), 5);
-    problem.date = ColumnText(api_, statement.get(), 6);
-    problem.note = ColumnText(api_, statement.get(), 7);
-    problem.analysis = ColumnText(api_, statement.get(), 8);
-    problem.difficulty = ColumnText(api_, statement.get(), 9);
-    problem.external_id = ColumnText(api_, statement.get(), 10);
-    problem.review_stage = api_.column_int(statement.get(), 11);
-    problem.next_review_at = ColumnText(api_, statement.get(), 12);
-    problem.archived_at = ColumnText(api_, statement.get(), 13);
-    problem.is_favorite = api_.column_int(statement.get(), 14) != 0;
-    problem.is_pinned = api_.column_int(statement.get(), 15) != 0;
-    problem.last_opened_at = ColumnText(api_, statement.get(), 16);
-    problem.created_at = ColumnText(api_, statement.get(), 17);
-    problem.updated_at = ColumnText(api_, statement.get(), 18);
+    problem.folder = ColumnText(api_, statement.get(), 6);
+    problem.date = ColumnText(api_, statement.get(), 7);
+    problem.note = ColumnText(api_, statement.get(), 8);
+    problem.analysis = ColumnText(api_, statement.get(), 9);
+    problem.difficulty = ColumnText(api_, statement.get(), 10);
+    problem.external_id = ColumnText(api_, statement.get(), 11);
+    problem.review_stage = api_.column_int(statement.get(), 12);
+    problem.next_review_at = ColumnText(api_, statement.get(), 13);
+    problem.archived_at = ColumnText(api_, statement.get(), 14);
+    problem.is_favorite = api_.column_int(statement.get(), 15) != 0;
+    problem.is_pinned = api_.column_int(statement.get(), 16) != 0;
+    problem.last_opened_at = ColumnText(api_, statement.get(), 17);
+    problem.created_at = ColumnText(api_, statement.get(), 18);
+    problem.updated_at = ColumnText(api_, statement.get(), 19);
     problems.push_back(std::move(problem));
   }
   return problems;
@@ -183,17 +184,18 @@ void ProblemDatabase::Upsert(const ProblemRecord& problem) {
   try {
     Statement statement(api_, database_, R"sql(
       INSERT INTO problems (
-        id, title, url, platform, workflow_status, tags_json, date, note,
+        id, title, url, platform, workflow_status, tags_json, folder, date, note,
         analysis, difficulty, external_id, review_stage, next_review_at,
         archived_at, is_favorite, is_pinned, last_opened_at, created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         title = excluded.title,
         url = excluded.url,
         platform = excluded.platform,
         workflow_status = excluded.workflow_status,
         tags_json = excluded.tags_json,
+        folder = excluded.folder,
         date = excluded.date,
         note = excluded.note,
         analysis = excluded.analysis,
@@ -216,6 +218,7 @@ void ProblemDatabase::Upsert(const ProblemRecord& problem) {
     BindText(api_, database_, statement.get(), index++,
              problem.workflow_status);
     BindText(api_, database_, statement.get(), index++, problem.tags_json);
+    BindText(api_, database_, statement.get(), index++, problem.folder);
     BindText(api_, database_, statement.get(), index++, problem.date);
     BindText(api_, database_, statement.get(), index++, problem.note);
     BindText(api_, database_, statement.get(), index++, problem.analysis);

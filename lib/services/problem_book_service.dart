@@ -79,7 +79,7 @@ class ProblemBookService {
       }
       if (problem.updatedAt.isAfter(merged[index].updatedAt)) {
         merged[index] = matchedById
-            ? problem
+            ? _mergeSyncedProblem(merged[index], problem)
             : _mergeDuplicateProblem(merged[index], problem);
       }
     }
@@ -94,6 +94,7 @@ class ProblemBookService {
     ProblemWorkflowStatus? workflowStatus,
     ProblemPlatform? platform,
     String? tag,
+    String? folder,
   }) {
     return filterProblems(
       problems,
@@ -102,6 +103,7 @@ class ProblemBookService {
       workflowStatus: workflowStatus,
       platform: platform,
       tag: tag,
+      folder: folder,
     );
   }
 
@@ -150,9 +152,11 @@ List<ProblemRecord> filterProblems(
   ProblemWorkflowStatus? workflowStatus,
   ProblemPlatform? platform,
   String? tag,
+  String? folder,
 }) {
   final normalizedQuery = query.trim().toLowerCase();
   final normalizedTag = tag?.trim().toLowerCase();
+  final normalizedFolder = folder?.trim().toLowerCase();
   return List.unmodifiable(problems.where((problem) {
     if (status != null && problem.status != status) {
       return false;
@@ -168,6 +172,11 @@ List<ProblemRecord> filterProblems(
         !problem.tags.any((item) => item.toLowerCase() == normalizedTag)) {
       return false;
     }
+    if (normalizedFolder != null &&
+        normalizedFolder.isNotEmpty &&
+        problem.folder.toLowerCase() != normalizedFolder) {
+      return false;
+    }
     if (normalizedQuery.isEmpty) {
       return true;
     }
@@ -176,6 +185,7 @@ List<ProblemRecord> filterProblems(
       problem.url,
       problem.note,
       problem.analysis,
+      problem.folder,
       ...problem.tags,
     ].join('\n').toLowerCase();
     return haystack.contains(normalizedQuery);
@@ -225,6 +235,16 @@ List<ProblemTagStat> buildProblemTagStats(
       return a.tag.toLowerCase().compareTo(b.tag.toLowerCase());
     });
   return List.unmodifiable(result);
+}
+
+ProblemRecord _mergeSyncedProblem(
+  ProblemRecord existing,
+  ProblemRecord incoming,
+) {
+  // Older website payloads have no folder; keep a local classification intact.
+  return incoming.folder.isEmpty && existing.folder.isNotEmpty
+      ? incoming.copyWith(folder: existing.folder)
+      : incoming;
 }
 
 class _MutableProblemTagStat {
@@ -411,6 +431,7 @@ ProblemRecord _mergeDuplicateProblem(
         incoming.difficulty.isEmpty ? existing.difficulty : incoming.difficulty,
     externalId:
         incoming.externalId.isEmpty ? existing.externalId : incoming.externalId,
+    folder: incoming.folder.isEmpty ? existing.folder : incoming.folder,
     note: _mergeProblemText(existing.note, incoming.note),
     analysis: _mergeProblemText(existing.analysis, incoming.analysis),
     updatedAt: incoming.updatedAt.isAfter(existing.updatedAt)

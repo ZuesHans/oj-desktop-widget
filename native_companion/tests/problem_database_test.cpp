@@ -34,7 +34,7 @@ constexpr const char* kSchema = R"sql(
   CREATE TABLE problems (
     id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL,
     platform TEXT NOT NULL, workflow_status TEXT NOT NULL,
-    tags_json TEXT NOT NULL DEFAULT '[]', date TEXT NOT NULL,
+    tags_json TEXT NOT NULL DEFAULT '[]', folder TEXT NOT NULL DEFAULT '', date TEXT NOT NULL,
     note TEXT NOT NULL DEFAULT '', analysis TEXT NOT NULL DEFAULT '',
     difficulty TEXT NOT NULL DEFAULT '', external_id TEXT NOT NULL DEFAULT '',
     review_stage INTEGER NOT NULL DEFAULT 0, next_review_at TEXT,
@@ -56,7 +56,7 @@ constexpr const char* kSchema = R"sql(
   CREATE TRIGGER problems_revision_after_delete AFTER DELETE ON problems BEGIN
     UPDATE problem_change_state SET revision = revision + 1 WHERE singleton = 1;
   END;
-  PRAGMA user_version = 2;
+  PRAGMA user_version = 3;
 )sql";
 
 void Require(bool condition, const char* message) {
@@ -143,6 +143,7 @@ int main() {
       problem.platform = "other";
       problem.workflow_status = "backlog";
       problem.tags_json = R"(["array"])";
+      problem.folder = "dp";
       problem.date = "2026-09-22";
       problem.created_at = "2026-09-22T12:00:00.000Z";
       problem.updated_at = problem.created_at;
@@ -153,6 +154,7 @@ int main() {
       const auto loaded = observer.LoadProblems();
       Require(loaded.size() == 1, "inserted problem should be loaded");
       Require(loaded.front().title == "Two Sum", "problem title changed");
+      Require(loaded.front().folder == "dp", "problem folder changed");
       problem = loaded.front();
       problem.title = "Two Sum updated externally";
       observer.Upsert(problem);

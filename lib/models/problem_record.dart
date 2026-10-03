@@ -32,6 +32,7 @@ class ProblemRecord {
     bool isFavorite = false,
     bool isPinned = false,
     DateTime? lastOpenedAt,
+    String folder = '',
   }) {
     final legacyStatus = status ?? ProblemStatus.TODO;
     return ProblemRecord._(
@@ -53,6 +54,7 @@ class ProblemRecord {
       isFavorite: isFavorite,
       isPinned: isPinned,
       lastOpenedAt: lastOpenedAt,
+      folder: folder.trim(),
       createdAt: createdAt,
       updatedAt: updatedAt,
       legacyStatusForMigration: workflowStatus == null ? legacyStatus : null,
@@ -77,6 +79,7 @@ class ProblemRecord {
     required this.isFavorite,
     required this.isPinned,
     required this.lastOpenedAt,
+    required this.folder,
     required this.createdAt,
     required this.updatedAt,
     required this.legacyStatusForMigration,
@@ -96,6 +99,7 @@ class ProblemRecord {
     String analysis = '',
     String difficulty = '',
     String externalId = '',
+    String folder = '',
   }) {
     final timestamp = now ?? DateTime.now();
     final legacyStatus = status ?? ProblemStatus.TODO;
@@ -112,6 +116,7 @@ class ProblemRecord {
       analysis: analysis.trim(),
       difficulty: difficulty.trim(),
       externalId: externalId.trim(),
+      folder: folder.trim(),
       reviewStage: 0,
       nextReviewAt: null,
       archivedAt: null,
@@ -141,6 +146,7 @@ class ProblemRecord {
     final analysis = json['analysis'];
     final createdAt = json['created_at'] ?? json['createdAt'];
     final updatedAt = json['updated_at'] ?? json['updatedAt'];
+    final folder = json['folder'];
     if (id is! String || id.trim().isEmpty) {
       return null;
     }
@@ -157,6 +163,9 @@ class ProblemRecord {
       return null;
     }
     if (analysis != null && analysis is! String) {
+      return null;
+    }
+    if (folder != null && folder is! String) {
       return null;
     }
     if (createdAt is! String || updatedAt is! String) {
@@ -219,6 +228,7 @@ class ProblemRecord {
       externalId: json['externalId'] is String
           ? (json['externalId'] as String).trim()
           : '',
+      folder: (folder as String?)?.trim() ?? '',
       reviewStage: reviewStage is int ? reviewStage : 0,
       nextReviewAt: parsedNextReviewAt,
       archivedAt: parsedArchivedAt,
@@ -243,6 +253,7 @@ class ProblemRecord {
   final String analysis;
   final String difficulty;
   final String externalId;
+  final String folder;
   final int reviewStage;
   final DateTime? nextReviewAt;
   final DateTime? archivedAt;
@@ -267,6 +278,7 @@ class ProblemRecord {
     String? analysis,
     String? difficulty,
     String? externalId,
+    String? folder,
     int? reviewStage,
     DateTime? nextReviewAt,
     bool clearNextReviewAt = false,
@@ -293,6 +305,7 @@ class ProblemRecord {
       analysis: analysis?.trim() ?? this.analysis,
       difficulty: difficulty?.trim() ?? this.difficulty,
       externalId: externalId?.trim() ?? this.externalId,
+      folder: folder?.trim() ?? this.folder,
       reviewStage: (reviewStage ?? this.reviewStage).clamp(0, 5).toInt(),
       nextReviewAt:
           clearNextReviewAt ? null : nextReviewAt ?? this.nextReviewAt,
@@ -320,6 +333,7 @@ class ProblemRecord {
         'analysis': analysis,
         'difficulty': difficulty,
         'externalId': externalId,
+        if (folder.isNotEmpty) 'folder': folder,
         'archivedAt': archivedAt?.toIso8601String(),
         'isFavorite': isFavorite,
         'isPinned': isPinned,

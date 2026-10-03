@@ -6,13 +6,15 @@ the Flutter client and the native C++ quick-entry companion.
 
 ## Compatibility rules
 
-- Check `PRAGMA user_version` before writing. The current schema version is `2`.
+- Check `PRAGMA user_version` before writing. The current schema version is `3`.
 - Use SQLite transactions for every write.
 - Keep WAL mode enabled and set a busy timeout before accessing the database.
 - Do not change the schema from the companion. Schema migrations belong to the
   Flutter client release that increments `user_version`.
 - Store booleans as `0` or `1`, tags as a JSON string array, and timestamps as
   ISO-8601 strings.
+- `problems.folder` is a trimmed optional classification. Existing rows migrate
+  to an empty folder and must remain usable without one.
 - Treat `id` as an opaque text primary key. New IDs should remain globally
   unique across both programs.
 
@@ -29,13 +31,16 @@ JSON file from overwriting the SQLite data.
 ## Tables
 
 `problems` contains the complete `ProblemRecord`. Frequently filtered workflow
-and update columns are indexed. `metadata` stores one-time storage bookkeeping;
+and update columns are indexed, including `folder`. `metadata` stores one-time storage bookkeeping;
 it is not application configuration.
 
 `problem_change_state` contains a monotonic revision. SQLite triggers increment
 it after every insert, update, or delete, including SQL committed by the native
 companion. The Flutter client polls this value once per second and reloads only
-when it changes. Companion code must not update the revision row directly.
+when it changes. When problem sync is enabled, an external change detected by
+this poll also schedules the configured automatic sync, so rows entered in the
+native companion are sent to the website without waiting for the next OJ
+account refresh. Companion code must not update the revision row directly.
 
 Flutter uses row-level upserts and deletes during normal operation. Full-table
 replacement is reserved for an explicit backup restore, so a native write is not

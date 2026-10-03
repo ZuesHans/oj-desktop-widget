@@ -1528,6 +1528,7 @@ class _ProblemPickerDialogState extends State<_ProblemPickerDialog> {
   ProblemWorkflowStatus? _workflow;
   _ResultFilter _result = _ResultFilter.any;
   String? _tag;
+  String? _folder;
   String? _listId;
 
   @override
@@ -1547,13 +1548,19 @@ class _ProblemPickerDialogState extends State<_ProblemPickerDialog> {
     final latest = _latestAttempts(widget.attempts);
     final tags = widget.problems.expand((item) => item.tags).toSet().toList()
       ..sort();
+    final folders = widget.problems
+        .map((item) => item.folder)
+        .where((item) => item.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
     final visible = widget.problems.where((problem) {
       if (problem.workflowStatus == ProblemWorkflowStatus.archived) {
         return false;
       }
       final query = _query.text.trim().toLowerCase();
       if (query.isNotEmpty &&
-          ![problem.title, problem.url, ...problem.tags]
+           ![problem.title, problem.url, problem.folder, ...problem.tags]
               .join(' ')
               .toLowerCase()
               .contains(query)) {
@@ -1564,6 +1571,7 @@ class _ProblemPickerDialogState extends State<_ProblemPickerDialog> {
         return false;
       }
       if (_tag != null && !problem.tags.contains(_tag)) return false;
+      if (_folder != null && problem.folder != _folder) return false;
       if (_listId != null) {
         final list =
             widget.lists.where((item) => item.id == _listId).firstOrNull;
@@ -1663,6 +1671,24 @@ class _ProblemPickerDialogState extends State<_ProblemPickerDialog> {
                         DropdownMenuItem(value: value, child: Text(value)),
                     ],
                     onChanged: (value) => setState(() => _tag = value),
+                  ),
+                ),
+                SizedBox(
+                  width: 170,
+                  child: DropdownButtonFormField<String?>(
+                    key: const ValueKey('picker-folder-filter'),
+                    isExpanded: true,
+                    initialValue: _folder,
+                    decoration: const InputDecoration(labelText: '文件夹'),
+                    items: [
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Text('全部文件夹'),
+                      ),
+                      for (final value in folders)
+                        DropdownMenuItem(value: value, child: Text(value)),
+                    ],
+                    onChanged: (value) => setState(() => _folder = value),
                   ),
                 ),
                 SizedBox(

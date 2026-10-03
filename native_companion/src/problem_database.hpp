@@ -17,6 +17,7 @@ struct ProblemRecord {
   std::string platform = "other";
   std::string workflow_status = "backlog";
   std::string tags_json = "[]";
+  std::string folder;
   std::string date;
   std::string note;
   std::string analysis;

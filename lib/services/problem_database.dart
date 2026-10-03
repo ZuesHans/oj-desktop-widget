@@ -25,7 +25,7 @@ class ProblemDatabaseSnapshot {
 class ProblemDatabase {
   ProblemDatabase(this.file);
 
-  static const schemaVersion = 2;
+  static const schemaVersion = 3;
   static const _legacyMigrationKey = 'legacy_json_migrated';
 
   final File file;
@@ -183,6 +183,13 @@ class ProblemDatabase {
           _migrateSchema1To2(database);
           database.execute('PRAGMA user_version = 2');
         });
+        currentVersion = 2;
+      }
+      if (currentVersion == 2) {
+        _runMigration(database, () {
+          _migrateSchema2To3(database);
+          database.execute('PRAGMA user_version = 3');
+        });
       }
       database.execute('PRAGMA synchronous = NORMAL');
       return database;
@@ -272,20 +279,30 @@ class ProblemDatabase {
     ''');
   }
 
+  static void _migrateSchema2To3(Database database) {
+    database.execute('''
+      ALTER TABLE problems ADD COLUMN folder TEXT NOT NULL DEFAULT ''
+    ''');
+    database.execute(
+      'CREATE INDEX IF NOT EXISTS problems_folder_idx ON problems(folder)',
+    );
+  }
+
   static void _upsertAll(Database database, Iterable<ProblemRecord> problems) {
     final statement = database.prepare('''
       INSERT INTO problems (
-        id, title, url, platform, workflow_status, tags_json, date, note,
+        id, title, url, platform, workflow_status, tags_json, folder, date, note,
         analysis, difficulty, external_id, review_stage, next_review_at,
         archived_at, is_favorite, is_pinned, last_opened_at, created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         title = excluded.title,
         url = excluded.url,
         platform = excluded.platform,
         workflow_status = excluded.workflow_status,
         tags_json = excluded.tags_json,
+        folder = excluded.folder,
         date = excluded.date,
         note = excluded.note,
         analysis = excluded.analysis,
@@ -309,6 +326,7 @@ class ProblemDatabase {
           problemPlatformValue(problem.platform),
           problem.workflowStatus.name,
           jsonEncode(problem.tags),
+          problem.folder,
           problem.date,
           problem.note,
           problem.analysis,
@@ -338,6 +356,7 @@ class ProblemDatabase {
         'platform': row['platform'],
         'workflowStatus': row['workflow_status'],
         'tags': row['tags_json'],
+        'folder': row['folder'],
         'date': row['date'],
         'note': row['note'],
         'analysis': row['analysis'],
