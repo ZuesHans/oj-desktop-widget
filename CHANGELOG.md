@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+## v0.3.0 - 2026-10-24
+
+- Remember main-window bounds, maximized state, and the last Dashboard page in machine-local window preferences, with display work-area recovery after monitor changes.
+- Add Ctrl+R to refresh, Ctrl+F to focus problem search, Ctrl+, for settings, and Esc for quick entry, while preserving modal focus and unsaved-settings confirmation.
+- Pre-fill recognized OJ problem links from the clipboard when quick entry opens, without automatic network requests or overwriting user edits.
+- Add rotating diagnostics logging with early framework/async error capture, 1 MiB x 5 rotation, stable-alias redaction of tokens, OJ accounts, URL parameters, and local user paths, plus a settings-page diagnostics export that stays local.
+- Pin the CI Flutter toolchain, derive release notes from the tag with a pre-packaging check, add Dependabot for Actions and pub, and attach build provenance to release assets.
+- Add real screenshots, a script-driven import demo, and a reproducible showcase runbook to the README (docs/images/, scripts/showcase/).
+
 ## v0.2.0-beta - 2026-07-26
 
 - Replaced compact, floating, and feature-window modes with one resizable Windows Dashboard client.

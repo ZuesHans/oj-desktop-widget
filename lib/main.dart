@@ -5,7 +5,9 @@ import 'package:window_manager/window_manager.dart';
 
 import 'app/oj_float_app.dart';
 import 'models/app_config.dart';
+import 'services/diagnostics_service.dart';
 import 'services/local_store.dart';
+import 'services/window_state_service.dart';
 import 'ui/app_labels.dart';
 import 'ui/app_theme.dart';
 
@@ -37,6 +39,7 @@ export 'services/automatic_backup_service.dart';
 export 'services/browser_import_service.dart';
 export 'services/contest_record_service.dart';
 export 'services/daily_summary_service.dart';
+export 'services/diagnostics_service.dart';
 export 'services/heatmap_service.dart';
 export 'services/home_action_service.dart';
 export 'services/local_store.dart';
@@ -68,6 +71,13 @@ const problemDatabaseMigrationFlag = '--migrate-problem-database-and-exit';
 Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Install diagnostics before any application code runs. We rely on the
+  // framework error handler plus PlatformDispatcher.onError rather than a
+  // custom zone, so Flutter binding initialization and runApp already share
+  // the root zone and errors are not recorded twice.
+  DiagnosticsService.install();
+  installDiagnosticsErrorHandlers();
+
   if (shouldMigrateProblemDatabase(arguments)) {
     try {
       final directoryIndex = arguments.indexOf('--migration-directory');
@@ -89,12 +99,16 @@ Future<void> main(List<String> arguments) async {
   }
 
   AppConfig? initialConfig;
+  WindowStateService? windowState;
   var startHidden = false;
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
+    windowState = WindowStateService();
+    await windowState.load();
     try {
-      initialConfig =
-          await LocalStore(useFilePreferences: Platform.isWindows).loadConfig();
+      initialConfig = await LocalStore(
+        useFilePreferences: Platform.isWindows,
+      ).loadConfig();
       startHidden = shouldStartHidden(arguments, initialConfig);
     } catch (error) {
       // Show the recovery page even when preferences cannot be read.
@@ -106,25 +120,28 @@ Future<void> main(List<String> arguments) async {
       center: true,
       title: AppLabels.appTitle,
       titleBarStyle: TitleBarStyle.normal,
-      backgroundColor:
-          appPaletteFor(initialConfig?.colorTheme ?? AppColorTheme.classic)
-              .surface,
+      backgroundColor: appPaletteFor(
+        initialConfig?.colorTheme ?? AppColorTheme.classic,
+      ).surface,
     );
-    await windowManager.waitUntilReadyToShow(options, () async {
-      // All close requests are routed through the app so unsaved settings can
-      // be confirmed before the window exits or hides to the tray.
-      await windowManager.setPreventClose(true);
-      if (!startHidden) {
-        await windowManager.show();
-        await windowManager.focus();
-      }
-    });
+    await windowManager.waitUntilReadyToShow(options);
+    // The plugin callback is void and does not await asynchronous restoration.
+    await windowManager.setPreventClose(true);
+    await windowState.restore(startHidden: startHidden);
+    windowState.start();
+    if (!startHidden) {
+      await windowManager.show();
+      await windowManager.focus();
+    }
   }
 
-  runApp(OjFloatApp(
-    initialConfig: initialConfig,
-    startHidden: startHidden,
-  ));
+  runApp(
+    OjFloatApp(
+      initialConfig: initialConfig,
+      startHidden: startHidden,
+      windowState: windowState,
+    ),
+  );
 }
 
 bool shouldMigrateProblemDatabase(List<String> arguments) {

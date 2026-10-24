@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/app_config.dart';
 import '../services/window_shell_service.dart';
+import '../services/window_state_service.dart';
 import '../ui/app_labels.dart';
 import '../ui/app_theme.dart';
 import '../ui/dashboard/oj_float_home.dart';
@@ -12,6 +13,7 @@ class OjFloatApp extends StatelessWidget {
     this.initialConfig,
     this.startHidden = false,
     this.windowShell,
+    this.windowState,
     this.enablePlatformIntegration = true,
     this.autoInitializeController = true,
   });
@@ -19,6 +21,7 @@ class OjFloatApp extends StatelessWidget {
   final AppConfig? initialConfig;
   final bool startHidden;
   final WindowShell? windowShell;
+  final WindowStateService? windowState;
   final bool enablePlatformIntegration;
   final bool autoInitializeController;
 
@@ -32,6 +35,7 @@ class OjFloatApp extends StatelessWidget {
         initialConfig: initialConfig,
         startHidden: startHidden,
         windowShell: windowShell,
+        windowState: windowState,
         enablePlatformIntegration: enablePlatformIntegration,
         autoInitializeController: autoInitializeController,
       ),

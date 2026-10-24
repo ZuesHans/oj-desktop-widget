@@ -58,7 +58,7 @@ void main() {
     final zip = UpdateService(
         client: MockClient((_) async => http.Response(
             jsonEncode(_release('v0.3.0')..['assets'] = []), 200)));
-    expect((await zip.check()).downloadUrl.toString(),
+    expect((await zip.check(currentVersion: '0.2.0+8')).downloadUrl.toString(),
         '$appRepositoryUrl/releases/tag/v0.3.0');
     zip.dispose();
   });
@@ -85,7 +85,8 @@ void main() {
       final service = UpdateService(
           client:
               MockClient((_) async => http.Response(jsonEncode(data), 200)));
-      await expectLater(service.check(), throwsFormatException);
+      await expectLater(
+          service.check(currentVersion: '0.2.0+8'), throwsFormatException);
       service.dispose();
     }
     for (final code in [301, 403, 429, 500]) {

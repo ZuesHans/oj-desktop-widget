@@ -23,6 +23,7 @@ import 'automatic_backup_service.dart';
 import 'browser_import_service.dart';
 import 'contest_record_service.dart';
 import 'daily_summary_service.dart';
+import 'diagnostics_service.dart';
 import 'local_store.dart';
 import 'problem_book_service.dart';
 import 'refresh_service.dart';
@@ -144,6 +145,7 @@ class OjController extends ChangeNotifier {
       teammates: teammates,
       training: training,
     );
+    _updateDiagnosticsAccounts();
     try {
       await startupService.setEnabled(
         config.closeToTray && config.launchAtStartup,
@@ -164,7 +166,9 @@ class OjController extends ChangeNotifier {
   }
 
   Future<void> applyProblemBatch(
-      Set<String> ids, ProblemBatchChange change) async {
+    Set<String> ids,
+    ProblemBatchChange change,
+  ) async {
     await storage.applyProblemBatch(ids, change);
     await _reloadProblemsFromStorage();
     notifyListeners();
@@ -176,7 +180,9 @@ class OjController extends ChangeNotifier {
     final snapshot = await storage.loadProblemSnapshot();
     _knownProblemRevision = snapshot.revision;
     state = state.copyWith(
-        problems: snapshot.problems, problemFolders: snapshot.folders);
+      problems: snapshot.problems,
+      problemFolders: snapshot.folders,
+    );
     notifyListeners();
   }
 
@@ -195,14 +201,16 @@ class OjController extends ChangeNotifier {
     }
     await storage.saveConfig(normalized);
     state = state.copyWith(config: normalized);
+    _updateDiagnosticsAccounts();
     _configureModules();
     _schedule();
     await _configureAutomaticBackup(runIfDue: true);
     notifyListeners();
     Object? startupError;
     try {
-      final startupUpdated =
-          await startupService.setEnabled(normalized.launchAtStartup);
+      final startupUpdated = await startupService.setEnabled(
+        normalized.launchAtStartup,
+      );
       if (!startupUpdated) {
         startupError = FetchException('登录时启动设置更新失败。');
       }
@@ -253,10 +261,12 @@ class OjController extends ChangeNotifier {
         rawProblems,
         coreBackup?.training ?? imported!.training,
       );
-      final importedProblems =
-          trainingService.normalizeLegacyProblems(rawProblems);
-      importedTraining =
-          trainingService.normalizeTrainingData(importedTraining);
+      final importedProblems = trainingService.normalizeLegacyProblems(
+        rawProblems,
+      );
+      importedTraining = trainingService.normalizeTrainingData(
+        importedTraining,
+      );
       final importedConfig = coreBackup == null
           ? imported!.config.copyWith(
               automaticBackup: previousConfig.automaticBackup,
@@ -282,6 +292,9 @@ class OjController extends ChangeNotifier {
         coreBackup == null ? const [] : previousRefreshLogs,
       );
     } catch (error) {
+      DiagnosticsService.instance?.recordOperation(
+        'backup import error ${normalizeError(error)}',
+      );
       try {
         await storage.saveConfig(previousConfig);
         await storage.replaceSnapshots(previousSnapshots);
@@ -294,9 +307,7 @@ class OjController extends ChangeNotifier {
         await storage.replaceTeammates(previousTeammates);
         await storage.saveRefreshLogs(previousRefreshLogs);
       } catch (rollbackError) {
-        throw FetchException(
-          '导入失败，回滚也失败：${normalizeError(rollbackError)}',
-        );
+        throw FetchException('导入失败，回滚也失败：${normalizeError(rollbackError)}');
       }
       throw FetchException(
         '导入失败，当前配置和快照已恢复：'
@@ -322,14 +333,20 @@ class OjController extends ChangeNotifier {
     await _configureAutomaticBackup(runIfDue: false);
     notifyListeners();
     try {
-      final startupSynced =
-          await startupService.setEnabled(state.config.launchAtStartup);
+      final startupSynced = await startupService.setEnabled(
+        state.config.launchAtStartup,
+      );
       if (!startupSynced) {
         throw FetchException('登录时启动设置更新失败。');
       }
     } catch (_) {
       // Import restores local state even if the OS startup toggle cannot sync.
     }
+    DiagnosticsService.instance?.recordOperation(
+      'backup import ok '
+      'scope=${coreBackup == null ? 'portable' : 'core_training'} '
+      'rows=${state.problems.length}',
+    );
     return ImportResult(
       safetyBackupFile: safetyBackup.backupFile,
       scope: coreBackup == null
@@ -347,6 +364,7 @@ class OjController extends ChangeNotifier {
     notifyListeners();
     try {
       final results = await service.refresh(state.config);
+      _recordRefreshSummaries(results);
       if (_disposed || epoch != _accountRefreshEpoch || !_accountsEnabled) {
         return;
       }
@@ -376,6 +394,11 @@ class OjController extends ChangeNotifier {
       if (syncAfterRefresh && state.config.sync.autoSyncAfterRefresh) {
         unawaited(_syncSilently());
       }
+    } catch (error) {
+      DiagnosticsService.instance?.recordOperation(
+        'refresh error ${normalizeError(error)}',
+      );
+      rethrow;
     } finally {
       refreshing = false;
       if (!_disposed) notifyListeners();
@@ -575,6 +598,33 @@ class OjController extends ChangeNotifier {
 
   String _accountKey(String ojId, String username) => '$ojId\n$username';
 
+  void _updateDiagnosticsAccounts() {
+    DiagnosticsService.instance?.updateKnownAccounts(
+      state.config.accounts.values.expand((account) => account.usernames),
+    );
+  }
+
+  void _recordRefreshSummaries(Map<String, List<FetchResult>> results) {
+    final diagnostics = DiagnosticsService.instance;
+    if (diagnostics == null) return;
+    for (final entry in results.entries) {
+      var failed = 0;
+      String? firstError;
+      for (final result in entry.value) {
+        if (result.status == FetchStatus.success) {
+          continue;
+        }
+        failed++;
+        firstError ??= result.error;
+      }
+      final suffix = failed == 0
+          ? 'ok'
+          : 'error${failed > 1 ? ' x$failed' : ''}'
+              '${firstError == null ? '' : ' $firstError'}';
+      diagnostics.recordOperation('refresh ${entry.key} $suffix');
+    }
+  }
+
   Future<void> maybeAutoRefreshTeammates() async {
     if (!state.config.moduleEnabled(DashboardModule.teammates) ||
         state.teammates.profiles.isEmpty ||
@@ -686,9 +736,10 @@ class OjController extends ChangeNotifier {
     }
     await saveProblem(
       problem.copyWith(
-          workflowStatus: ProblemWorkflowStatus.archived,
-          archivedAt: DateTime.now(),
-          clearNextReviewAt: true),
+        workflowStatus: ProblemWorkflowStatus.archived,
+        archivedAt: DateTime.now(),
+        clearNextReviewAt: true,
+      ),
     );
   }
 
@@ -711,8 +762,10 @@ class OjController extends ChangeNotifier {
     if (_problemById(id) == null) {
       return;
     }
-    final training =
-        trainingService.removeProblemReferences(state.training, id);
+    final training = trainingService.removeProblemReferences(
+      state.training,
+      id,
+    );
     await storage.deleteProblemAndSaveTraining(id, training);
     await _reloadProblemsFromStorage();
     state = state.copyWith(training: training);
@@ -734,8 +787,11 @@ class OjController extends ChangeNotifier {
   }
 
   Future<void> moveTrainingTask(String taskId, String trainingDate) async {
-    final training =
-        trainingService.moveTask(state.training, taskId, trainingDate);
+    final training = trainingService.moveTask(
+      state.training,
+      taskId,
+      trainingDate,
+    );
     await storage.saveTraining(training);
     state = state.copyWith(training: training);
     notifyListeners();
@@ -860,8 +916,9 @@ class OjController extends ChangeNotifier {
   }
 
   Future<void> saveTeammate(TeammateProfile teammate) async {
-    final exists =
-        state.teammates.profiles.any((profile) => profile.id == teammate.id);
+    final exists = state.teammates.profiles.any(
+      (profile) => profile.id == teammate.id,
+    );
     final next = exists
         ? teammateService.updateTeammate(state.teammates, teammate)
         : teammateService.addTeammate(state.teammates, teammate);
@@ -981,7 +1038,9 @@ class OjController extends ChangeNotifier {
     final snapshot = await storage.loadProblemSnapshot();
     _knownProblemRevision = snapshot.revision;
     state = state.copyWith(
-        problems: snapshot.problems, problemFolders: snapshot.folders);
+      problems: snapshot.problems,
+      problemFolders: snapshot.folders,
+    );
   }
 
   ProblemRecord _persistedProblemFor(
@@ -1002,7 +1061,8 @@ class OjController extends ChangeNotifier {
   void _recomputeSummaries() {
     final today = trainingDateFor(DateTime.now());
     state = state.copyWith(
-        todaySummary: DailySummary.fromSnapshots(today, state.snapshots));
+      todaySummary: DailySummary.fromSnapshots(today, state.snapshots),
+    );
   }
 
   void _schedule() {
@@ -1057,8 +1117,9 @@ class OjController extends ChangeNotifier {
     if (config.automaticBackup.directoryPath.trim().isNotEmpty) {
       return config;
     }
-    final directory =
-        await automaticBackupService.resolveDirectory(config.automaticBackup);
+    final directory = await automaticBackupService.resolveDirectory(
+      config.automaticBackup,
+    );
     final resolved = config.copyWith(
       automaticBackup: config.automaticBackup.copyWith(
         directoryPath: directory.path,

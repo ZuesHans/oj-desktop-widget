@@ -4,6 +4,7 @@ import 'dart:io';
 import '../models/app_config.dart';
 import 'automatic_backup_service.dart';
 import 'backup_service.dart';
+import 'diagnostics_service.dart';
 import 'local_store.dart';
 import 'problem_database.dart';
 import 'app_data_directory.dart';
@@ -58,7 +59,8 @@ class DataRecoveryService {
         if (await preferences.exists()) {
           try {
             values = Map<String, dynamic>.from(
-                jsonDecode(await preferences.readAsString()) as Map);
+              jsonDecode(await preferences.readAsString()) as Map,
+            );
           } on FormatException {
             // The original invalid preferences remain in the retained copy.
           } on TypeError {
@@ -67,8 +69,9 @@ class DataRecoveryService {
         }
         values['flutter.app_config_v1'] = jsonEncode(portable.config.toJson());
         await preferences.writeAsString(jsonEncode(values), flush: true);
-        await File('${preferences.path}.bak')
-            .writeAsString(jsonEncode(values), flush: true);
+        await File(
+          '${preferences.path}.bak',
+        ).writeAsString(jsonEncode(values), flush: true);
       }
       // Core backups intentionally retain settings. Reject corrupt settings
       // here so an unsuitable backup never replaces the original directory.
@@ -99,7 +102,15 @@ class DataRecoveryService {
         if (movedOriginal) await retained.rename(target.path);
         rethrow;
       }
+      DiagnosticsService.instance?.recordOperation(
+        'restore ok scope=${core == null ? 'portable' : 'core_training'}',
+      );
       return retained;
+    } catch (error) {
+      DiagnosticsService.instance?.recordOperation(
+        'restore error ${error.toString()}',
+      );
+      rethrow;
     } finally {
       if (await staged.exists()) await staged.delete(recursive: true);
     }
