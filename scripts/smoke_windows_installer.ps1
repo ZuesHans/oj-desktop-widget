@@ -1,11 +1,16 @@
 param(
   [string]$InnoCompiler = '',
   [string]$StageDirectory = '',
-  [string]$Version = '0.2.0'
+  [string]$Version = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+if (-not $Version) {
+  $versionLine = Select-String -LiteralPath (Join-Path $repositoryRoot 'pubspec.yaml') -Pattern '^version:\s*(\S+)\s*$' | Select-Object -First 1
+  if (-not $versionLine) { throw 'Unable to read the application version from pubspec.yaml.' }
+  $Version = $versionLine.Matches[0].Groups[1].Value -replace '\+\d+$', ''
+}
 if (-not $InnoCompiler) { $InnoCompiler = Join-Path $repositoryRoot 'build\tools\inno\ISCC.exe' }
 if (-not $StageDirectory) { $StageDirectory = Join-Path $repositoryRoot "dist\OJ-Float-v$Version-windows-x64" }
 $smokeId = "io.github.zueshans.ojfloat.smoke.$PID"
