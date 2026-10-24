@@ -229,8 +229,10 @@ class _OjFloatHomeState extends State<OjFloatHome>
   }
 
   Future<void> _restoreLocalData() async {
-    final selection = await FilePicker.platform
-        .pickFiles(type: FileType.custom, allowedExtensions: const ['json']);
+    final selection = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+        allowMultiple: false);
     final path = selection?.files.single.path;
     if (path == null || !mounted) return;
     final confirmed = await showDialog<bool>(
@@ -1075,7 +1077,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
   }
 
   Future<String?> _chooseAutomaticBackupDirectory() {
-    return FilePicker.platform.getDirectoryPath(
+    return FilePicker.getDirectoryPath(
       dialogTitle: '选择 OJ Float 自动备份文件夹',
       initialDirectory: _controller.state.config.automaticBackup.directoryPath,
     );

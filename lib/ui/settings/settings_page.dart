@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -998,11 +999,10 @@ class SettingsPageState extends State<SettingsPage> {
         false;
     if (confirmed != true || !mounted) return;
 
-    final path = await FilePicker.platform.saveFile(
+    final path = await FilePicker.saveFile(
       dialogTitle: '导出诊断信息',
       fileName: 'oj-diagnostics.txt',
-      type: FileType.custom,
-      allowedExtensions: const ['txt'],
+      bytes: Uint8List(0),
     );
     if (path == null || !mounted) return;
 
