@@ -6,6 +6,7 @@ import 'package:window_manager/window_manager.dart';
 import 'app/oj_float_app.dart';
 import 'models/app_config.dart';
 import 'services/local_store.dart';
+import 'services/window_state_service.dart';
 import 'ui/app_labels.dart';
 import 'ui/app_theme.dart';
 
@@ -89,9 +90,12 @@ Future<void> main(List<String> arguments) async {
   }
 
   AppConfig? initialConfig;
+  WindowStateService? windowState;
   var startHidden = false;
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
+    windowState = WindowStateService();
+    await windowState.load();
     try {
       initialConfig =
           await LocalStore(useFilePreferences: Platform.isWindows).loadConfig();
@@ -110,20 +114,21 @@ Future<void> main(List<String> arguments) async {
           appPaletteFor(initialConfig?.colorTheme ?? AppColorTheme.classic)
               .surface,
     );
-    await windowManager.waitUntilReadyToShow(options, () async {
-      // All close requests are routed through the app so unsaved settings can
-      // be confirmed before the window exits or hides to the tray.
-      await windowManager.setPreventClose(true);
-      if (!startHidden) {
-        await windowManager.show();
-        await windowManager.focus();
-      }
-    });
+    await windowManager.waitUntilReadyToShow(options);
+    // The plugin callback is void and does not await asynchronous restoration.
+    await windowManager.setPreventClose(true);
+    await windowState.restore(startHidden: startHidden);
+    windowState.start();
+    if (!startHidden) {
+      await windowManager.show();
+      await windowManager.focus();
+    }
   }
 
   runApp(OjFloatApp(
     initialConfig: initialConfig,
     startHidden: startHidden,
+    windowState: windowState,
   ));
 }
 

@@ -31,6 +31,7 @@ class ProblemsPage extends StatefulWidget {
     this.onPermanentDelete,
     this.onStartTraining,
     this.showBackButton = true,
+    this.searchFocusNode,
   });
 
   final List<ProblemRecord> problems;
@@ -48,6 +49,7 @@ class ProblemsPage extends StatefulWidget {
   final Future<void> Function(String id)? onToggleFavorite;
   final Future<void> Function(String id)? onTogglePinned;
   final bool showBackButton;
+  final FocusNode? searchFocusNode;
 
   @override
   State<ProblemsPage> createState() => _ProblemsPageState();
@@ -356,9 +358,10 @@ class _ProblemsPageState extends State<ProblemsPage> {
                   child: TextField(
                     key: const ValueKey('problem-search-field'),
                     controller: _queryController,
+                    focusNode: widget.searchFocusNode,
                     decoration: InputDecoration(
                       prefixIcon: const Icon(Icons.search),
-                      hintText: '搜索标题、链接、标签或笔记',
+                      hintText: '搜索标题、链接、标签或笔记 (Ctrl+F)',
                       isDense: true,
                       suffixIcon: _query.isEmpty
                           ? null

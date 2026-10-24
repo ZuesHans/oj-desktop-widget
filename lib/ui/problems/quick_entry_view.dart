@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../models/problem_record.dart';
 import '../../services/problem_book_service.dart';
+import '../../services/clipboard_problem_link.dart';
 
 /// A small, single-purpose view; it shares the main controller and storage.
 class QuickEntryView extends StatefulWidget {
@@ -28,6 +32,33 @@ class _QuickEntryViewState extends State<QuickEntryView> {
   bool _busy = false;
   bool _fieldsVisible = false;
   String? _error;
+  bool _urlEdited = false;
+  bool _clipboardPrefilled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_prefillFromClipboard());
+  }
+
+  Future<void> _prefillFromClipboard() async {
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      if (!mounted || _urlEdited || _busy || _url.text.isNotEmpty) return;
+      final link = findClipboardProblemLink(data?.text ?? '');
+      if (link == null) return;
+      setState(() {
+        _url.value = TextEditingValue(
+            text: link,
+            selection: TextSelection.collapsed(offset: link.length));
+        _clipboardPrefilled = true;
+      });
+    } on PlatformException {
+      // Clipboard access is optional; the user can still paste manually.
+    } on MissingPluginException {
+      // No platform clipboard in headless environments.
+    }
+  }
 
   @override
   void dispose() {
@@ -102,86 +133,109 @@ class _QuickEntryViewState extends State<QuickEntryView> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-            title: const Text('快速录入'),
-            automaticallyImplyLeading: false,
-            actions: [
-              IconButton(
-                  tooltip: '关闭快速录入',
-                  onPressed: _busy ? null : widget.onClose,
-                  icon: const Icon(Icons.close))
-            ]),
-        body: ListView(padding: const EdgeInsets.all(20), children: [
-          TextField(
-              key: const ValueKey('quick-entry-url'),
-              controller: _url,
+  Widget build(BuildContext context) => CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.escape): () {
+              if (!_busy) widget.onClose();
+            },
+          },
+          child: FocusScope(
               autofocus: true,
-              enabled: !_busy,
-              decoration: const InputDecoration(labelText: '粘贴题目链接'),
-              onSubmitted: (_) => _busy ? null : _parse()),
-          const SizedBox(height: 12),
-          Row(children: [
-            OutlinedButton(
-                onPressed: _busy ? null : _parse, child: const Text('解析')),
-            const SizedBox(width: 8),
-            FilledButton(
-                onPressed: _busy ? null : _save, child: const Text('保存')),
-            if (_busy)
-              const Padding(
-                  padding: EdgeInsets.only(left: 12),
-                  child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2))),
-          ]),
-          if (_error != null)
-            Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(_error!,
-                    style:
-                        TextStyle(color: Theme.of(context).colorScheme.error))),
-          if (_fieldsVisible) ...[
-            const SizedBox(height: 12),
-            TextField(
-                controller: _title,
-                enabled: !_busy,
-                decoration: const InputDecoration(labelText: '标题')),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<ProblemPlatform>(
-                key: ValueKey(_platform),
-                initialValue: _platform,
-                decoration: const InputDecoration(labelText: '平台'),
-                items: [
-                  for (final p in ProblemPlatform.values)
-                    DropdownMenuItem(
-                        value: p, child: Text(problemPlatformLabel(p)))
-                ],
-                onChanged:
-                    _busy ? null : (p) => setState(() => _platform = p!)),
-            const SizedBox(height: 12),
-            TextField(
-                controller: _number,
-                enabled: !_busy,
-                decoration: const InputDecoration(labelText: '题号')),
-            const SizedBox(height: 12),
-            TextField(
-                controller: _tags,
-                enabled: !_busy,
-                decoration:
-                    const InputDecoration(labelText: '标签', hintText: '用逗号分隔')),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<ProblemWorkflowStatus>(
-                initialValue: _status,
-                decoration: const InputDecoration(labelText: '状态'),
-                items: [
-                  for (final s in ProblemWorkflowStatus.values
-                      .where((s) => s != ProblemWorkflowStatus.archived))
-                    DropdownMenuItem(
-                        value: s, child: Text(problemWorkflowStatusLabel(s)))
-                ],
-                onChanged: _busy ? null : (s) => setState(() => _status = s!)),
-          ],
-        ]),
-      );
+              child: Scaffold(
+                appBar: AppBar(
+                    title: const Text('快速录入'),
+                    automaticallyImplyLeading: false,
+                    actions: [
+                      IconButton(
+                          tooltip: '关闭快速录入',
+                          onPressed: _busy ? null : widget.onClose,
+                          icon: const Icon(Icons.close))
+                    ]),
+                body: ListView(padding: const EdgeInsets.all(20), children: [
+                  TextField(
+                      key: const ValueKey('quick-entry-url'),
+                      controller: _url,
+                      autofocus: true,
+                      enabled: !_busy,
+                      decoration: InputDecoration(
+                          labelText: '粘贴题目链接',
+                          helperText:
+                              _clipboardPrefilled ? '已从剪贴板填入题目链接' : null),
+                      onChanged: (_) {
+                        _urlEdited = true;
+                        if (_clipboardPrefilled) {
+                          setState(() => _clipboardPrefilled = false);
+                        }
+                      },
+                      onSubmitted: (_) => _busy ? null : _parse()),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    OutlinedButton(
+                        onPressed: _busy ? null : _parse,
+                        child: const Text('解析')),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                        onPressed: _busy ? null : _save,
+                        child: const Text('保存')),
+                    if (_busy)
+                      const Padding(
+                          padding: EdgeInsets.only(left: 12),
+                          child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2))),
+                  ]),
+                  if (_error != null)
+                    Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(_error!,
+                            style: TextStyle(
+                                color: Theme.of(context).colorScheme.error))),
+                  if (_fieldsVisible) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                        controller: _title,
+                        enabled: !_busy,
+                        decoration: const InputDecoration(labelText: '标题')),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<ProblemPlatform>(
+                        key: ValueKey(_platform),
+                        initialValue: _platform,
+                        decoration: const InputDecoration(labelText: '平台'),
+                        items: [
+                          for (final p in ProblemPlatform.values)
+                            DropdownMenuItem(
+                                value: p, child: Text(problemPlatformLabel(p)))
+                        ],
+                        onChanged: _busy
+                            ? null
+                            : (p) => setState(() => _platform = p!)),
+                    const SizedBox(height: 12),
+                    TextField(
+                        controller: _number,
+                        enabled: !_busy,
+                        decoration: const InputDecoration(labelText: '题号')),
+                    const SizedBox(height: 12),
+                    TextField(
+                        controller: _tags,
+                        enabled: !_busy,
+                        decoration: const InputDecoration(
+                            labelText: '标签', hintText: '用逗号分隔')),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<ProblemWorkflowStatus>(
+                        initialValue: _status,
+                        decoration: const InputDecoration(labelText: '状态'),
+                        items: [
+                          for (final s in ProblemWorkflowStatus.values.where(
+                              (s) => s != ProblemWorkflowStatus.archived))
+                            DropdownMenuItem(
+                                value: s,
+                                child: Text(problemWorkflowStatusLabel(s)))
+                        ],
+                        onChanged:
+                            _busy ? null : (s) => setState(() => _status = s!)),
+                  ],
+                ]),
+              )));
 }

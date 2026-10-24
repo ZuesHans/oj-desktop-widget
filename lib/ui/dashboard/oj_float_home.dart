@@ -30,6 +30,7 @@ import '../../services/oj_controller.dart';
 import '../../services/quick_entry_hotkey_service.dart';
 import '../../services/refresh_service.dart';
 import '../../services/window_shell_service.dart';
+import '../../services/window_state_service.dart';
 import '../app_labels.dart';
 import '../app_theme.dart';
 import '../contests/contests_entry_panel.dart';
@@ -64,6 +65,7 @@ class OjFloatHome extends StatefulWidget {
     this.initialConfig,
     this.startHidden = false,
     this.windowShell,
+    this.windowState,
     this.browserImportServer,
     this.enablePlatformIntegration = true,
     this.autoInitializeController = true,
@@ -73,6 +75,7 @@ class OjFloatHome extends StatefulWidget {
   final AppConfig? initialConfig;
   final bool startHidden;
   final WindowShell? windowShell;
+  final WindowStateService? windowState;
   final BrowserImportServer? browserImportServer;
   final bool enablePlatformIntegration;
   final bool autoInitializeController;
@@ -90,6 +93,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
   late final BrowserImportServer _browserImportServer;
   late final BrowserImportTokenStore _browserImportTokenStore;
   final _settingsKey = GlobalKey<SettingsPageState>();
+  final _problemSearchFocus = FocusNode(debugLabel: 'problem search');
 
   DashboardSection _dashboardSection = DashboardSection.summary;
   String _syncToken = '';
@@ -114,6 +118,12 @@ class _OjFloatHomeState extends State<OjFloatHome>
   @override
   void initState() {
     super.initState();
+    for (final section in DashboardSection.values) {
+      if (section.name == widget.windowState?.state.section) {
+        _dashboardSection = section;
+        break;
+      }
+    }
     _windowShell = widget.windowShell ?? WindowShellService();
     _homeActions = HomeActionService();
     _browserImportServer = widget.browserImportServer ?? BrowserImportServer();
@@ -177,6 +187,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
       await _controller.init(refreshOnStart: false);
       if (!mounted) return;
       setState(() => _ready = true);
+      widget.windowState?.selectSection(_effectiveSection.name);
       if (widget.enablePlatformIntegration &&
           Platform.isWindows &&
           _controller.state.config.moduleEnabled(DashboardModule.problems)) {
@@ -268,6 +279,8 @@ class _OjFloatHomeState extends State<OjFloatHome>
 
   @override
   void dispose() {
+    _problemSearchFocus.dispose();
+    widget.windowState?.dispose();
     if (widget.enablePlatformIntegration) {
       _windowShell.removeTrayListener(this);
       _windowShell.removeWindowListener(this);
@@ -321,6 +334,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
         return;
       }
       if (_ready && _controller.state.config.closeToTray) {
+        await _saveWindowState();
         await _windowShell.hide();
       } else {
         await _exitApp(confirmUnsaved: false);
@@ -350,48 +364,95 @@ class _OjFloatHomeState extends State<OjFloatHome>
                   onRestore: () => unawaited(_restoreLocalData()),
                   onOpenDirectory: () => unawaited(_openDataDirectory()),
                 )
-              : Stack(children: [
-                  Offstage(
-                      offstage: _quickEntry,
-                      child: OverflowBox(
-                          minWidth: _quickEntry ? appWindowSize.width : null,
-                          maxWidth: _quickEntry ? appWindowSize.width : null,
-                          minHeight: _quickEntry ? appWindowSize.height : null,
-                          maxHeight: _quickEntry ? appWindowSize.height : null,
-                          child: DashboardShell(
-                            header: WindowHeader(
-                              sectionLabel: sectionLabel(_effectiveSection),
-                              refreshing: _controller.refreshing,
-                              onRefresh: _controller.refreshing ||
-                                      !_controller.state.config.moduleEnabled(
-                                          DashboardModule.ojAccounts)
-                                  ? null
-                                  : _controller.refresh,
-                              quickEntryHotkey:
-                                  _controller.state.config.quickEntryHotkey,
-                              onQuickEntry: _controller.state.config
-                                      .moduleEnabled(DashboardModule.problems)
-                                  ? () => unawaited(_openQuickEntry())
-                                  : null,
-                              onSettings: () => unawaited(
-                                _selectSection(DashboardSection.settings),
-                              ),
-                            ),
-                            currentSection: _effectiveSection,
-                            sections: _sections,
-                            onSectionSelected: (section) =>
-                                unawaited(_selectSection(section)),
-                            child: _dashboardContent(context),
-                          ))),
-                  if (_quickEntry)
-                    QuickEntryView(
-                        onParse: _controller.parseProblemLink,
-                        onSave: _controller.saveProblem,
-                        onClose: () => unawaited(_closeQuickEntry())),
-                ]),
+              : CallbackShortcuts(
+                  bindings: {
+                      const SingleActivator(LogicalKeyboardKey.keyR,
+                              control: true):
+                          () => unawaited(_refreshFromShortcut()),
+                      const SingleActivator(LogicalKeyboardKey.keyF,
+                              control: true):
+                          () => unawaited(_focusProblemSearch()),
+                      const SingleActivator(LogicalKeyboardKey.comma,
+                          control: true): () {
+                        if (!_quickEntry) {
+                          unawaited(_selectSection(DashboardSection.settings));
+                        }
+                      },
+                    },
+                  child: FocusScope(
+                      autofocus: true,
+                      child: Stack(children: [
+                        Offstage(
+                            offstage: _quickEntry,
+                            child: OverflowBox(
+                                minWidth:
+                                    _quickEntry ? appWindowSize.width : null,
+                                maxWidth:
+                                    _quickEntry ? appWindowSize.width : null,
+                                minHeight:
+                                    _quickEntry ? appWindowSize.height : null,
+                                maxHeight:
+                                    _quickEntry ? appWindowSize.height : null,
+                                child: DashboardShell(
+                                  header: WindowHeader(
+                                    sectionLabel:
+                                        sectionLabel(_effectiveSection),
+                                    refreshing: _controller.refreshing,
+                                    onRefresh: _controller.refreshing ||
+                                            !_controller.state.config
+                                                .moduleEnabled(
+                                                    DashboardModule.ojAccounts)
+                                        ? null
+                                        : _controller.refresh,
+                                    quickEntryHotkey: _controller
+                                        .state.config.quickEntryHotkey,
+                                    onQuickEntry: _controller.state.config
+                                            .moduleEnabled(
+                                                DashboardModule.problems)
+                                        ? () => unawaited(_openQuickEntry())
+                                        : null,
+                                    onSettings: () => unawaited(
+                                      _selectSection(DashboardSection.settings),
+                                    ),
+                                  ),
+                                  currentSection: _effectiveSection,
+                                  sections: _sections,
+                                  onSectionSelected: (section) =>
+                                      unawaited(_selectSection(section)),
+                                  child: _dashboardContent(context),
+                                ))),
+                        if (_quickEntry)
+                          QuickEntryView(
+                              onParse: _controller.parseProblemLink,
+                              onSave: _controller.saveProblem,
+                              onClose: () => unawaited(_closeQuickEntry())),
+                      ]))),
         );
       },
     );
+  }
+
+  Future<void> _refreshFromShortcut() async {
+    if (_quickEntry ||
+        _controller.refreshing ||
+        !_controller.state.config.moduleEnabled(DashboardModule.ojAccounts)) {
+      return;
+    }
+    try {
+      await _controller.refresh();
+    } catch (error) {
+      if (mounted) _showFeedback('刷新未完成：$error');
+    }
+  }
+
+  Future<void> _focusProblemSearch() async {
+    if (_quickEntry ||
+        !_controller.state.config.moduleEnabled(DashboardModule.problems)) {
+      return;
+    }
+    await _selectSection(DashboardSection.problems);
+    if (!mounted || _effectiveSection != DashboardSection.problems) return;
+    _problemSearchFocus.requestFocus();
   }
 
   Future<void> _registerQuickEntry() async {
@@ -421,6 +482,8 @@ class _OjFloatHomeState extends State<OjFloatHome>
     }
     _quickTransition = true;
     try {
+      await _saveWindowState();
+      widget.windowState?.geometrySuspended = true;
       if (widget.enablePlatformIntegration) {
         _previousVisible = await windowManager.isVisible();
         _previousMinimized = await windowManager.isMinimized();
@@ -438,6 +501,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
         await _windowShell.showAndFocus();
       }
     } catch (error) {
+      if (!_quickEntry) widget.windowState?.geometrySuspended = false;
       if (mounted) _showFeedback('打开快速录入失败：$error');
     } finally {
       _quickTransition = false;
@@ -449,15 +513,18 @@ class _OjFloatHomeState extends State<OjFloatHome>
     _quickTransition = true;
     try {
       if (widget.enablePlatformIntegration) {
-        if (!_previousVisible) await _windowShell.hide();
         await windowManager.setMinimumSize(appMinimumWindowSize);
         if (_previousBounds != null) {
           await windowManager.setBounds(_previousBounds!);
         }
         if (_previousMaximized) await windowManager.maximize();
         if (_previousMinimized) await windowManager.minimize();
+        if (!_previousVisible) await _windowShell.hide();
       }
       if (mounted) setState(() => _quickEntry = false);
+      widget.windowState?.geometrySuspended = false;
+      await widget.windowState?.ensureVisible();
+      await widget.windowState?.flush();
     } finally {
       _quickTransition = false;
     }
@@ -490,6 +557,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
     }
     if (mounted) {
       setState(() => _dashboardSection = section);
+      widget.windowState?.selectSection(section.name);
     }
   }
 
@@ -527,6 +595,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
           showBackButton: false,
         ),
       DashboardSection.problems => ProblemsPage(
+          searchFocusNode: _problemSearchFocus,
           problems: _controller.state.problems,
           folders: _controller.state.problemFolders,
           onCreateFolder: _controller.createProblemFolder,
@@ -1034,6 +1103,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
     }
     _exiting = true;
     try {
+      await _saveWindowState();
       await _stopBrowserImportServer();
       await _windowShell.exitApp();
     } catch (error) {
@@ -1042,6 +1112,11 @@ class _OjFloatHomeState extends State<OjFloatHome>
         _showFeedback('退出客户端失败：$error');
       }
     }
+  }
+
+  Future<void> _saveWindowState() async {
+    widget.windowState?.selectSection(_effectiveSection.name);
+    await widget.windowState?.flush();
   }
 
   Future<void> _stopBrowserImportServer() async {

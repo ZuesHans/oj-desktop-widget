@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Remember main-window bounds, maximized state, and the last Dashboard page in machine-local window preferences, with display work-area recovery after monitor changes.
+- Add Ctrl+R to refresh, Ctrl+F to focus problem search, Ctrl+, for settings, and Esc for quick entry, while preserving modal focus and unsaved-settings confirmation.
+- Pre-fill recognized OJ problem links from the clipboard when quick entry opens, without automatic network requests or overwriting user edits.
+
 ## v0.2.0-beta - 2026-07-26
 
 - Replaced compact, floating, and feature-window modes with one resizable Windows Dashboard client.

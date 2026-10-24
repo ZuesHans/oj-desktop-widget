@@ -70,7 +70,7 @@ class WindowHeader extends StatelessWidget {
                 icon: const Icon(Icons.add_link)),
           IconButton(
             key: const ValueKey('toolbar-refresh-button'),
-            tooltip: '立即刷新',
+            tooltip: '立即刷新 (Ctrl+R)',
             onPressed: onRefresh,
             icon: refreshing
                 ? const SizedBox.square(
@@ -81,7 +81,7 @@ class WindowHeader extends StatelessWidget {
           ),
           IconButton(
             key: const ValueKey('toolbar-settings-button'),
-            tooltip: '设置',
+            tooltip: '设置 (Ctrl+,)',
             onPressed: onSettings,
             icon: const Icon(Icons.tune),
           ),
