@@ -6,6 +6,8 @@ class QuickEntryHotkeyService {
       {this.channel = const MethodChannel('oj_float/quick_entry')});
   final MethodChannel channel;
 
+  Future<void> unregister() => channel.invokeMethod<void>('unregister');
+
   Future<void> register(String label) async {
     final shortcut = QuickEntryShortcut.parse(label);
     if (shortcut == null) throw const FormatException('快捷键格式无效。');

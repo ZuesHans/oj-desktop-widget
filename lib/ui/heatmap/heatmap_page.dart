@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/heatmap_service.dart';
 import '../app_theme.dart';
 import '../shared/app_surface_card.dart';
+import '../shared/app_page_header.dart';
 import 'heatmap_dialog.dart';
 import 'heatmap_formatters.dart';
 
@@ -26,74 +27,32 @@ class HeatmapPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       key: const ValueKey('heatmap-page'),
-      padding:
-          const EdgeInsets.fromLTRB(appSpace5, appSpace3, appSpace5, appSpace5),
+      padding: const EdgeInsets.all(24),
       children: [
-        AppSurfaceCard(
-          child: Row(
-            children: [
-              if (showBackButton) ...[
-                IconButton(
+        AppPageHeader(
+          title: '热力图',
+          subtitle: '每一天的积累，都在这里留下痕迹。',
+          leading: showBackButton
+              ? IconButton(
                   key: const ValueKey('heatmap-back-button'),
                   tooltip: '返回',
                   onPressed: onBack,
-                  icon: const Icon(Icons.arrow_back),
-                ),
-                const SizedBox(width: appSpace1),
-              ],
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(appRadiusControl),
-                  border: Border.all(color: accentColor.withValues(alpha: 0.2)),
-                ),
-                child: Icon(Icons.calendar_view_week, color: accentColor),
-              ),
-              const SizedBox(width: appSpace3),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '热力图',
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: textPrimaryColor,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '连续 ${summary.currentStreak} 天 · 活跃 ${summary.activeDays} 天 · 累计 +${summary.totalDelta}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: textSecondaryColor, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: appSpace2),
-              IconButton(
+                  icon: const Icon(Icons.arrow_back))
+              : null,
+          actions: [
+            IconButton(
                 key: const ValueKey('heatmap-export-data-button'),
                 tooltip: '导出备份',
                 onPressed: onExport,
-                color: accentColor,
-                icon: const Icon(Icons.download),
-              ),
-              IconButton(
+                icon: const Icon(Icons.download_outlined)),
+            IconButton(
                 key: const ValueKey('heatmap-import-backup-button'),
                 tooltip: '导入备份',
                 onPressed: onImport,
-                color: accentColor,
-                icon: const Icon(Icons.upload_file),
-              ),
-            ],
-          ),
+                icon: const Icon(Icons.upload_file_outlined)),
+          ],
         ),
-        const SizedBox(height: appSpace3),
+        const SizedBox(height: 20),
         Wrap(
           spacing: appSpace2,
           runSpacing: appSpace2,

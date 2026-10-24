@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -33,6 +34,8 @@ struct ProblemRecord {
   std::string updated_at;
 };
 
+enum class BatchOperation { folder, add_tags, remove_tags, status };
+
 class ProblemDatabase {
  public:
   explicit ProblemDatabase(const std::filesystem::path& path,
@@ -44,7 +47,13 @@ class ProblemDatabase {
   std::int64_t Revision();
   std::vector<ProblemRecord> LoadProblems();
   void Upsert(const ProblemRecord& problem);
+  std::vector<std::string> LoadFolders();
+  void CreateFolder(const std::string& name);
+  void ApplyBatch(const std::vector<std::string>& ids, BatchOperation operation,
+                  const std::string& value, const std::string& timestamp);
   bool Delete(const std::string& id);
+  // Keep read/merge/write operations atomic across all database connections.
+  void WriteTransaction(const std::function<void()>& action);
 
   // Used only by the native database contract test to prepare an isolated DB.
   void ExecuteForTesting(const std::string& sql);
@@ -59,6 +68,7 @@ class ProblemDatabase {
   SqliteApi api_;
   sqlite3* database_ = nullptr;
   bool allow_create_for_testing_ = false;
+  bool writing_ = false;
 };
 
 }  // namespace oj_companion

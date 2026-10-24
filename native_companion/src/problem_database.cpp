@@ -111,10 +111,10 @@ ProblemDatabase::~ProblemDatabase() {
 void ProblemDatabase::VerifySchema() {
   Statement statement(api_, database_, "PRAGMA user_version");
   if (api_.step(statement.get()) != kSqliteRow ||
-      api_.column_int(statement.get(), 0) != 3) {
+      api_.column_int(statement.get(), 0) != 4) {
     throw std::runtime_error(
         "题库数据库版本不受支持。请先打开新版主程序完成迁移；"
-        "当前小程序需要 schema v3。");
+        "当前小程序需要 schema v4。");
   }
   Statement revision(api_, database_,
                      "SELECT revision FROM problem_change_state "
@@ -122,6 +122,14 @@ void ProblemDatabase::VerifySchema() {
   if (api_.step(revision.get()) != kSqliteRow) {
     throw std::runtime_error(
         "题库数据库缺少变更修订记录，请使用新版主程序修复或恢复备份。");
+  }
+  Statement migration(api_, database_,
+                      "SELECT value FROM metadata "
+                      "WHERE key = 'legacy_json_migrated' AND length(value) > 0");
+  if (api_.step(migration.get()) != kSqliteRow) {
+    throw std::runtime_error(
+        "题库迁移尚未成功完成。请打开主程序修复数据或从备份恢复；"
+        "小程序不会打开未完成迁移的空库。");
   }
 }
 
@@ -179,9 +187,26 @@ std::vector<ProblemRecord> ProblemDatabase::LoadProblems() {
   return problems;
 }
 
-void ProblemDatabase::Upsert(const ProblemRecord& problem) {
+void ProblemDatabase::WriteTransaction(const std::function<void()>& action) {
+  if (writing_) {
+    action();
+    return;
+  }
   Execute("BEGIN IMMEDIATE");
+  writing_ = true;
   try {
+    action();
+    Execute("COMMIT");
+    writing_ = false;
+  } catch (...) {
+    writing_ = false;
+    try { Execute("ROLLBACK"); } catch (...) {}
+    throw;
+  }
+}
+
+void ProblemDatabase::Upsert(const ProblemRecord& problem) {
+  WriteTransaction([&] {
     Statement statement(api_, database_, R"sql(
       INSERT INTO problems (
         id, title, url, platform, workflow_status, tags_json, folder, date, note,
@@ -245,12 +270,66 @@ void ProblemDatabase::Upsert(const ProblemRecord& problem) {
     if (api_.step(statement.get()) != kSqliteDone) {
       ThrowDatabaseError("save problem");
     }
+  });
+}
+
+std::vector<std::string> ProblemDatabase::LoadFolders() {
+  Statement statement(api_, database_, "SELECT name FROM problem_folders ORDER BY name COLLATE NOCASE");
+  std::vector<std::string> folders;
+  while (true) {
+    const int result = api_.step(statement.get());
+    if (result == kSqliteDone) break;
+    if (result != kSqliteRow) ThrowDatabaseError("load folders");
+    folders.push_back(ColumnText(api_, statement.get(), 0));
+  }
+  return folders;
+}
+
+void ProblemDatabase::CreateFolder(const std::string& name) {
+  Statement statement(api_, database_, "INSERT OR IGNORE INTO problem_folders(name) VALUES (?)");
+  BindText(api_, database_, statement.get(), 1, name);
+  if (api_.step(statement.get()) != kSqliteDone) ThrowDatabaseError("create folder");
+}
+
+void ProblemDatabase::ApplyBatch(const std::vector<std::string>& ids,
+                                 BatchOperation operation,
+                                 const std::string& value,
+                                 const std::string& timestamp) {
+  std::string assignments;
+  switch (operation) {
+    case BatchOperation::folder: assignments = "folder = ?"; break;
+    case BatchOperation::status:
+      if (value != "backlog" && value != "active" && value != "review" && value != "mastered" && value != "archived") {
+        throw std::invalid_argument("Invalid batch status");
+      }
+      assignments = "workflow_status = ?, archived_at = CASE WHEN ? = 'archived' THEN ? ELSE NULL END";
+      break;
+    case BatchOperation::add_tags:
+      assignments = R"sql(tags_json = (SELECT json_group_array(value) FROM (
+        SELECT value FROM (SELECT value FROM json_each(problems.tags_json) UNION ALL SELECT value FROM json_each(?))
+        GROUP BY value COLLATE NOCASE)))sql"; break;
+    case BatchOperation::remove_tags:
+      assignments = R"sql(tags_json = (SELECT json_group_array(value) FROM json_each(problems.tags_json)
+        WHERE value COLLATE NOCASE NOT IN (SELECT value FROM json_each(?))))sql"; break;
+  }
+  Execute("BEGIN IMMEDIATE");
+  try {
+    for (const auto& id : ids) {
+      const auto sql = "UPDATE problems SET " + assignments + ", updated_at = ? WHERE id = ?";
+      Statement statement(api_, database_, sql.c_str());
+      int index = 1;
+      BindText(api_, database_, statement.get(), index++, value);
+      if (operation == BatchOperation::status) {
+        BindText(api_, database_, statement.get(), index++, value);
+        BindText(api_, database_, statement.get(), index++, timestamp);
+      }
+      BindText(api_, database_, statement.get(), index++, timestamp);
+      BindText(api_, database_, statement.get(), index, id);
+      if (api_.step(statement.get()) != kSqliteDone) ThrowDatabaseError("batch update");
+    }
     Execute("COMMIT");
   } catch (...) {
-    try {
-      Execute("ROLLBACK");
-    } catch (...) {
-    }
+    try { Execute("ROLLBACK"); } catch (...) {}
     throw;
   }
 }

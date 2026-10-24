@@ -12,6 +12,7 @@ import '../models/contest_record.dart';
 import '../models/fetch_result.dart';
 import '../models/oj_state.dart';
 import '../models/problem_record.dart';
+import '../models/problem_batch.dart';
 import '../models/refresh_log_entry.dart';
 import '../models/solved_snapshot.dart';
 import '../models/teammate.dart';
@@ -88,14 +89,32 @@ class OjController extends ChangeNotifier {
   AutomaticBackupResult? lastAutomaticBackupResult;
   String automaticBackupError = '';
   bool automaticBackupRunning = false;
+  int _accountRefreshEpoch = 0;
+  int _teammateRefreshEpoch = 0;
+  bool _accountsEnabled = true;
+  bool _teammatesEnabled = true;
+  bool _disposed = false;
 
-  Future<void> init() async {
+  void _configureModules() {
+    final accounts = state.config.moduleEnabled(DashboardModule.ojAccounts);
+    final teammates = state.config.moduleEnabled(DashboardModule.teammates);
+    if (_accountsEnabled != accounts) _accountRefreshEpoch++;
+    if (_teammatesEnabled != teammates) _teammateRefreshEpoch++;
+    _accountsEnabled = accounts;
+    _teammatesEnabled = teammates;
+    service.client.setEnabled(accounts);
+    teammateService.client.setEnabled(teammates);
+    _scheduleProblemRefresh();
+  }
+
+  Future<void> init({bool refreshOnStart = true}) async {
     await storage.recoverPendingProblemTrainingTransaction();
     var config = await storage.loadConfig();
-    config = await _withResolvedAutomaticBackupDirectory(config);
     final snapshots = await storage.loadSnapshots();
     final refreshLogs = await storage.loadRefreshLogs();
     final coreSnapshot = await storage.loadCoreBackupSnapshot();
+    if (_disposed) return;
+    config = await _withResolvedAutomaticBackupDirectory(config);
     final storedProblems = coreSnapshot.problems;
     var problems = storedProblems;
     final contests = coreSnapshot.contests;
@@ -104,6 +123,10 @@ class OjController extends ChangeNotifier {
     training = trainingService.migrateLegacyAttempts(problems, training);
     problems = trainingService.normalizeLegacyProblems(problems);
     training = trainingService.normalizeTrainingData(training);
+    if (!config.moduleEnabled(DashboardModule.training) &&
+        training.activeAttempt != null) {
+      training = trainingService.pauseAttempt(training);
+    }
     final normalizedProblems = _changedProblems(storedProblems, problems);
     if (normalizedProblems.isNotEmpty) {
       await storage.saveProblems(normalizedProblems);
@@ -116,6 +139,7 @@ class OjController extends ChangeNotifier {
       snapshots: snapshots,
       refreshLogs: refreshLogs,
       problems: problemSnapshot.problems,
+      problemFolders: problemSnapshot.folders,
       contests: contests,
       teammates: teammates,
       training: training,
@@ -127,13 +151,33 @@ class OjController extends ChangeNotifier {
     } catch (error) {
       debugPrint('Failed to synchronize startup registration: $error');
     }
+    if (_disposed) return;
     _recomputeSummaries();
+    _configureModules();
     _schedule();
-    _scheduleProblemRefresh();
     await _configureAutomaticBackup(runIfDue: true);
     notifyListeners();
-    await refresh();
-    await maybeAutoRefreshTeammates();
+    if (refreshOnStart) {
+      await refresh();
+      await maybeAutoRefreshTeammates();
+    }
+  }
+
+  Future<void> applyProblemBatch(
+      Set<String> ids, ProblemBatchChange change) async {
+    await storage.applyProblemBatch(ids, change);
+    await _reloadProblemsFromStorage();
+    notifyListeners();
+  }
+
+  Future<void> createProblemFolder(String name) async {
+    if (name.trim().isEmpty) throw const FormatException('请输入文件夹名称。');
+    await storage.createProblemFolder(name);
+    final snapshot = await storage.loadProblemSnapshot();
+    _knownProblemRevision = snapshot.revision;
+    state = state.copyWith(
+        problems: snapshot.problems, problemFolders: snapshot.folders);
+    notifyListeners();
   }
 
   Future<void> saveConfig(AppConfig config) async {
@@ -145,8 +189,13 @@ class OjController extends ChangeNotifier {
         normalized.automaticBackup,
       );
     }
+    if (!normalized.moduleEnabled(DashboardModule.training) &&
+        state.training.activeAttempt != null) {
+      await pauseTraining();
+    }
     await storage.saveConfig(normalized);
     state = state.copyWith(config: normalized);
+    _configureModules();
     _schedule();
     await _configureAutomaticBackup(runIfDue: true);
     notifyListeners();
@@ -190,6 +239,7 @@ class OjController extends ChangeNotifier {
       config: state.config,
       snapshots: state.snapshots,
       problems: state.problems,
+      problemFolders: state.problemFolders,
       contests: state.contests,
       teammates: state.teammates,
       training: state.training,
@@ -212,6 +262,9 @@ class OjController extends ChangeNotifier {
               automaticBackup: previousConfig.automaticBackup,
             )
           : previousConfig;
+      if (!importedConfig.moduleEnabled(DashboardModule.training)) {
+        importedTraining = trainingService.pauseAttempt(importedTraining);
+      }
       await storage.saveConfig(importedConfig);
       await storage.replaceSnapshots(
         coreBackup == null ? imported!.snapshots : previousSnapshots,
@@ -220,6 +273,7 @@ class OjController extends ChangeNotifier {
         importedProblems,
         importedTraining,
         coreBackup?.contests ?? imported!.contests,
+        problemFolders: coreBackup?.problemFolders ?? imported!.problemFolders,
       );
       await storage.replaceTeammates(
         coreBackup == null ? imported!.teammates : previousTeammates,
@@ -235,6 +289,7 @@ class OjController extends ChangeNotifier {
           previousProblems,
           previousTraining,
           previousContests,
+          problemFolders: state.problemFolders,
         );
         await storage.replaceTeammates(previousTeammates);
         await storage.saveRefreshLogs(previousRefreshLogs);
@@ -255,12 +310,14 @@ class OjController extends ChangeNotifier {
       snapshots: await storage.loadSnapshots(),
       refreshLogs: coreBackup == null ? const [] : previousRefreshLogs,
       problems: problemSnapshot.problems,
+      problemFolders: problemSnapshot.folders,
       contests: await storage.loadContests(),
       teammates: await storage.loadTeammates(),
       training: await storage.loadTraining(),
       latest: const {},
     );
     _recomputeSummaries();
+    _configureModules();
     _schedule();
     await _configureAutomaticBackup(runIfDue: false);
     notifyListeners();
@@ -282,13 +339,17 @@ class OjController extends ChangeNotifier {
   }
 
   Future<void> refresh({bool syncAfterRefresh = true}) async {
-    if (refreshing) {
+    if (refreshing || !state.config.moduleEnabled(DashboardModule.ojAccounts)) {
       return;
     }
     refreshing = true;
+    final epoch = _accountRefreshEpoch;
     notifyListeners();
     try {
       final results = await service.refresh(state.config);
+      if (_disposed || epoch != _accountRefreshEpoch || !_accountsEnabled) {
+        return;
+      }
       final guarded = _applyRefreshGuard(results, state.snapshots);
       final snapshots = retainRecentSnapshots([
         ...state.snapshots,
@@ -303,6 +364,9 @@ class OjController extends ChangeNotifier {
       ]);
       await storage.saveSnapshots(snapshots);
       await storage.saveRefreshLogs(refreshLogs);
+      if (_disposed || epoch != _accountRefreshEpoch || !_accountsEnabled) {
+        return;
+      }
       state = state.copyWith(
         latest: guarded.results,
         snapshots: snapshots,
@@ -314,7 +378,7 @@ class OjController extends ChangeNotifier {
       }
     } finally {
       refreshing = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -512,7 +576,8 @@ class OjController extends ChangeNotifier {
   String _accountKey(String ojId, String username) => '$ojId\n$username';
 
   Future<void> maybeAutoRefreshTeammates() async {
-    if (state.teammates.profiles.isEmpty ||
+    if (!state.config.moduleEnabled(DashboardModule.teammates) ||
+        state.teammates.profiles.isEmpty ||
         !shouldAutoRefreshTeammates(
           DateTime.now(),
           state.teammates.lastAutoRefreshTrainingDate,
@@ -813,37 +878,53 @@ class OjController extends ChangeNotifier {
   }
 
   Future<void> refreshTeammate(String id) async {
-    if (refreshingTeammates) {
+    if (refreshingTeammates ||
+        !state.config.moduleEnabled(DashboardModule.teammates)) {
       return;
     }
     refreshingTeammates = true;
+    final epoch = _teammateRefreshEpoch;
     notifyListeners();
     try {
       final next = await teammateService.refreshTeammate(state.teammates, id);
+      if (_disposed || epoch != _teammateRefreshEpoch || !_teammatesEnabled) {
+        return;
+      }
       await storage.saveTeammates(next);
+      if (_disposed || epoch != _teammateRefreshEpoch || !_teammatesEnabled) {
+        return;
+      }
       state = state.copyWith(teammates: next);
     } finally {
       refreshingTeammates = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 
   Future<void> refreshAllTeammates({bool isAuto = false}) async {
-    if (refreshingTeammates) {
+    if (refreshingTeammates ||
+        !state.config.moduleEnabled(DashboardModule.teammates)) {
       return;
     }
     refreshingTeammates = true;
+    final epoch = _teammateRefreshEpoch;
     notifyListeners();
     try {
       var next = await teammateService.refreshAll(state.teammates);
+      if (_disposed || epoch != _teammateRefreshEpoch || !_teammatesEnabled) {
+        return;
+      }
       if (isAuto) {
         next = teammateService.markAutoRefreshed(next);
       }
       await storage.saveTeammates(next);
+      if (_disposed || epoch != _teammateRefreshEpoch || !_teammatesEnabled) {
+        return;
+      }
       state = state.copyWith(teammates: next);
     } finally {
       refreshingTeammates = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -899,7 +980,8 @@ class OjController extends ChangeNotifier {
   Future<void> _reloadProblemsFromStorage() async {
     final snapshot = await storage.loadProblemSnapshot();
     _knownProblemRevision = snapshot.revision;
-    state = state.copyWith(problems: snapshot.problems);
+    state = state.copyWith(
+        problems: snapshot.problems, problemFolders: snapshot.folders);
   }
 
   ProblemRecord _persistedProblemFor(
@@ -925,6 +1007,11 @@ class OjController extends ChangeNotifier {
 
   void _schedule() {
     _timer?.cancel();
+    _timer = null;
+    if (!state.config.moduleEnabled(DashboardModule.ojAccounts) &&
+        !state.config.moduleEnabled(DashboardModule.teammates)) {
+      return;
+    }
     _timer = Timer.periodic(
       Duration(minutes: state.config.refreshIntervalMinutes),
       (_) {
@@ -936,7 +1023,10 @@ class OjController extends ChangeNotifier {
 
   void _scheduleProblemRefresh() {
     _problemRefreshTimer?.cancel();
-    if (problemRefreshInterval <= Duration.zero) {
+    if (problemRefreshInterval <= Duration.zero ||
+        !(state.config.moduleEnabled(DashboardModule.problems) ||
+            state.config.moduleEnabled(DashboardModule.training) ||
+            (state.config.sync.enabled && state.config.sync.syncProblems))) {
       _problemRefreshTimer = null;
       return;
     }
@@ -1042,6 +1132,7 @@ class OjController extends ChangeNotifier {
       final result = await automaticBackupService.createBackup(
         config: state.config.automaticBackup,
         problems: snapshot.problems,
+        problemFolders: snapshot.problemFolders,
         training: snapshot.training,
         contests: snapshot.contests,
       );
@@ -1070,6 +1161,7 @@ class OjController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _timer?.cancel();
     _automaticBackupTimer?.cancel();
     _problemRefreshTimer?.cancel();

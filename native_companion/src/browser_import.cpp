@@ -9,6 +9,8 @@
 #include <array>
 #include <atomic>
 #include <condition_variable>
+#include <chrono>
+#include <future>
 #include <cctype>
 #include <iomanip>
 #include <mutex>
@@ -76,6 +78,7 @@ class JsonReader {
 
   BrowserProblemImport ParseImport() {
     BrowserProblemImport result;
+    std::set<std::string> keys;
     SkipWhitespace();
     Expect('{');
     SkipWhitespace();
@@ -84,6 +87,9 @@ class JsonReader {
     }
     while (true) {
       const std::string key = ParseString();
+      if (!keys.insert(key).second) {
+        throw std::runtime_error("Import JSON contains a duplicate field.");
+      }
       SkipWhitespace();
       Expect(':');
       SkipWhitespace();
@@ -252,7 +258,8 @@ class JsonReader {
     }
   }
 
-  void SkipValue() {
+  void SkipValue(unsigned int depth = 0) {
+    if (depth > 32) throw std::runtime_error("JSON nesting is too deep.");
     SkipWhitespace();
     if (position_ >= input_.size()) {
       throw std::runtime_error("Unexpected end of JSON value.");
@@ -269,7 +276,7 @@ class JsonReader {
         ParseString();
         SkipWhitespace();
         Expect(':');
-        SkipValue();
+        SkipValue(depth + 1);
         SkipWhitespace();
         if (Consume('}')) return;
         Expect(',');
@@ -281,7 +288,7 @@ class JsonReader {
       SkipWhitespace();
       if (Consume(']')) return;
       while (true) {
-        SkipValue();
+        SkipValue(depth + 1);
         SkipWhitespace();
         if (Consume(']')) return;
         Expect(',');
@@ -297,6 +304,28 @@ class JsonReader {
     if (position_ == start) {
       throw std::runtime_error("Invalid JSON value.");
     }
+    const auto token = input_.substr(start, position_ - start);
+    if (token == "true" || token == "false" || token == "null") return;
+    std::size_t index = 0;
+    if (token[index] == '-') ++index;
+    if (index == token.size()) throw std::runtime_error("Invalid JSON number.");
+    const auto digits = [&] {
+      const auto first = index;
+      while (index < token.size() && token[index] >= '0' && token[index] <= '9') ++index;
+      return index > first;
+    };
+    if (token[index] == '0') ++index;
+    else if (!digits()) throw std::runtime_error("Invalid JSON value.");
+    if (index < token.size() && token[index] == '.') {
+      ++index;
+      if (!digits()) throw std::runtime_error("Invalid JSON fraction.");
+    }
+    if (index < token.size() && (token[index] == 'e' || token[index] == 'E')) {
+      ++index;
+      if (index < token.size() && (token[index] == '+' || token[index] == '-')) ++index;
+      if (!digits()) throw std::runtime_error("Invalid JSON exponent.");
+    }
+    if (index != token.size()) throw std::runtime_error("Invalid JSON value.");
   }
 
   std::string_view input_;
@@ -351,18 +380,18 @@ std::string SerializeTags(const std::vector<std::string>& tags) {
 }
 
 std::vector<std::string> NormalizeTags(
-    const std::vector<std::string>& values) {
+    const std::vector<std::string>& values, bool enforce_import_limits = true) {
   std::set<std::string> seen;
   std::vector<std::string> tags;
   for (const auto& value : values) {
     const std::string tag = Trim(value);
     if (tag.empty()) continue;
-    if (tag.size() > 100) {
+    if (enforce_import_limits && tag.size() > 100) {
       throw std::runtime_error("A problem tag is too long.");
     }
     if (seen.insert(LowerAscii(tag)).second) {
       tags.push_back(tag);
-      if (tags.size() == 30) break;
+      if (enforce_import_limits && tags.size() == 30) break;
     }
   }
   return tags;
@@ -437,7 +466,7 @@ std::vector<std::string> MergeTags(const std::string& existing_json,
   } catch (...) {
   }
   combined.insert(combined.end(), incoming.begin(), incoming.end());
-  return NormalizeTags(combined);
+  return NormalizeTags(combined, false);
 }
 
 struct HttpRequest {
@@ -462,19 +491,37 @@ class HttpError : public std::runtime_error {
   int status;
 };
 
-HttpRequest ReceiveRequest(SOCKET socket) {
-  DWORD timeout = 3000;
-  setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO,
-             reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+int ReceiveBeforeDeadline(SOCKET socket, char* buffer, int length,
+                          const std::atomic<bool>& stopping,
+                          std::chrono::steady_clock::time_point deadline) {
+  while (!stopping) {
+    if (std::chrono::steady_clock::now() >= deadline) {
+      throw HttpError(408, "Request deadline exceeded.");
+    }
+    fd_set readable;
+    FD_ZERO(&readable);
+    FD_SET(socket, &readable);
+    timeval timeout{};
+    timeout.tv_usec = 50000;
+    const int ready = select(0, &readable, nullptr, nullptr, &timeout);
+    if (ready == SOCKET_ERROR) throw HttpError(400, "Socket read failed.");
+    if (ready > 0) return recv(socket, buffer, length, 0);
+  }
+  throw HttpError(408, "Server is stopping.");
+}
+
+HttpRequest ReceiveRequest(SOCKET socket, const std::atomic<bool>& stopping) {
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
   std::string data;
   std::array<char, 4096> buffer{};
   std::size_t header_end = std::string::npos;
   while ((header_end = data.find("\r\n\r\n")) == std::string::npos) {
-    const int received = recv(socket, buffer.data(),
-                              static_cast<int>(buffer.size()), 0);
+    const int received = ReceiveBeforeDeadline(socket, buffer.data(),
+                              static_cast<int>(buffer.size()), stopping, deadline);
     if (received <= 0) throw HttpError(400, "Incomplete HTTP headers.");
     data.append(buffer.data(), static_cast<std::size_t>(received));
-    if (data.size() > kMaximumHeaderBytes) {
+    const auto end = data.find("\r\n\r\n");
+    if ((end == std::string::npos ? data.size() : end) > kMaximumHeaderBytes) {
       throw HttpError(431, "HTTP headers are too large.");
     }
   }
@@ -486,8 +533,9 @@ HttpRequest ReceiveRequest(SOCKET socket) {
   if (!line.empty() && line.back() == '\r') line.pop_back();
   std::istringstream request_line(line);
   std::string version;
+  std::string extra;
   if (!(request_line >> request.method >> request.path >> version) ||
-      !StartsWith(version, "HTTP/")) {
+      (version != "HTTP/1.1" && version != "HTTP/1.0") || (request_line >> extra)) {
     throw HttpError(400, "Invalid HTTP request line.");
   }
   while (std::getline(headers, line)) {
@@ -496,12 +544,25 @@ HttpRequest ReceiveRequest(SOCKET socket) {
     if (colon == std::string::npos) {
       throw HttpError(400, "Invalid HTTP header.");
     }
-    request.headers.emplace_back(LowerAscii(Trim(line.substr(0, colon))),
-                                 Trim(line.substr(colon + 1)));
+    const auto name = LowerAscii(Trim(line.substr(0, colon)));
+    if (name.empty() || !std::all_of(name.begin(), name.end(), [](unsigned char c) {
+          return std::isalnum(c) || c == '-';
+        }) || std::any_of(request.headers.begin(), request.headers.end(),
+          [&](const auto& header) { return header.first == name; })) {
+      throw HttpError(400, "Invalid or duplicate HTTP header.");
+    }
+    request.headers.emplace_back(name, Trim(line.substr(colon + 1)));
+  }
+
+  if (!request.Header("transfer-encoding").empty()) {
+    throw HttpError(400, "Transfer-Encoding is unsupported.");
   }
 
   const std::string length_text = request.Header("content-length");
   if (length_text.empty()) throw HttpError(411, "Content-Length is required.");
+  if (!std::all_of(length_text.begin(), length_text.end(), [](unsigned char c) {
+        return c >= '0' && c <= '9';
+      })) throw HttpError(400, "Content-Length is invalid.");
   std::size_t content_length = 0;
   try {
     std::size_t parsed = 0;
@@ -515,10 +576,13 @@ HttpRequest ReceiveRequest(SOCKET socket) {
   }
   const std::size_t body_start = header_end + 4;
   while (data.size() - body_start < content_length) {
-    const int received = recv(socket, buffer.data(),
-                              static_cast<int>(buffer.size()), 0);
+    const int received = ReceiveBeforeDeadline(socket, buffer.data(),
+                              static_cast<int>(buffer.size()), stopping, deadline);
     if (received <= 0) throw HttpError(400, "Incomplete request body.");
     data.append(buffer.data(), static_cast<std::size_t>(received));
+  }
+  if (data.size() - body_start != content_length) {
+    throw HttpError(400, "Request length does not match Content-Length.");
   }
   request.body = data.substr(body_start, content_length);
   return request;
@@ -571,27 +635,42 @@ void SendJson(SOCKET socket, int status, const std::string& body) {
   SendAll(socket, response.str());
 }
 
-void HandleClient(SOCKET client, ProblemDatabase& database) {
+void HandleClient(SOCKET client, ProblemDatabase& database, const std::atomic<bool>& stopping) {
+  DWORD timeout = 1000;
+  setsockopt(client, SOL_SOCKET, SO_SNDTIMEO,
+             reinterpret_cast<const char*>(&timeout), sizeof(timeout));
   try {
-    const HttpRequest request = ReceiveRequest(client);
-    if (request.method != "POST" ||
-        request.path != "/v1/problems/import") {
+    const HttpRequest request = ReceiveRequest(client, stopping);
+    const bool health = request.method == "GET" && request.path == "/v1/health";
+    if (!health && (request.method != "POST" ||
+        request.path != "/v1/problems/import")) {
       throw HttpError(404, "Unknown endpoint.");
     }
     if (request.Header("x-oj-companion") != kRequiredClientHeader) {
       throw HttpError(403, "The companion userscript header is required.");
     }
-    if (!StartsWith(LowerAscii(request.Header("content-type")),
-                    "application/json")) {
-      throw HttpError(415, "Content-Type must be application/json.");
+    if (health) {
+      if (!request.body.empty()) throw HttpError(400, "Health request must have no body.");
+      SendJson(client, 200,
+          "{\"service\":\"oj-float-companion\",\"protocol\":1,\"ready\":true}");
+    } else {
+      if (!StartsWith(LowerAscii(request.Header("content-type")),
+                      "application/json")) {
+        throw HttpError(415, "Content-Type must be application/json.");
+      }
+      BrowserProblemImport input;
+      try {
+        input = ParseBrowserProblemImport(request.body);
+      } catch (const std::exception& error) {
+        throw HttpError(400, error.what());
+      }
+      const auto result = SaveBrowserProblemImport(database, input);
+      SendJson(client, 200,
+               std::string("{\"status\":\"") +
+                   (result.created ? "created" : "existing") +
+                   "\",\"problemId\":\"" + JsonEscape(result.problem_id) +
+                   "\"}");
     }
-    const auto input = ParseBrowserProblemImport(request.body);
-    const auto result = SaveBrowserProblemImport(database, input);
-    SendJson(client, 200,
-             std::string("{\"status\":\"") +
-                 (result.created ? "created" : "existing") +
-                 "\",\"problemId\":\"" + JsonEscape(result.problem_id) +
-                 "\"}");
   } catch (const HttpError& error) {
     SendJson(client, error.status,
              "{\"error\":\"request_rejected\",\"message\":\"" +
@@ -607,9 +686,17 @@ void HandleClient(SOCKET client, ProblemDatabase& database) {
 
 }  // namespace
 
+std::vector<std::string> ParseProblemTagsJson(const std::string& json) {
+  return JsonReader(json).ParseArrayDocument();
+}
+
 BrowserProblemImport ParseBrowserProblemImport(const std::string& json) {
   if (json.size() > kMaximumBodyBytes) {
     throw std::runtime_error("Import JSON is too large.");
+  }
+  if (json.empty() || MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+      json.data(), static_cast<int>(json.size()), nullptr, 0) == 0) {
+    throw std::runtime_error("Import JSON must be UTF-8.");
   }
   auto result = JsonReader(json).ParseImport();
   result.url = Trim(result.url);
@@ -632,35 +719,39 @@ BrowserProblemImport ParseBrowserProblemImport(const std::string& json) {
 
 BrowserImportResult SaveBrowserProblemImport(ProblemDatabase& database,
                                              const BrowserProblemImport& input) {
-  const auto problems = database.LoadProblems();
-  const auto existing = std::find_if(
-      problems.begin(), problems.end(),
-      [&](const ProblemRecord& problem) { return SameProblem(problem, input); });
-  const std::string now = UtcNowIso8601();
-  ProblemRecord problem;
-  bool created = existing == problems.end();
-  if (created) {
-    problem.id = NewProblemId();
-    problem.workflow_status = "backlog";
-    problem.date = Today();
-    problem.created_at = now;
-  } else {
-    problem = *existing;
-  }
-  if (!input.title.empty()) problem.title = input.title;
-  if (problem.title.empty()) {
-    problem.title = input.external_id.empty() ? input.url : input.external_id;
-  }
-  problem.url = input.url;
-  problem.platform = NormalizePlatform(input.platform);
-  if (!input.external_id.empty()) problem.external_id = input.external_id;
-  if (!input.difficulty.empty()) problem.difficulty = input.difficulty;
-  if (!input.tags.empty()) {
-    problem.tags_json = SerializeTags(MergeTags(problem.tags_json, input.tags));
-  }
-  problem.updated_at = now;
-  database.Upsert(problem);
-  return {created, problem.id};
+  BrowserImportResult result;
+  database.WriteTransaction([&] {
+    const auto problems = database.LoadProblems();
+    const auto existing = std::find_if(
+        problems.begin(), problems.end(),
+        [&](const ProblemRecord& problem) { return SameProblem(problem, input); });
+    const std::string now = UtcNowIso8601();
+    ProblemRecord problem;
+    bool created = existing == problems.end();
+    if (created) {
+      problem.id = NewProblemId();
+      problem.workflow_status = "backlog";
+      problem.date = Today();
+      problem.created_at = now;
+    } else {
+      problem = *existing;
+    }
+    if (!input.title.empty()) problem.title = input.title;
+    if (problem.title.empty()) {
+      problem.title = input.external_id.empty() ? input.url : input.external_id;
+    }
+    problem.url = input.url;
+    problem.platform = NormalizePlatform(input.platform);
+    if (!input.external_id.empty()) problem.external_id = input.external_id;
+    if (!input.difficulty.empty()) problem.difficulty = input.difficulty;
+    if (!input.tags.empty()) {
+      problem.tags_json = SerializeTags(MergeTags(problem.tags_json, input.tags));
+    }
+    problem.updated_at = now;
+    database.Upsert(problem);
+    result = {created, problem.id};
+  });
+  return result;
 }
 
 class BrowserImportServer::Impl {
@@ -730,7 +821,8 @@ class BrowserImportServer::Impl {
                sizeof(address)) == SOCKET_ERROR ||
           listen(listener, SOMAXCONN) == SOCKET_ERROR) {
         throw std::runtime_error(
-            "无法监听 127.0.0.1:27122；端口可能已被占用。");
+            "无法监听 127.0.0.1:" + std::to_string(requested_port_) +
+            "；端口可能已被占用。");
       }
       int address_size = sizeof(address);
       if (getsockname(listener, reinterpret_cast<sockaddr*>(&address),
@@ -741,8 +833,11 @@ class BrowserImportServer::Impl {
       ProblemDatabase database(database_path_);
       running_ = true;
       FinishStartup("");
-
+      std::vector<std::future<void>> clients;
       while (!stop_requested_) {
+        clients.erase(std::remove_if(clients.begin(), clients.end(), [](auto& client) {
+          return client.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+        }), clients.end());
         fd_set readable;
         FD_ZERO(&readable);
         FD_SET(listener, &readable);
@@ -754,7 +849,19 @@ class BrowserImportServer::Impl {
         }
         if (ready == 0 || !FD_ISSET(listener, &readable)) continue;
         const SOCKET client = accept(listener, nullptr, nullptr);
-        if (client != INVALID_SOCKET) HandleClient(client, database);
+        if (client == INVALID_SOCKET) continue;
+        if (clients.size() >= 8) {
+          closesocket(client);
+          continue;
+        }
+        clients.push_back(std::async(std::launch::async, [this, client] {
+          try {
+            ProblemDatabase connection(database_path_);
+            HandleClient(client, connection, stop_requested_);
+          } catch (...) {
+            closesocket(client);
+          }
+        }));
       }
     } catch (const std::exception& error) {
       if (!startup_complete_) FinishStartup(error.what());

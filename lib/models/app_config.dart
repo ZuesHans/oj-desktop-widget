@@ -15,7 +15,12 @@ const defaultDashboardModules = <DashboardModule>[
   DashboardModule.daily,
 ];
 
-const currentAppConfigVersion = 3;
+const currentAppConfigVersion = 4;
+
+const defaultWideDashboardModules = <DashboardModule>[
+  DashboardModule.training,
+  DashboardModule.daily,
+];
 
 enum DashboardModule {
   summary('summary'),
@@ -38,12 +43,19 @@ enum AppColorTheme {
   terminalDark('terminalDark'),
   classic('classic'),
   dark('dark'),
-  candy('candy');
+  candy('candy'),
+  ocean('ocean'),
+  rose('rose'),
+  sage('sage'),
+  ink('ink'),
+  warm('warm');
 
   const AppColorTheme(this.id);
 
   final String id;
 }
+
+enum AppAppearanceMode { system, light, dark }
 
 class AppConfig {
   const AppConfig({
@@ -51,12 +63,17 @@ class AppConfig {
     required this.accounts,
     this.configVersion = currentAppConfigVersion,
     this.dashboardModules = defaultDashboardModules,
+    this.dashboardOrder = defaultDashboardModules,
+    this.wideDashboardModules = defaultWideDashboardModules,
     this.colorTheme = AppColorTheme.classic,
+    this.appearanceMode = AppAppearanceMode.system,
+    this.compactDensity = false,
     this.sync = const SyncConfig(),
     this.automaticBackup = const AutomaticBackupConfig(),
     this.launchAtStartup = false,
     this.closeToTray = false,
     this.quickEntryHotkey = 'Ctrl+Shift+O',
+    this.onboardingComplete = true,
   });
 
   factory AppConfig.defaults() {
@@ -68,6 +85,7 @@ class AppConfig {
       automaticBackup: const AutomaticBackupConfig(),
       dashboardModules: defaultDashboardModules,
       colorTheme: AppColorTheme.classic,
+      onboardingComplete: false,
       accounts: {
         for (final meta in supportedOjs)
           meta.id: const OjAccountConfig(usernames: [], enabled: false),
@@ -82,6 +100,7 @@ class AppConfig {
     final isLegacyFloatingConfig = storedVersion < 2;
     return AppConfig(
       configVersion: currentAppConfigVersion,
+      onboardingComplete: json['onboardingComplete'] != false,
       refreshIntervalMinutes: _parseRefreshInterval(
         json['refreshIntervalMinutes'],
       ),
@@ -97,7 +116,13 @@ class AppConfig {
         json['automaticBackup'],
       ),
       dashboardModules: _parseDashboardModules(json['dashboardModules']),
+      dashboardOrder: _parseDashboardOrder(
+        json['dashboardOrder'] ?? json['dashboardModules'],
+      ),
+      wideDashboardModules: _parseWideModules(json['wideDashboardModules']),
       colorTheme: _parseColorTheme(json['colorTheme']),
+      appearanceMode: _parseAppearanceMode(json['appearanceMode']),
+      compactDensity: json['compactDensity'] == true,
       quickEntryHotkey: _parseQuickEntryHotkey(json['quickEntryHotkey']),
       accounts: {
         for (final meta in supportedOjs)
@@ -141,7 +166,13 @@ class AppConfig {
       sync: const SyncConfig(),
       automaticBackup: const AutomaticBackupConfig(),
       dashboardModules: _parseDashboardModules(json['dashboardModules']),
+      dashboardOrder: _parseDashboardOrder(
+        json['dashboardOrder'] ?? json['dashboardModules'],
+      ),
+      wideDashboardModules: _parseWideModules(json['wideDashboardModules']),
       colorTheme: _parseColorTheme(json['colorTheme']),
+      appearanceMode: _parseAppearanceMode(json['appearanceMode']),
+      compactDensity: json['compactDensity'] == true,
       quickEntryHotkey: _parseQuickEntryHotkey(json['quickEntryHotkey']),
       accounts: accounts,
     );
@@ -194,13 +225,28 @@ class AppConfig {
     return null;
   }
 
+  static List<DashboardModule> _parseDashboardOrder(Object? value) =>
+      List.unmodifiable({
+        ..._parseDashboardModules(value),
+        ...defaultDashboardModules,
+      });
+
+  static List<DashboardModule> _parseWideModules(Object? value) => value == null
+      ? defaultWideDashboardModules
+      : _parseDashboardModules(value);
+
+  static AppAppearanceMode _parseAppearanceMode(Object? value) =>
+      AppAppearanceMode.values.firstWhere(
+        (mode) => mode.name == value,
+        orElse: () => AppAppearanceMode.system,
+      );
+
   static String _parseQuickEntryHotkey(Object? value) => value is String
       ? QuickEntryShortcut.parse(value)?.label ??
           QuickEntryShortcut.defaultLabel
       : QuickEntryShortcut.defaultLabel;
 
   static AppColorTheme _parseColorTheme(Object? value) {
-    if (value == 'ocean' || value == 'rose') return AppColorTheme.githubLight;
     if (value is String) {
       for (final theme in AppColorTheme.values) {
         if (theme.id == value) {
@@ -215,22 +261,35 @@ class AppConfig {
   final int refreshIntervalMinutes;
   final Map<String, OjAccountConfig> accounts;
   final List<DashboardModule> dashboardModules;
+  final List<DashboardModule> dashboardOrder;
+  final List<DashboardModule> wideDashboardModules;
   final AppColorTheme colorTheme;
+  final AppAppearanceMode appearanceMode;
+  final bool compactDensity;
   final bool launchAtStartup;
   final bool closeToTray;
   final String quickEntryHotkey;
+  final bool onboardingComplete;
   final SyncConfig sync;
   final AutomaticBackupConfig automaticBackup;
+
+  bool moduleEnabled(DashboardModule module) =>
+      dashboardModules.contains(module);
 
   AppConfig copyWith({
     int? configVersion,
     int? refreshIntervalMinutes,
     Map<String, OjAccountConfig>? accounts,
     List<DashboardModule>? dashboardModules,
+    List<DashboardModule>? dashboardOrder,
+    List<DashboardModule>? wideDashboardModules,
     AppColorTheme? colorTheme,
+    AppAppearanceMode? appearanceMode,
+    bool? compactDensity,
     bool? launchAtStartup,
     bool? closeToTray,
     String? quickEntryHotkey,
+    bool? onboardingComplete,
     SyncConfig? sync,
     AutomaticBackupConfig? automaticBackup,
   }) {
@@ -240,10 +299,15 @@ class AppConfig {
           refreshIntervalMinutes ?? this.refreshIntervalMinutes,
       accounts: accounts ?? this.accounts,
       dashboardModules: dashboardModules ?? this.dashboardModules,
+      dashboardOrder: dashboardOrder ?? this.dashboardOrder,
+      wideDashboardModules: wideDashboardModules ?? this.wideDashboardModules,
       colorTheme: colorTheme ?? this.colorTheme,
+      appearanceMode: appearanceMode ?? this.appearanceMode,
+      compactDensity: compactDensity ?? this.compactDensity,
       launchAtStartup: launchAtStartup ?? this.launchAtStartup,
       closeToTray: closeToTray ?? this.closeToTray,
       quickEntryHotkey: quickEntryHotkey ?? this.quickEntryHotkey,
+      onboardingComplete: onboardingComplete ?? this.onboardingComplete,
       sync: sync ?? this.sync,
       automaticBackup: automaticBackup ?? this.automaticBackup,
     );
@@ -255,9 +319,15 @@ class AppConfig {
         'launchAtStartup': launchAtStartup,
         'closeToTray': closeToTray,
         'quickEntryHotkey': quickEntryHotkey,
+        'onboardingComplete': onboardingComplete,
         'dashboardModules':
             dashboardModules.map((module) => module.id).toList(),
+        'dashboardOrder': dashboardOrder.map((module) => module.id).toList(),
+        'wideDashboardModules':
+            wideDashboardModules.map((module) => module.id).toList(),
         'colorTheme': colorTheme.id,
+        'appearanceMode': appearanceMode.name,
+        'compactDensity': compactDensity,
         'sync': sync.toJson(),
         'automaticBackup': automaticBackup.toJson(),
         'accounts': {

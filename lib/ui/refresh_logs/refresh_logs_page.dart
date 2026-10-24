@@ -5,6 +5,7 @@ import '../../core/time.dart';
 import '../../models/refresh_log_entry.dart';
 import '../app_theme.dart';
 import '../shared/app_surface_card.dart';
+import '../shared/app_page_header.dart';
 import '../shared/pill.dart';
 
 class RefreshLogsPage extends StatelessWidget {
@@ -29,72 +30,26 @@ class RefreshLogsPage extends StatelessWidget {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(
-                  appSpace4, 10, appSpace4, appSpace2),
-              child: AppSurfaceCard(
-                child: Row(
-                  children: [
-                    if (showBackButton) ...[
-                      IconButton(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+              child: AppPageHeader(
+                title: '刷新日志',
+                subtitle: '查看数据从哪里来，以及每次更新的结果。',
+                leading: showBackButton
+                    ? IconButton(
                         key: const ValueKey('refresh-logs-back-button'),
                         tooltip: '返回',
                         onPressed: onBack,
-                        icon: const Icon(Icons.arrow_back),
-                      ),
-                      const SizedBox(width: appSpace1),
-                    ],
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: accentColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(appRadiusControl),
-                        border: Border.all(
-                            color: accentColor.withValues(alpha: 0.2)),
-                      ),
-                      child:
-                          Icon(Icons.fact_check_outlined, color: accentColor),
-                    ),
-                    const SizedBox(width: appSpace3),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '刷新日志',
-                            style: TextStyle(
-                              color: textPrimaryColor,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            logs.isEmpty ? '还没有刷新记录' : '保留最近刷新、备用和失败状态',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                color: textSecondaryColor, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: appSpace2),
-                    Pill(label: '最近 ${logs.length} 条'),
-                  ],
-                ),
+                        icon: const Icon(Icons.arrow_back))
+                    : null,
+                actions: [Pill(label: '最近 ${logs.length} 条')],
               ),
             ),
             Expanded(
               child: logs.isEmpty
                   ? const Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        appSpace4,
-                        0,
-                        appSpace4,
-                        appSpace4,
-                      ),
-                      child: Center(
+                      padding: EdgeInsets.fromLTRB(24, 0, 24, 24),
+                      child: Align(
+                        alignment: Alignment.topCenter,
                         child: AppEmptyState(
                           icon: Icons.fact_check_outlined,
                           title: '暂无刷新记录',
@@ -103,7 +58,7 @@ class RefreshLogsPage extends StatelessWidget {
                       ),
                     )
                   : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                       itemCount: logs.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (context, index) =>
@@ -143,7 +98,7 @@ class _RefreshLogCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: textPrimaryColor,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -187,7 +142,7 @@ class _StatusPill extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(color: color, fontWeight: FontWeight.w800),
+        style: TextStyle(color: color, fontWeight: FontWeight.w600),
       ),
     );
   }

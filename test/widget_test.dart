@@ -203,6 +203,9 @@ void main() {
     await openDashboardShell(tester);
     await tapDashboardNav(tester, 'settings');
 
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('close-to-tray-switch')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('close-to-tray-switch')));
     await tester.pumpAndSettle();
 
@@ -360,7 +363,7 @@ void main() {
     expect(find.textContaining('已改为待复习'), findsOneWidget);
   });
 
-  testWidgets('problems page uses compact cards with a details dialog',
+  testWidgets('problems page uses readable rows with a details dialog',
       (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -399,9 +402,11 @@ void main() {
       ),
     );
 
-    expect(find.byType(GridView), findsOneWidget);
+    expect(find.byKey(const ValueKey('problem-results-list')), findsOneWidget);
     expect(find.byKey(const ValueKey('view-problem-p1')), findsOneWidget);
 
+    await tester.ensureVisible(find.byKey(const ValueKey('view-problem-p1')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('view-problem-p1')));
     await tester.pumpAndSettle();
 

@@ -21,15 +21,12 @@ void main() {
   });
 
   group('config storage hardening', () {
-    test('damaged config JSON falls back to defaults', () async {
+    test('damaged config JSON blocks startup without overwriting it', () async {
       SharedPreferences.setMockInitialValues({_configKey: '{not-json'});
 
-      final config = await LocalStore().loadConfig();
-
-      expect(config.refreshIntervalMinutes, 60);
-      expect(config.accounts.length, supportedOjs.length);
-      expect(
-          config.accounts.values.every((account) => !account.enabled), isTrue);
+      await expectLater(LocalStore().loadConfig(), throwsFormatException);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(_configKey), '{not-json');
     });
 
     test('missing refreshIntervalMinutes falls back to 60', () {
@@ -148,7 +145,7 @@ void main() {
       expect(migrated.closeToTray, isFalse);
       expect(migrated.launchAtStartup, isFalse);
       expect(migrated.refreshIntervalMinutes, 45);
-      expect(migrated.colorTheme, AppColorTheme.githubLight);
+      expect(migrated.colorTheme, AppColorTheme.ocean);
       expect(migrated.dashboardModules, [
         DashboardModule.teammates,
         DashboardModule.heatmap,
@@ -619,7 +616,7 @@ void main() {
       await File('${directory.path}${Platform.pathSeparator}$_snapshotsFile')
           .writeAsString(damagedSnapshots);
 
-      await LocalStore().loadConfig();
+      await expectLater(LocalStore().loadConfig(), throwsFormatException);
       await LocalStore(supportDirectory: directory).loadSnapshots();
 
       final joinedLogs = logs.join('\n');

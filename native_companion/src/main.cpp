@@ -1,8 +1,13 @@
 #include "browser_import.hpp"
 #include "problem_database.hpp"
 #include "resource.h"
+#include "single_instance.hpp"
 
 #include <commctrl.h>
+#include <commdlg.h>
+#include <uxtheme.h>
+#include <fstream>
+#include <set>
 #include <objbase.h>
 #include <shellapi.h>
 #include <shlobj.h>
@@ -49,6 +54,8 @@ enum ControlId {
   kFolderFilter,
   kNoteEdit,
   kStatusText,
+  kFolderName, kCreateFolder, kTagFilter, kTagMatchAll,
+  kBatchOperation, kBatchValue, kBatchApply, kBatchExport, kAnalysisEdit,
 };
 
 const std::array<const char*, 10> kPlatforms = {
@@ -155,44 +162,7 @@ std::string TagsToJson(const std::string& text) {
 }
 
 std::string JsonToTags(const std::string& json) {
-  std::vector<std::string> tags;
-  size_t index = 0;
-  while (index < json.size()) {
-    if (json[index++] != '"') {
-      continue;
-    }
-    std::string value;
-    while (index < json.size()) {
-      const char character = json[index++];
-      if (character == '"') {
-        break;
-      }
-      if (character != '\\' || index >= json.size()) {
-        value.push_back(character);
-        continue;
-      }
-      const char escaped = json[index++];
-      switch (escaped) {
-        case 'n':
-          value.push_back('\n');
-          break;
-        case 'r':
-          value.push_back('\r');
-          break;
-        case 't':
-          value.push_back('\t');
-          break;
-        case '"':
-        case '\\':
-        case '/':
-          value.push_back(escaped);
-          break;
-        default:
-          value.push_back(escaped);
-      }
-    }
-    tags.push_back(std::move(value));
-  }
+  const auto tags = oj_companion::ParseProblemTagsJson(json);
   std::string result;
   for (size_t tag_index = 0; tag_index < tags.size(); ++tag_index) {
     if (tag_index > 0) {
@@ -246,7 +216,7 @@ std::filesystem::path DefaultDatabasePath() {
   }
   std::filesystem::path path(roaming_path);
   CoTaskMemFree(roaming_path);
-  return path / L"com.example" / L"oj_float" / L"problem_book.sqlite3";
+  return path / L"ZuesHans" / L"OJ Float" / L"problem_book.sqlite3";
 }
 
 std::filesystem::path ExecutableDirectory() {
@@ -293,7 +263,13 @@ std::filesystem::path FindFlutterClient() {
 
 void MigrateDefaultDatabase(const std::filesystem::path& database_path) {
   if (std::filesystem::exists(database_path)) {
-    return;
+    try {
+      oj_companion::ProblemDatabase verified(database_path);
+      return;
+    } catch (const std::exception&) {
+      // Flutter owns schema and legacy migration. A file's existence does not
+      // establish that either completed successfully.
+    }
   }
   const auto flutter_client = FindFlutterClient();
   if (flutter_client.empty()) {
@@ -319,21 +295,18 @@ void MigrateDefaultDatabase(const std::filesystem::path& database_path) {
   }
   CloseHandle(process.hThread);
 
-  constexpr int kMaximumWaitAttempts = 300;
-  for (int attempt = 0; attempt < kMaximumWaitAttempts; ++attempt) {
-    if (std::filesystem::exists(database_path)) {
-      break;
-    }
-    if (WaitForSingleObject(process.hProcess, 100) == WAIT_OBJECT_0 &&
-        !std::filesystem::exists(database_path)) {
-      break;
-    }
-  }
+  const DWORD wait_result = WaitForSingleObject(process.hProcess, 30000);
+  DWORD exit_code = EXIT_FAILURE;
+  const bool completed = wait_result == WAIT_OBJECT_0 &&
+      GetExitCodeProcess(process.hProcess, &exit_code) && exit_code == 0;
   CloseHandle(process.hProcess);
-  if (!std::filesystem::exists(database_path)) {
+  if (!completed) {
     throw std::runtime_error(
-        "主程序未能生成题库数据库。请先手动运行一次最新版 oj_float.exe。");
+        wait_result == WAIT_TIMEOUT
+            ? "题库迁移仍在进行，小程序不会打开中间数据。请稍后重试或打开主程序检查。"
+            : "主程序未能完成题库迁移。原始数据已保留，请打开主程序修复或恢复备份。");
   }
+  oj_companion::ProblemDatabase verified(database_path);
 }
 
 class Application {
@@ -343,7 +316,8 @@ class Application {
         database_(database_path_),
         browser_import_server_(database_path_) {}
 
-  bool Create(HINSTANCE instance, int show_command) {
+  bool Create(HINSTANCE instance, int show_command,
+              const oj_companion::SingleInstance& single_instance) {
     WNDCLASSEXW window_class{};
     window_class.cbSize = sizeof(window_class);
     window_class.lpfnWndProc = WindowProcedure;
@@ -365,12 +339,13 @@ class Application {
 
     window_ = CreateWindowExW(
         0, kWindowClass, L"OJ 题库小程序", WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, 980, 700, nullptr, nullptr, instance, this);
+        CW_USEDEFAULT, CW_USEDEFAULT, 1180, 760, nullptr, nullptr, instance, this);
     if (window_ == nullptr) {
       return false;
     }
     ShowWindow(window_, show_command);
     UpdateWindow(window_);
+    single_instance.Publish(window_);
     return true;
   }
 
@@ -421,7 +396,7 @@ class Application {
         return 0;
       case WM_GETMINMAXINFO: {
         auto* info = reinterpret_cast<MINMAXINFO*>(l_parameter);
-        info->ptMinTrackSize = POINT{780, 570};
+        info->ptMinTrackSize = POINT{1000, 740};
         return 0;
       }
       case WM_TIMER:
@@ -435,7 +410,14 @@ class Application {
       case WM_NOTIFY:
         HandleNotification(reinterpret_cast<NMHDR*>(l_parameter));
         return 0;
+      case WM_CTLCOLORSTATIC:
+      case WM_CTLCOLORBTN:
+        SetTextColor(reinterpret_cast<HDC>(w_parameter), RGB(36, 58, 56));
+        SetBkColor(reinterpret_cast<HDC>(w_parameter), RGB(242, 247, 245));
+        return reinterpret_cast<LRESULT>(background_brush_);
       case WM_DESTROY:
+        if (ui_font_) DeleteObject(ui_font_);
+        if (background_brush_) DeleteObject(background_brush_);
         KillTimer(window_, kRefreshTimer);
         browser_import_server_.Stop();
         PostQuitMessage(0);
@@ -452,31 +434,54 @@ class Application {
         0, 0, window_, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
         GetModuleHandleW(nullptr), nullptr);
     SendMessageW(control, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)),
+                 reinterpret_cast<WPARAM>(ui_font_ ? ui_font_ : GetStockObject(DEFAULT_GUI_FONT)),
                  TRUE);
     return control;
   }
 
   void CreateControls() {
+    background_brush_ = CreateSolidBrush(RGB(242, 247, 245));
+    SetClassLongPtrW(window_, GCLP_HBRBACKGROUND, reinterpret_cast<LONG_PTR>(background_brush_));
+    ui_font_ = CreateFontW(-16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+      DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+      DEFAULT_PITCH, L"Microsoft YaHei UI");
+    folder_name_ = CreateControl(L"EDIT", L"", ES_AUTOHSCROLL, kFolderName, WS_EX_CLIENTEDGE);
+    SendMessageW(folder_name_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"新文件夹名称"));
+    create_folder_ = CreateControl(L"BUTTON", L"新建文件夹", BS_PUSHBUTTON, kCreateFolder);
+    tag_filter_ = CreateControl(L"EDIT", L"", ES_AUTOHSCROLL, kTagFilter, WS_EX_CLIENTEDGE);
+    SendMessageW(tag_filter_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"筛选标签，逗号分隔"));
+    tag_match_all_ = CreateControl(L"BUTTON", L"匹配全部标签", BS_AUTOCHECKBOX, kTagMatchAll);
+    batch_operation_ = CreateControl(WC_COMBOBOXW, L"", CBS_DROPDOWNLIST | WS_VSCROLL, kBatchOperation, WS_EX_CLIENTEDGE);
+    for (const auto* label : {L"移动到文件夹", L"添加标签", L"移除标签", L"修改状态", L"归档", L"恢复到待补"}) ComboBox_AddString(batch_operation_, label);
+    ComboBox_SetCurSel(batch_operation_, 0);
+    batch_value_ = CreateControl(L"EDIT", L"", ES_AUTOHSCROLL, kBatchValue, WS_EX_CLIENTEDGE);
+    SendMessageW(batch_value_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"文件夹 / 标签 / 状态英文名"));
+    batch_apply_ = CreateControl(L"BUTTON", L"应用到勾选项", BS_PUSHBUTTON, kBatchApply);
+    batch_export_ = CreateControl(L"BUTTON", L"导出勾选项", BS_PUSHBUTTON, kBatchExport);
+    analysis_label_ = CreateControl(L"STATIC", L"题解", SS_LEFT, 0);
+    analysis_edit_ = CreateControl(L"EDIT", L"", ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN | WS_VSCROLL, kAnalysisEdit, WS_EX_CLIENTEDGE);
     folder_filter_label_ =
-        CreateControl(L"STATIC", L"Folder", SS_LEFT, 0);
+        CreateControl(L"STATIC", L"文件夹", SS_LEFT, 0);
     folder_filter_ = CreateControl(
         WC_COMBOBOXW, L"", CBS_DROPDOWNLIST | WS_VSCROLL, kFolderFilter,
         WS_EX_CLIENTEDGE);
-    folder_label_ = CreateControl(L"STATIC", L"Folder", SS_LEFT, 0);
+    folder_label_ = CreateControl(L"STATIC", L"文件夹", SS_LEFT, 0);
     folder_edit_ = CreateControl(L"EDIT", L"", ES_AUTOHSCROLL, kFolderEdit,
                                  WS_EX_CLIENTEDGE);
     path_text_ = CreateControl(L"STATIC", L"", SS_LEFT, kDatabasePath);
     list_ = CreateControl(WC_LISTVIEWW, L"",
-                          LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS,
+                          LVS_REPORT | LVS_SHOWSELALWAYS,
                           kProblemList, WS_EX_CLIENTEDGE);
     ListView_SetExtendedListViewStyle(
-        list_, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_GRIDLINES);
+        list_, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_CHECKBOXES);
+    SetWindowTheme(list_, L"Explorer", nullptr);
+    ListView_SetBkColor(list_, RGB(255, 255, 255));
+    ListView_SetTextColor(list_, RGB(36, 58, 56));
     const std::array<std::pair<const wchar_t*, int>, 5> columns = {{
-        {L"题目", 280},
-        {L"平台", 90},
+        {L"题目", 230},
+        {L"平台", 65},
         {L"状态", 100},
-        {L"标签", 220},
+        {L"标签 / 文件夹", 180},
         {L"更新时间", 180},
     }};
     for (size_t index = 0; index < columns.size(); ++index) {
@@ -536,63 +541,60 @@ class Application {
   }
 
   void LayoutControls(int width, int height) {
-    constexpr int margin = 12;
-    constexpr int gap = 8;
-    constexpr int button_width = 88;
-    constexpr int button_height = 30;
-    constexpr int label_width = 105;
+    constexpr int margin = 16;
     const int content_width = std::max(1, width - margin * 2);
-
-    MoveWindow(path_text_, margin, 10, content_width, 20, TRUE);
-    int button_x = margin;
-    for (HWND button : {new_button_, save_button_, delete_button_, open_button_,
-                        refresh_button_}) {
-      MoveWindow(button, button_x, 36, button_width, button_height, TRUE);
-      button_x += button_width + gap;
+    MoveWindow(path_text_, margin, 10, content_width, 22, TRUE);
+    int x = margin;
+    for (HWND button : {new_button_, save_button_, delete_button_, open_button_, refresh_button_}) {
+      MoveWindow(button, x, 40, 88, 32, TRUE); x += 96;
     }
-    MoveWindow(folder_filter_label_, button_x, 41, 54, 20, TRUE);
-    MoveWindow(folder_filter_, button_x + 58, 36, 180, 220, TRUE);
-
-    const int editor_height = 240;
-    const int status_height = 22;
-    const int list_top = 74;
-    const int list_height =
-        std::max(120, height - list_top - editor_height - status_height - 18);
-    MoveWindow(list_, margin, list_top, content_width, list_height, TRUE);
-
-    int y = list_top + list_height + 10;
-    const int edit_x = margin + label_width;
-    const int edit_width = content_width - label_width;
-    MoveWindow(title_label_, margin, y + 5, label_width - gap, 20, TRUE);
-    MoveWindow(title_edit_, edit_x, y, edit_width, 26, TRUE);
-    y += 34;
-    MoveWindow(url_label_, margin, y + 5, label_width - gap, 20, TRUE);
-    MoveWindow(url_edit_, edit_x, y, edit_width, 26, TRUE);
-    y += 34;
-    MoveWindow(platform_label_, margin, y + 5, 48, 20, TRUE);
-    MoveWindow(platform_combo_, margin + 48, y, 115, 200, TRUE);
-    MoveWindow(status_label_, margin + 175, y + 5, 42, 20, TRUE);
-    MoveWindow(status_combo_, margin + 217, y, 120, 200, TRUE);
-    MoveWindow(tags_label_, margin + 350, y + 5, 118, 20, TRUE);
-    MoveWindow(tags_edit_, margin + 468, y,
-               std::max(80, content_width - 468), 26, TRUE);
-    y += 34;
-    MoveWindow(folder_label_, margin, y + 5, label_width - gap, 20, TRUE);
-    MoveWindow(folder_edit_, edit_x, y, edit_width, 26, TRUE);
-    y += 34;
-    MoveWindow(note_label_, margin, y + 5, label_width - gap, 20, TRUE);
-    MoveWindow(note_edit_, edit_x, y, edit_width, 58, TRUE);
-    MoveWindow(status_text_, margin, height - status_height - 4, content_width,
-               status_height, TRUE);
+    MoveWindow(folder_name_, x + 8, 42, 170, 28, TRUE);
+    MoveWindow(create_folder_, x + 186, 40, 110, 32, TRUE);
+    MoveWindow(folder_filter_label_, margin, 89, 60, 22, TRUE);
+    MoveWindow(folder_filter_, margin + 62, 84, 210, 250, TRUE);
+    MoveWindow(tag_filter_, margin + 284, 84, 250, 28, TRUE);
+    MoveWindow(tag_match_all_, margin + 548, 84, 150, 28, TRUE);
+    MoveWindow(batch_operation_, margin, 128, 150, 240, TRUE);
+    MoveWindow(batch_value_, margin + 160, 128, 290, 28, TRUE);
+    MoveWindow(batch_apply_, margin + 462, 126, 132, 32, TRUE);
+    MoveWindow(batch_export_, margin + 604, 126, 122, 32, TRUE);
+    const int list_top = 174;
+    const int pane_height = std::max(320, height - list_top - 44);
+    const int left_width = content_width * 56 / 100;
+    MoveWindow(list_, margin, list_top, left_width, pane_height, TRUE);
+    const int edit_x = margin + left_width + 20;
+    const int edit_width = content_width - left_width - 20;
+    int y = list_top;
+    auto field = [&](HWND label, HWND edit, int field_height) {
+      MoveWindow(label, edit_x, y, edit_width, 22, TRUE); y += 25;
+      MoveWindow(edit, edit_x, y, edit_width, field_height, TRUE); y += field_height + 12;
+    };
+    field(title_label_, title_edit_, 28);
+    field(url_label_, url_edit_, 28);
+    const int half = (edit_width - 12) / 2;
+    MoveWindow(platform_label_, edit_x, y, half, 22, TRUE);
+    MoveWindow(status_label_, edit_x + half + 12, y, half, 22, TRUE); y += 25;
+    MoveWindow(platform_combo_, edit_x, y, half, 220, TRUE);
+    MoveWindow(status_combo_, edit_x + half + 12, y, half, 220, TRUE); y += 42;
+    field(tags_label_, tags_edit_, 28);
+    field(folder_label_, folder_edit_, 28);
+    const int note_height = std::max(44, (height - y - 118) / 2);
+    field(note_label_, note_edit_, note_height);
+    field(analysis_label_, analysis_edit_, std::max(44, height - y - 66));
+    MoveWindow(status_text_, margin, height - 28, content_width, 24, TRUE);
   }
 
   void HandleCommand(int id, int notification) {
     if (!loading_editor_ &&
         ((id == kTitleEdit || id == kUrlEdit || id == kTagsEdit ||
           id == kFolderEdit ||
-          id == kNoteEdit) &&
+          id == kNoteEdit || id == kAnalysisEdit) &&
          notification == EN_CHANGE)) {
       editor_dirty_ = true;
+      return;
+    }
+    if ((id == kTagFilter && notification == EN_CHANGE) || (id == kTagMatchAll && notification == BN_CLICKED)) {
+      if (!reloading_list_) ReloadProblems();
       return;
     }
     if (id == kFolderFilter && notification == CBN_SELCHANGE) {
@@ -612,6 +614,17 @@ class Application {
     }
     try {
       switch (id) {
+        case kCreateFolder: {
+          const auto name = Trim(WideToUtf8(WindowText(folder_name_)));
+          if (name.empty()) throw std::runtime_error("请输入文件夹名称。");
+          database_.CreateFolder(name);
+          SetWindowTextW(folder_name_, L"");
+          ReloadProblems();
+          SetStatus("已创建文件夹：" + name);
+          break;
+        }
+        case kBatchApply: ApplyBatch(); break;
+        case kBatchExport: ExportSelected(); break;
         case kNewButton:
           ListView_SetItemState(list_, -1, 0, LVIS_SELECTED);
           ClearEditor();
@@ -646,22 +659,25 @@ class Application {
         static_cast<size_t>(change->iItem) >= displayed_problems_.size()) {
       return;
     }
-    LoadEditor(displayed_problems_[static_cast<size_t>(change->iItem)]);
+    if (!editor_dirty_) LoadEditor(displayed_problems_[static_cast<size_t>(change->iItem)]);
   }
 
   void ReloadProblems() {
+    const auto checked = CheckedIds();
     const std::string preserved_id = selected_id_;
     const bool preserve_dirty_editor = editor_dirty_;
     const std::string preserved_folder_filter = FolderFilterValue();
-    problems_ = database_.LoadProblems();
+    // Read revision first: a racing write causes another refresh instead of
+    // marking an older list as current.
     known_revision_ = database_.Revision();
+    problems_ = database_.LoadProblems();
     reloading_list_ = true;
     PopulateFolderFilter(preserved_folder_filter);
     ListView_DeleteAllItems(list_);
     displayed_problems_.clear();
     int selected_index = -1;
     for (const auto& problem : problems_) {
-      if (!MatchesFolderFilter(problem)) {
+      if (!MatchesFolderFilter(problem) || !MatchesTags(problem)) {
         continue;
       }
       displayed_problems_.push_back(problem);
@@ -672,6 +688,7 @@ class Application {
       item.iItem = static_cast<int>(index);
       item.pszText = const_cast<wchar_t*>(title.c_str());
       ListView_InsertItem(list_, &item);
+      if (std::find(checked.begin(), checked.end(), problem.id) != checked.end()) ListView_SetCheckState(list_, static_cast<int>(index), TRUE);
       SetListText(static_cast<int>(index), 1, problem.platform);
       SetListText(static_cast<int>(index), 2, problem.workflow_status);
       SetListText(
@@ -699,7 +716,7 @@ class Application {
     reloading_list_ = false;
     std::string status =
         "已加载 " + std::to_string(problems_.size()) + " 道题；修订号 " +
-        std::to_string(known_revision_);
+        std::to_string(known_revision_) + "；勾选题目可批量操作";
     if (browser_import_server_.IsRunning()) {
       status += "；浏览器导入 127.0.0.1:" +
                 std::to_string(browser_import_server_.Port());
@@ -743,6 +760,7 @@ class Application {
     problem.tags_json = TagsToJson(WideToUtf8(WindowText(tags_edit_)));
     problem.folder = Trim(WideToUtf8(WindowText(folder_edit_)));
     problem.note = WideToUtf8(WindowText(note_edit_));
+    problem.analysis = WideToUtf8(WindowText(analysis_edit_));
     problem.updated_at = UtcNowIso8601();
     if (problem.workflow_status == "archived" && problem.archived_at.empty()) {
       problem.archived_at = problem.updated_at;
@@ -792,6 +810,7 @@ class Application {
     SetWindowTextW(tags_edit_, L"");
     SetWindowTextW(folder_edit_, L"");
     SetWindowTextW(note_edit_, L"");
+    SetWindowTextW(analysis_edit_, L"");
     ComboBox_SetCurSel(platform_combo_, static_cast<int>(kPlatforms.size() - 1));
     ComboBox_SetCurSel(status_combo_, 0);
     loading_editor_ = false;
@@ -807,6 +826,7 @@ class Application {
     SetWindowTextUtf8(tags_edit_, JsonToTags(problem.tags_json));
     SetWindowTextUtf8(folder_edit_, problem.folder);
     SetWindowTextUtf8(note_edit_, problem.note);
+    SetWindowTextUtf8(analysis_edit_, problem.analysis);
     SelectCombo(platform_combo_, kPlatforms, problem.platform);
     SelectCombo(status_combo_, kStatuses, problem.workflow_status);
     loading_editor_ = false;
@@ -839,36 +859,98 @@ class Application {
 
   std::string FolderFilterValue() const {
     const int index = ComboBox_GetCurSel(folder_filter_);
-    return index <= 0 ? std::string() : Trim(WideToUtf8(WindowText(folder_filter_)));
+    return index <= 0 ? std::string() : index == 1 ? "unclassified:" : "folder:" + Trim(WideToUtf8(WindowText(folder_filter_)));
   }
 
   bool MatchesFolderFilter(const ProblemRecord& problem) const {
+    const int index = ComboBox_GetCurSel(folder_filter_);
+    if (index == 1) return problem.folder.empty();
     const auto filter = FolderFilterValue();
-    return filter.empty() || problem.folder == filter;
+    return index <= 0 || _wcsicmp(Utf8ToWide(problem.folder).c_str(), Utf8ToWide(filter.substr(7)).c_str()) == 0;
   }
 
   void PopulateFolderFilter(const std::string& selected) {
     ComboBox_ResetContent(folder_filter_);
-    const auto all_folders = Utf8ToWide("All folders");
+    const auto all_folders = Utf8ToWide("全部文件夹");
     ComboBox_AddString(folder_filter_, all_folders.c_str());
-    std::vector<std::string> folders;
-    for (const auto& problem : problems_) {
-      if (!problem.folder.empty() &&
-          std::find(folders.begin(), folders.end(), problem.folder) ==
-              folders.end()) {
-        folders.push_back(problem.folder);
-      }
-    }
-    std::sort(folders.begin(), folders.end());
-    int selected_index = 0;
+    ComboBox_AddString(folder_filter_, L"未分类");
+    const auto folders = database_.LoadFolders();
+    int selected_index = selected == "unclassified:" ? 1 : 0;
     for (const auto& folder : folders) {
       const auto value = Utf8ToWide(folder);
       const int index = ComboBox_AddString(folder_filter_, value.c_str());
-      if (folder == selected) {
+      if ("folder:" + folder == selected) {
         selected_index = index;
       }
     }
     ComboBox_SetCurSel(folder_filter_, selected_index);
+  }
+
+  bool MatchesTags(const ProblemRecord& problem) const {
+    const auto query = TagsToJson(WideToUtf8(WindowText(tag_filter_)));
+    const auto requested = oj_companion::ParseProblemTagsJson(query);
+    if (requested.empty()) return true;
+    const auto actual = oj_companion::ParseProblemTagsJson(problem.tags_json);
+    int matched = 0;
+    for (const auto& tag : requested) {
+      if (std::any_of(actual.begin(), actual.end(), [&](const auto& item) {
+        return _wcsicmp(Utf8ToWide(tag).c_str(), Utf8ToWide(item).c_str()) == 0;
+      })) ++matched;
+    }
+    return Button_GetCheck(tag_match_all_) == BST_CHECKED ? matched == static_cast<int>(requested.size()) : matched > 0;
+  }
+
+  std::vector<std::string> CheckedIds() const {
+    std::vector<std::string> ids;
+    for (size_t i = 0; i < displayed_problems_.size(); ++i) {
+      if (ListView_GetCheckState(list_, static_cast<int>(i))) ids.push_back(displayed_problems_[i].id);
+    }
+    return ids;
+  }
+
+  void ApplyBatch() {
+    const auto ids = CheckedIds();
+    if (ids.empty()) throw std::runtime_error("请先勾选题目。");
+    if (editor_dirty_) throw std::runtime_error("请先保存当前编辑，再批量操作。");
+    const int index = ComboBox_GetCurSel(batch_operation_);
+    auto value = Trim(WideToUtf8(WindowText(batch_value_)));
+    auto operation = oj_companion::BatchOperation::folder;
+    if (index == 1 || index == 2) {
+      operation = index == 1 ? oj_companion::BatchOperation::add_tags : oj_companion::BatchOperation::remove_tags;
+      value = TagsToJson(value);
+    } else if (index >= 3) {
+      operation = oj_companion::BatchOperation::status;
+      if (index == 4) value = "archived";
+      if (index == 5) value = "backlog";
+    }
+    if (index == 4 && MessageBoxW(window_, L"归档勾选题目？之后可以恢复。", L"批量归档", MB_YESNO | MB_DEFBUTTON2) != IDYES) return;
+    database_.ApplyBatch(ids, operation, value, UtcNowIso8601());
+    ReloadProblems();
+    SetStatus("已更新 " + std::to_string(ids.size()) + " 道题。");
+  }
+
+  void ExportSelected() {
+    const auto ids = CheckedIds();
+    if (ids.empty()) throw std::runtime_error("请先勾选要导出的题目。");
+    std::array<wchar_t, 32768> path{};
+    wcscpy_s(path.data(), path.size(), L"oj-problems.md");
+    OPENFILENAMEW dialog{};
+    dialog.lStructSize = sizeof(dialog); dialog.hwndOwner = window_;
+    dialog.lpstrFilter = L"Markdown (*.md)\0*.md\0\0";
+    dialog.lpstrFile = path.data(); dialog.nMaxFile = static_cast<DWORD>(path.size());
+    dialog.lpstrDefExt = L"md"; dialog.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST;
+    if (!GetSaveFileNameW(&dialog)) return;
+    std::ofstream output(std::filesystem::path(path.data()), std::ios::binary);
+    output << "# OJ 题库导出\n\n";
+    for (const auto& problem : database_.LoadProblems()) {
+      if (std::find(ids.begin(), ids.end(), problem.id) == ids.end()) continue;
+      output << "## [" << problem.title << "](" << problem.url << ")\n\n- 平台：" << problem.platform
+        << "\n- 状态：" << problem.workflow_status << "\n- 文件夹：" << problem.folder
+        << "\n- 标签：" << JsonToTags(problem.tags_json) << "\n\n### 备注\n" << problem.note << "\n\n### 题解\n" << problem.analysis << "\n\n---\n";
+    }
+    output.flush();
+    if (!output) throw std::runtime_error("导出失败，文件无法写入。");
+    SetStatus("已导出 " + std::to_string(ids.size()) + " 道题。");
   }
 
   void SetListText(int row, int column, const std::string& value) {
@@ -914,6 +996,12 @@ class Application {
   HWND note_label_ = nullptr;
   HWND note_edit_ = nullptr;
   HWND status_text_ = nullptr;
+  HFONT ui_font_ = nullptr;
+  HBRUSH background_brush_ = nullptr;
+  HWND folder_name_ = nullptr, create_folder_ = nullptr;
+  HWND tag_filter_ = nullptr, tag_match_all_ = nullptr;
+  HWND batch_operation_ = nullptr, batch_value_ = nullptr, batch_apply_ = nullptr, batch_export_ = nullptr;
+  HWND analysis_label_ = nullptr, analysis_edit_ = nullptr;
   std::vector<ProblemRecord> problems_;
   std::vector<ProblemRecord> displayed_problems_;
   std::string selected_id_;
@@ -931,11 +1019,19 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show_command) {
   const HRESULT com_result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
   try {
     const auto selection = DatabasePathFromCommandLine();
+    oj_companion::SingleInstance single_instance(selection.path);
+    if (single_instance.IsExisting()) {
+      if (!single_instance.ActivateExisting()) {
+        throw std::runtime_error("已有题库正在启动或未能完成启动，请稍后重试。");
+      }
+      if (SUCCEEDED(com_result)) CoUninitialize();
+      return 0;
+    }
     if (!selection.custom) {
       MigrateDefaultDatabase(selection.path);
     }
     Application application(selection.path);
-    if (!application.Create(instance, show_command)) {
+    if (!application.Create(instance, show_command, single_instance)) {
       throw std::runtime_error("Unable to create the companion window.");
     }
     MSG message{};

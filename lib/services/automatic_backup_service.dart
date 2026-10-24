@@ -58,6 +58,7 @@ class CoreTrainingBackup {
     required this.backupType,
     required this.contentHash,
     required this.problems,
+    this.problemFolders = const [],
     required this.training,
     required this.contests,
   });
@@ -66,6 +67,7 @@ class CoreTrainingBackup {
   final String backupType;
   final String contentHash;
   final List<ProblemRecord> problems;
+  final List<String> problemFolders;
   final TrainingStoreData training;
   final List<ContestRecord> contests;
 }
@@ -128,6 +130,7 @@ class AutomaticBackupService {
   Future<AutomaticBackupResult> createBackup({
     required AutomaticBackupConfig config,
     required List<ProblemRecord> problems,
+    List<String> problemFolders = const [],
     required TrainingStoreData training,
     required List<ContestRecord> contests,
   }) async {
@@ -137,6 +140,7 @@ class AutomaticBackupService {
     final scan = await _scan(directory);
     final data = _buildCoreData(
       problems: problems,
+      problemFolders: problemFolders,
       training: training,
       contests: contests,
     );
@@ -351,17 +355,20 @@ CoreTrainingBackup parseCoreTrainingBackupJson(String text) {
     backupType: backupType,
     contentHash: storedHash,
     problems: List.unmodifiable(problems),
+    problemFolders: parseProblemFolders(data['problemFolders'], problems),
     training: training,
     contests: List.unmodifiable(contests),
   );
 }
 
 Map<String, dynamic> _buildCoreData({
+  List<String> problemFolders = const [],
   required List<ProblemRecord> problems,
   required TrainingStoreData training,
   required List<ContestRecord> contests,
 }) {
   return {
+    'problemFolders': parseProblemFolders(problemFolders, problems),
     'problems': problems.map((item) => item.toStorageJson()).toList(),
     'training': training.toJson(),
     'contests': contests.map((item) => item.toStorageJson()).toList(),

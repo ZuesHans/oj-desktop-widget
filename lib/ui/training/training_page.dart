@@ -9,6 +9,7 @@ import '../../models/training.dart';
 import '../../services/training_service.dart';
 import '../app_theme.dart';
 import '../shared/app_surface_card.dart';
+import '../shared/app_page_header.dart';
 import '../shared/pill.dart';
 
 class TrainingFinishInput {
@@ -45,8 +46,10 @@ class TrainingPage extends StatefulWidget {
     required this.onDeleteList,
     required this.onOpenProblem,
     this.contests = const [],
+    this.tasksOnly = false,
   });
 
+  final bool tasksOnly;
   final List<ProblemRecord> problems;
   final List<ContestRecord> contests;
   final TrainingStoreData training;
@@ -111,98 +114,73 @@ class _TrainingPageState extends State<TrainingPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      key: const ValueKey('training-page'),
+      key: ValueKey(widget.tasksOnly ? 'todo-page' : 'training-page'),
       backgroundColor: appSurfaceColor,
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 14, 18, 8),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: accentColor.withValues(alpha: 0.11),
-                    borderRadius: BorderRadius.circular(appRadiusControl),
-                  ),
-                  child: Icon(Icons.timer_outlined, color: accentColor),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+            child: AppPageHeader(
+              title: widget.tasksOnly ? '待办事项' : '训练工作台',
+              subtitle:
+                  widget.tasksOnly ? '安排今天要做的题，逐步完成每一项。' : '自主安排训练，保留每一次尝试与复盘。',
+            ),
+          ),
+          if (!widget.tasksOnly)
+            TabBar(
+              controller: _tabs,
+              tabs: const [
+                Tab(text: '每日安排'),
+                Tab(text: '题单'),
+                Tab(text: '记录与分析'),
+              ],
+            ),
+          Expanded(
+            child: widget.tasksOnly
+                ? _dailySchedule()
+                : TabBarView(
+                    controller: _tabs,
                     children: [
-                      Text(
-                        '训练工作台',
-                        style: TextStyle(
-                          color: textPrimaryColor,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                        ),
+                      _dailySchedule(),
+                      _TrainingListsView(
+                        problems: widget.problems,
+                        contests: widget.contests,
+                        training: widget.training,
+                        onStart: widget.onStart,
+                        onOpenProblem: widget.onOpenProblem,
+                        onSave: widget.onSaveList,
+                        onDelete: widget.onDeleteList,
                       ),
-                      Text(
-                        '自主安排训练，保留每一次尝试与复盘',
-                        style: TextStyle(color: textSecondaryColor),
+                      _TrainingHistoryView(
+                        problems: widget.problems,
+                        attempts: widget.training.attempts,
+                        analytics: widget.analytics,
                       ),
                     ],
                   ),
-                ),
-              ],
-            ),
-          ),
-          TabBar(
-            controller: _tabs,
-            tabs: const [
-              Tab(text: '每日安排'),
-              Tab(text: '题单'),
-              Tab(text: '记录与分析'),
-            ],
-          ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabs,
-              children: [
-                _DailyScheduleView(
-                  selectedDate: _selectedDate,
-                  problems: widget.problems,
-                  training: widget.training,
-                  onDateChanged: (date) => setState(() {
-                    _selectedDate =
-                        DateTime(date.year, date.month, date.day, 4);
-                  }),
-                  onStart: widget.onStart,
-                  onPause: widget.onPause,
-                  onResume: widget.onResume,
-                  onCancel: widget.onCancel,
-                  onFinish: _finish,
-                  onAddTasks: widget.onAddTasks,
-                  onMoveTask: widget.onMoveTask,
-                  onRemoveTask: widget.onRemoveTask,
-                  onOpenProblem: widget.onOpenProblem,
-                ),
-                _TrainingListsView(
-                  problems: widget.problems,
-                  contests: widget.contests,
-                  training: widget.training,
-                  onStart: widget.onStart,
-                  onOpenProblem: widget.onOpenProblem,
-                  onSave: widget.onSaveList,
-                  onDelete: widget.onDeleteList,
-                ),
-                _TrainingHistoryView(
-                  problems: widget.problems,
-                  attempts: widget.training.attempts,
-                  analytics: widget.analytics,
-                ),
-              ],
-            ),
           ),
         ],
       ),
     );
   }
+
+  Widget _dailySchedule() => _DailyScheduleView(
+        selectedDate: _selectedDate,
+        problems: widget.problems,
+        training: widget.training,
+        onDateChanged: (date) => setState(() {
+          _selectedDate = DateTime(date.year, date.month, date.day, 4);
+        }),
+        onStart: widget.onStart,
+        onPause: widget.onPause,
+        onResume: widget.onResume,
+        onCancel: widget.onCancel,
+        onFinish: _finish,
+        onAddTasks: widget.onAddTasks,
+        onMoveTask: widget.onMoveTask,
+        onRemoveTask: widget.onRemoveTask,
+        onOpenProblem: widget.onOpenProblem,
+      );
 
   Future<void> _finish() async {
     final active = widget.training.activeAttempt;
@@ -271,7 +249,7 @@ class _DailyScheduleView extends StatelessWidget {
 
     return ListView(
       key: const ValueKey('training-schedule-tab'),
-      padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
       children: [
         Row(
           children: [
@@ -316,7 +294,7 @@ class _DailyScheduleView extends StatelessWidget {
         const SizedBox(height: 10),
         LayoutBuilder(
           builder: (context, constraints) {
-            final width = constraints.maxWidth >= 720
+            final width = constraints.maxWidth >= 520
                 ? (constraints.maxWidth - 30) / 4
                 : (constraints.maxWidth - 10) / 2;
             return Wrap(
@@ -351,7 +329,7 @@ class _DailyScheduleView extends StatelessWidget {
           style: TextStyle(
             color: textPrimaryColor,
             fontSize: 16,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 8),
@@ -493,7 +471,7 @@ class _Metric extends StatelessWidget {
               style: TextStyle(
                 color: textPrimaryColor,
                 fontSize: 22,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -540,7 +518,7 @@ class _ActiveAttemptCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: textPrimaryColor,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 Text(
@@ -622,7 +600,7 @@ class _TaskRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: textPrimaryColor,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 Text(
@@ -732,7 +710,7 @@ class _TrainingListsView extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: textPrimaryColor,
-                                    fontWeight: FontWeight.w900,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
@@ -1014,7 +992,7 @@ class _TrainingHistoryView extends StatelessWidget {
             style: TextStyle(
               color: textPrimaryColor,
               fontSize: 16,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
@@ -1034,7 +1012,7 @@ class _TrainingHistoryView extends StatelessWidget {
             style: TextStyle(
               color: textPrimaryColor,
               fontSize: 16,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
@@ -1053,7 +1031,7 @@ class _TrainingHistoryView extends StatelessWidget {
           style: TextStyle(
             color: textPrimaryColor,
             fontSize: 16,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 8),
@@ -1108,7 +1086,7 @@ class _AttemptRecordCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: textPrimaryColor,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -1206,7 +1184,7 @@ class _FinishAttemptDialogState extends State<_FinishAttemptDialog> {
                       '自动计时 ${_durationLabel(widget.elapsedSeconds)}',
                       style: TextStyle(
                         color: textPrimaryColor,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -1560,7 +1538,7 @@ class _ProblemPickerDialogState extends State<_ProblemPickerDialog> {
       }
       final query = _query.text.trim().toLowerCase();
       if (query.isNotEmpty &&
-           ![problem.title, problem.url, problem.folder, ...problem.tags]
+          ![problem.title, problem.url, problem.folder, ...problem.tags]
               .join(' ')
               .toLowerCase()
               .contains(query)) {

@@ -31,6 +31,8 @@ std::filesystem::path TestDatabasePath() {
 }
 
 constexpr const char* kSchema = R"sql(
+  CREATE TABLE metadata(key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
+  INSERT INTO metadata(key, value) VALUES ('legacy_json_migrated', 'fixture');
   CREATE TABLE problems (
     id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL,
     platform TEXT NOT NULL, workflow_status TEXT NOT NULL,
@@ -56,12 +58,55 @@ constexpr const char* kSchema = R"sql(
   CREATE TRIGGER problems_revision_after_delete AFTER DELETE ON problems BEGIN
     UPDATE problem_change_state SET revision = revision + 1 WHERE singleton = 1;
   END;
-  PRAGMA user_version = 3;
+  CREATE TABLE problem_folders(name TEXT PRIMARY KEY COLLATE NOCASE NOT NULL CHECK(length(trim(name)) > 0));
+  CREATE TRIGGER folders_revision_after_insert AFTER INSERT ON problem_folders BEGIN
+    UPDATE problem_change_state SET revision = revision + 1 WHERE singleton = 1;
+  END;
+  CREATE TRIGGER folders_revision_after_delete AFTER DELETE ON problem_folders BEGIN
+    UPDATE problem_change_state SET revision = revision + 1 WHERE singleton = 1;
+  END;
+  CREATE TRIGGER problems_folder_after_insert AFTER INSERT ON problems WHEN length(trim(NEW.folder)) > 0 BEGIN
+    INSERT INTO problem_folders(name) SELECT trim(NEW.folder) WHERE NOT EXISTS (SELECT 1 FROM problem_folders WHERE name = trim(NEW.folder) COLLATE NOCASE);
+  END;
+  CREATE TRIGGER problems_folder_after_update AFTER UPDATE OF folder ON problems WHEN length(trim(NEW.folder)) > 0 BEGIN
+    INSERT INTO problem_folders(name) SELECT trim(NEW.folder) WHERE NOT EXISTS (SELECT 1 FROM problem_folders WHERE name = trim(NEW.folder) COLLATE NOCASE);
+  END;
+  PRAGMA user_version = 4;
 )sql";
 
 void Require(bool condition, const char* message) {
   if (!condition) {
     throw std::runtime_error(message);
+  }
+}
+
+std::string StoredTagsFixture() {
+  std::string json = "[";
+  for (int index = 0; index < 35; ++index) {
+    if (index > 0) json += ',';
+    json += "\"tag-" + std::to_string(index) + "\"";
+  }
+  return json + ",\"" + std::string(120, 'x') +
+         R"json(","\u52a8\u6001\u89c4\u5212","\ud83d\udc37"])json";
+}
+
+void TestStoredTags() {
+  const auto tags = oj_companion::ParseProblemTagsJson(StoredTagsFixture());
+  Require(tags.size() == 38 && tags[34] == "tag-34",
+          "stored tag parsing must retain more than thirty tags");
+  Require(tags[35] == std::string(120, 'x'),
+          "stored tags must retain long values accepted by Flutter");
+  Require(tags[36] == u8"动态规划" && tags[37] == u8"🐷",
+          "stored tag parsing must decode Unicode and surrogate pairs");
+  for (const auto* invalid : {"[\"DP\"] trailing", "[42]",
+                              "[\"\\ud83d\"]"}) {
+    bool rejected = false;
+    try {
+      oj_companion::ParseProblemTagsJson(invalid);
+    } catch (const std::exception&) {
+      rejected = true;
+    }
+    Require(rejected, "invalid stored tag JSON must be rejected");
   }
 }
 
@@ -124,10 +169,14 @@ std::string SendImportRequest(std::uint16_t port, const std::string& body,
 
 }  // namespace
 
+#include "browser_import_test.hpp"
+#include "single_instance_test.hpp"
+
 int main() {
   const auto path = TestDatabasePath();
   const auto directory = path.parent_path();
   try {
+    TestStoredTags();
     {
       oj_companion::ProblemDatabase setup(path, true);
       setup.ExecuteForTesting(kSchema);
@@ -148,8 +197,8 @@ int main() {
       problem.created_at = "2026-09-22T12:00:00.000Z";
       problem.updated_at = problem.created_at;
       database.Upsert(problem);
-      Require(database.Revision() == 1, "insert should advance revision");
-      Require(observer.Revision() == 1,
+      Require(database.Revision() == 2, "insert should advance revision");
+      Require(observer.Revision() == 2,
               "a second connection should observe the insert revision");
       const auto loaded = observer.LoadProblems();
       Require(loaded.size() == 1, "inserted problem should be loaded");
@@ -158,13 +207,46 @@ int main() {
       problem = loaded.front();
       problem.title = "Two Sum updated externally";
       observer.Upsert(problem);
-      Require(database.Revision() == 2, "update should advance revision");
+      Require(database.Revision() == 3, "update should advance revision");
       Require(database.LoadProblems().front().title ==
                   "Two Sum updated externally",
               "the first connection should observe the external update");
       Require(database.Delete(problem.id), "delete should report a row");
-      Require(database.Revision() == 3, "delete should advance revision");
+      Require(database.Revision() == 4, "delete should advance revision");
       Require(database.LoadProblems().empty(), "deleted row should be absent");
+
+      const auto revision = database.Revision();
+      database.CreateFolder("empty");
+      database.CreateFolder("EMPTY");
+      Require(database.Revision() == revision + 1, "duplicate folder must not advance revision");
+      Require(observer.LoadFolders().size() == 2, "empty folders must persist across connections");
+      {
+        oj_companion::ProblemRecord batch;
+        batch.id = "batch"; batch.title = "Keep title"; batch.note = "concurrent note";
+        batch.analysis = "keep analysis"; batch.tags_json = R"(["DP","greedy"])";
+        database.Upsert(batch);
+        database.ApplyBatch({"batch"}, oj_companion::BatchOperation::folder, "new-folder", "now");
+        database.ApplyBatch({"batch"}, oj_companion::BatchOperation::add_tags, R"(["dp","graph"])", "now");
+        database.ApplyBatch({"batch"}, oj_companion::BatchOperation::remove_tags, R"(["GREEDY"])", "now");
+        database.ApplyBatch({"batch"}, oj_companion::BatchOperation::status, "archived", "now");
+        auto rows = observer.LoadProblems();
+        Require(rows.size() == 1 && rows.front().folder == "new-folder", "batch folder did not persist");
+        Require(rows.front().title == "Keep title" && rows.front().note == "concurrent note" && rows.front().analysis == "keep analysis", "batch overwrote unrelated fields");
+        Require(rows.front().tags_json.find("greedy") == std::string::npos && rows.front().tags_json.find("graph") != std::string::npos, "batch tags failed");
+        Require(rows.front().workflow_status == "archived" && rows.front().archived_at == "now", "batch archive failed");
+        database.ApplyBatch({"batch"}, oj_companion::BatchOperation::status, "backlog", "later");
+        Require(observer.LoadProblems().front().archived_at.empty(), "batch restore failed");
+        // A failure on a later row must roll the earlier update back.
+        oj_companion::ProblemDatabase setup(path, true);
+        setup.ExecuteForTesting("CREATE TRIGGER reject_batch BEFORE UPDATE ON problems WHEN NEW.folder = 'reject' AND NEW.id = 'blocked' BEGIN SELECT RAISE(ABORT, 'test rejection'); END;");
+        batch.id = "blocked"; database.Upsert(batch);
+        bool rejected = false;
+        try { database.ApplyBatch({"batch", "blocked"}, oj_companion::BatchOperation::folder, "reject", "now"); } catch (...) { rejected = true; }
+        Require(rejected, "test trigger should reject batch");
+        for (const auto& row : database.LoadProblems()) Require(row.folder != "reject", "failed batch must roll back every row");
+        database.Delete("batch"); database.Delete("blocked");
+      }
+      const auto before_import = database.Revision();
 
       const auto parsed = oj_companion::ParseBrowserProblemImport(R"json({
         "url":"https://codeforces.com/contest/1799/problem/A",
@@ -178,7 +260,7 @@ int main() {
       const auto direct =
           oj_companion::SaveBrowserProblemImport(database, parsed);
       Require(direct.created, "first direct import should create a problem");
-      Require(database.Revision() == 4,
+      Require(database.Revision() == before_import + 1,
               "direct browser import should advance revision");
 
       oj_companion::BrowserImportServer server(path, 0);
@@ -218,6 +300,34 @@ int main() {
                   imported.front().tags_json.find("greedy") !=
                       std::string::npos,
               "browser import should merge tags");
+      auto many_tags = imported.front();
+      many_tags.tags_json = StoredTagsFixture();
+      database.Upsert(many_tags);
+      auto next_import = parsed;
+      next_import.tags = {"new-tag"};
+      oj_companion::SaveBrowserProblemImport(database, next_import);
+      const auto merged_tags = oj_companion::ParseProblemTagsJson(
+          observer.LoadProblems().front().tags_json);
+      Require(merged_tags.size() == 39 && merged_tags[34] == "tag-34" &&
+                  merged_tags[35] == std::string(120, 'x') &&
+                  merged_tags.back() == "new-tag",
+              "browser import must preserve existing Flutter tags");
+    }
+    TestHttpHardening(path);
+    TestSingleInstance(path);
+    {
+      oj_companion::ProblemDatabase setup(path, true);
+      setup.ExecuteForTesting("DELETE FROM metadata WHERE key = 'legacy_json_migrated'");
+      bool incomplete_rejected = false;
+      try { oj_companion::ProblemDatabase incomplete(path); } catch (...) { incomplete_rejected = true; }
+      Require(incomplete_rejected, "a v4 file without a successful migration marker must not be opened");
+      setup.ExecuteForTesting("INSERT INTO metadata(key, value) VALUES ('legacy_json_migrated', 'fixture')");
+      for (const int version : {3, 5}) {
+        setup.ExecuteForTesting("PRAGMA user_version = " + std::to_string(version));
+        bool rejected = false;
+        try { oj_companion::ProblemDatabase unsupported(path); } catch (...) { rejected = true; }
+        Require(rejected, "companion must reject older and future schemas");
+      }
     }
     std::filesystem::remove_all(directory);
     std::cout << "native companion database contract passed\n";

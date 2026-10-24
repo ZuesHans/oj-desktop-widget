@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../models/app_config.dart' show DashboardModule;
 import '../app_theme.dart';
+import '../shared/app_page_header.dart';
 
 enum DashboardSection {
   summary,
   training,
+  todos,
   heatmap,
   problems,
   refreshLogs,
@@ -23,12 +25,14 @@ class DashboardShell extends StatelessWidget {
     required this.currentSection,
     required this.onSectionSelected,
     required this.child,
+    this.sections = DashboardSection.values,
   });
 
   final Widget header;
   final DashboardSection currentSection;
   final ValueChanged<DashboardSection> onSectionSelected;
   final Widget child;
+  final List<DashboardSection> sections;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +47,7 @@ class DashboardShell extends StatelessWidget {
               child: Row(
                 children: [
                   _DashboardRail(
+                    sections: sections,
                     currentSection: currentSection,
                     onSectionSelected: onSectionSelected,
                   ),
@@ -64,38 +69,55 @@ class DashboardShell extends StatelessWidget {
 
 class _DashboardRail extends StatelessWidget {
   const _DashboardRail({
+    required this.sections,
     required this.currentSection,
     required this.onSectionSelected,
   });
 
   final DashboardSection currentSection;
+  final List<DashboardSection> sections;
   final ValueChanged<DashboardSection> onSectionSelected;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('dashboard-nav'),
-      width: 184,
+      width: 176,
       decoration: BoxDecoration(
         color: cardColor,
         border: Border(right: BorderSide(color: borderColor)),
       ),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
-        children: [
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 18, 12, 12),
+        child: Column(children: [
           const _RailHeader(),
           const SizedBox(height: 10),
-          for (final section in DashboardSection.values)
+          Expanded(
+              child: SingleChildScrollView(
+                  child: Column(children: [
+            for (final section in sections)
+              if (section != DashboardSection.settings)
+                DashboardNavButton(
+                    section: section,
+                    selected: section == currentSection,
+                    onTap: () => onSectionSelected(section)),
+          ]))),
+          if (sections.contains(DashboardSection.settings)) ...[
+            const SizedBox(height: 8),
+            Divider(height: 16, color: borderColor),
             DashboardNavButton(
-              section: section,
-              selected: section == currentSection,
-              onTap: () => onSectionSelected(section),
-            ),
-        ],
+                section: DashboardSection.settings,
+                selected: currentSection == DashboardSection.settings,
+                onTap: () => onSectionSelected(DashboardSection.settings)),
+          ],
+        ]),
       ),
     );
   }
 }
+
+DashboardSection sectionForModule(DashboardModule module) =>
+    DashboardSection.values.byName(module.name);
 
 class _RailHeader extends StatelessWidget {
   const _RailHeader();
@@ -108,16 +130,16 @@ class _RailHeader extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '训练工作台',
+            '我的工作台',
             style: TextStyle(
               color: textPrimaryColor,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
               fontSize: 15,
             ),
           ),
           const SizedBox(height: 2),
           Text(
-            '账号、补题和复盘',
+            '训练 · 记录 · 复盘',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(color: textSecondaryColor, fontSize: 12),
@@ -154,7 +176,7 @@ class DashboardNavButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(appRadiusControl),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: Row(
               children: [
                 AnimatedContainer(
@@ -176,7 +198,7 @@ class DashboardNavButton extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: selected ? textPrimaryColor : textSecondaryColor,
-                      fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                      fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
                     ),
                   ),
                 ),
@@ -200,53 +222,15 @@ class DashboardSectionTitle extends StatelessWidget {
   final String? subtitle;
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: accentColor.withValues(alpha: 0.11),
-            borderRadius: BorderRadius.circular(appRadiusControl),
-          ),
-          child: Icon(sectionIcon(section), color: accentColor, size: 20),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                sectionLabel(section),
-                style: TextStyle(
-                  color: textPrimaryColor,
-                  fontSize: 22,
-                  height: 1.08,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              if (subtitle != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  subtitle!,
-                  style: TextStyle(color: textSecondaryColor),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) =>
+      AppPageHeader(title: sectionLabel(section), subtitle: subtitle);
 }
 
 String sectionLabel(DashboardSection section) {
   return switch (section) {
     DashboardSection.summary => '总览',
     DashboardSection.training => '训练',
+    DashboardSection.todos => '待办事项',
     DashboardSection.heatmap => dashboardModuleLabel(DashboardModule.heatmap),
     DashboardSection.problems => dashboardModuleLabel(DashboardModule.problems),
     DashboardSection.refreshLogs =>
@@ -265,6 +249,7 @@ IconData sectionIcon(DashboardSection section) {
   return switch (section) {
     DashboardSection.summary => Icons.query_stats,
     DashboardSection.training => Icons.timer_outlined,
+    DashboardSection.todos => Icons.checklist_outlined,
     DashboardSection.heatmap => dashboardModuleIcon(DashboardModule.heatmap),
     DashboardSection.problems => dashboardModuleIcon(DashboardModule.problems),
     DashboardSection.refreshLogs =>

@@ -27,6 +27,8 @@ struct BrowserImportResult {
 };
 
 BrowserProblemImport ParseBrowserProblemImport(const std::string& json);
+// Stored tags share Flutter's schema; browser request limits do not apply.
+std::vector<std::string> ParseProblemTagsJson(const std::string& json);
 BrowserImportResult SaveBrowserProblemImport(ProblemDatabase& database,
                                              const BrowserProblemImport& input);
 

@@ -2,35 +2,43 @@
 
 OJ Float 是一个 Windows 桌面训练客户端，用来集中查看多个 Online Judge 账号的刷题进度、今日增量、补题记录、比赛记录、队友观察和刷新日志。
 
-当前预发行版本：`v0.2.0-beta+7`
+当前稳定版本：`v0.2.0`（build 8）
 
 ## 下载
 
-请在 GitHub Releases 下载最新 Windows x64 免安装包：
+在 [GitHub Releases](https://github.com/ZuesHans/oj-desktop-widget/releases/latest) 下载 Windows 10 / 11 x64 安装包：
 
 ```text
-OJ-Float-v0.2.0-beta+7-windows-x64.zip
+OJ-Float-v0.2.0-windows-x64-setup.exe
 ```
 
-使用方式：
+1. 运行安装包，按当前用户安装，无需管理员权限。
+2. 从开始菜单打开 OJ Float 或 OJ Problem Companion（轻量题库）。桌面快捷方式可在安装时选中。
+3. 首次使用可以直接保存一道题，也可以跳过引导；OJ 账号可稍后配置。
 
-1. 下载 zip 文件。
-2. 解压到任意文件夹。
-3. 运行解压后的 `oj_float.exe`。
+后续下载新版安装包覆盖安装即可；卸载默认保留题库、配置和训练记录。设置底部提供手动检查更新和下载入口。安装包尚未进行发布者代码签名。
 
-不要只复制或单独运行 `oj_float.exe`。应用需要同目录下的 `data` 文件夹和运行库 DLL。
+也提供 `OJ-Float-v0.2.0-windows-x64.zip` 免安装包。请完整解压后运行 `oj_float.exe`，保留同目录的 `data` 和所有 DLL。两种发行方式使用同一份本机数据。发布页附 SHA-256 校验文件。
 
 ## 这一版有什么变化
 
-`v0.2.0-beta` 将产品从多级悬浮窗收敛为标准 Windows 桌面客户端：
+`v0.2.0` 将产品从多级悬浮窗收敛为标准 Windows 桌面客户端：
 
 - 正常启动直接进入完整 Dashboard，使用原生标题栏、任务栏、缩放和最大化。
 - 默认关闭即退出；用户可在设置中主动开启关闭到托盘和登录时静默启动。
 - 设置集中到 Dashboard 正式页面，支持显式保存、保存并同步和未保存离开确认。
 - 移除紧凑窗、大浮窗、窗口置顶、隐藏任务栏和窗口尺寸切换。
 - 新增 Windows 单实例保护；再次启动会恢复并聚焦已有窗口。
-- 配置升级到版本 3，同时兼容旧配置和旧版便携备份。
+- 配置升级到版本 4，同时兼容旧配置和旧版便携备份。
 - 内存、磁盘、刷新和备份中的历史快照统一保留最近 6000 条。
+
+## 工作台自定义
+
+界面沿用交互演示的文字层级与留白，首页以进度摘要和训练安排为主，题库提供常驻文件夹与列表浏览。侧栏「待办事项」直达原有每日安排，与训练页共用任务和计时数据；关闭训练模块时一同隐藏。
+
+在「设置 → 桌面与功能」配置模块开关、侧栏与总览顺序、卡片半行/整行宽度；在「设置 → 外观」预览配色、切换显示模式和内容密度，保存后生效。原有页面与配色保留，新增雾青、靛蓝、暖杏。关闭模块会隐藏入口；关闭 OJ 账号或队友会停止对应抓取并取消进行中的请求，关闭训练会暂停并保存计时。关闭题库会停用主程序的浏览器导入和全局快捷录入，原生题库小程序仍可独立使用。数据、设置、备份恢复保留。
+
+题库支持新建空文件夹、未分类筛选和多标签「任一 / 全部」组合筛选。勾选题目后可批量移动、增删标签、改状态、归档恢复和导出 Markdown；原有收藏、置顶、笔记、题解及训练功能继续可用。共享数据库升级至 v4，旧数据库由主程序自动迁移；已有数据库请先启动新版主程序，再运行新版原生小程序。
 
 ## 功能
 
@@ -52,7 +60,7 @@ OJ-Float-v0.2.0-beta+7-windows-x64.zip
 
 ## 首次使用
 
-首次打开后从 Dashboard 左侧导航进入设置，填写各 OJ 的公开用户名或用户 ID。
+首次引导支持直接保存题目、配置浏览器存题或跳过。题库、笔记和待办无需 OJ 账号。需要汇总通过数时，从左侧导航进入设置，填写各 OJ 的公开用户名或用户 ID。
 
 - Codeforces：填写公开 handle。
 - LeetCode：填写公开 username。
@@ -60,7 +68,7 @@ OJ-Float-v0.2.0-beta+7-windows-x64.zip
 - 洛谷：建议填写数字 UID。
 - 牛客：优先填写个人主页里的数字用户 ID。昵称依赖第三方 OJ Hunt 或牛客搜索解析，稳定性不如数字 ID。
 
-保存后可以手动刷新，也可以等待应用按设定间隔自动刷新。
+保存后可以手动刷新，也可以等待应用按设定间隔自动刷新。每个账号显示上次成功时间、失败原因和数据待更新状态。
 
 ## 数据与隐私
 
@@ -96,6 +104,8 @@ OJ-Float-v0.2.0-beta+7-windows-x64.zip
 ## 备份与迁移
 
 OJ Float 的题库使用本地 `problem_book.sqlite3` SQLite 数据库，其他本地数据仍使用分立 JSON 文件。升级后首次读取题库时，应用会严格校验并迁移旧 `problems_v1.json`，旧文件保留不删除。OJ Float 仍使用 JSON 作为可携和轮换备份格式，而不是直接复制正在使用的数据库文件。备份带有独立 schema 版本和 SHA-256 内容校验，可以避免把临时文件或安全存储中的 Token 一并复制。
+
+稳定版数据目录为 `%APPDATA%\ZuesHans\OJ Float`，应用身份为 `io.github.zueshans.ojfloat`。首次升级会在旧程序均关闭后，将 `%APPDATA%\com.example\oj_float` 校验并迁移到新目录；旧目录保留。迁移或核心数据校验失败时，工作台会显示恢复页，提供重试、打开数据目录和从备份恢复。恢复前的目录保留为相邻的 `.before-restore-*` 文件夹。新旧目录同时存在独立数据时不会自动合并。
 
 ### 轮换自动备份
 
@@ -189,14 +199,15 @@ flutter test
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_windows_release_ninja.ps1
 ```
 
-构建并生成包含 Flutter 客户端、C++ 题库小程序和油猴脚本的发行 zip：
+安装 Inno Setup 编译器后，生成包含两个客户端、浏览器入口和运行库的安装包与 zip：
 
 ```powershell
+.\scripts\bootstrap_inno.ps1
 .\scripts\package_windows_release.ps1
+.\scripts\smoke_windows_installer.ps1
 ```
 
-打包完成后会自动把桌面的 `oj_float.exe` 和 `OJ 题库小程序` 快捷方式更新到
-最新版本目录。如不希望修改桌面快捷方式，可添加 `-SkipDesktopShortcuts`。
+打包脚本生成安装包、完整免安装 zip 和 SHA-256 校验文件，并附带 Visual C++ 运行库。安装包负责可选桌面快捷方式和卸载入口。CI 在 Windows 上验证安装、覆盖和卸载；版本标签通过全部检查后自动发布。
 
 确认 zip 内至少包含：
 
@@ -210,7 +221,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_windows_releas
 
 - 把题单、比赛、队友页面继续拆成更小的组件。
 - 增加 rating 趋势和比赛提醒。
-- 增加更完整的发行脚本，包括自动打包、校验和 release notes 生成。
 - 继续优化首次启动、空状态、错误状态和网络异常提示。
 
 ## 版权

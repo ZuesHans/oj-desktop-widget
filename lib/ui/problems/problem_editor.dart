@@ -10,10 +10,12 @@ class ProblemEditorDialog extends StatefulWidget {
   const ProblemEditorDialog({
     super.key,
     this.initial,
+    this.folders = const [],
     required this.onParseLink,
   });
 
   final ProblemRecord? initial;
+  final List<String> folders;
   final Future<ParsedProblemLink> Function(String url) onParseLink;
 
   @override
@@ -225,6 +227,13 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
                     border: OutlineInputBorder(),
                   ),
                 ),
+                if (widget.folders.isNotEmpty)
+                  Wrap(spacing: 6, children: [
+                    for (final folder in widget.folders)
+                      ActionChip(
+                          label: Text(folder),
+                          onPressed: () => _folderController.text = folder)
+                  ]),
                 const SizedBox(height: 12),
                 TextFormField(
                   key: const ValueKey('problem-note-field'),
@@ -412,7 +421,7 @@ class _ProblemEditorTitle extends StatelessWidget {
             style: TextStyle(
               color: textPrimaryColor,
               fontSize: 22,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),

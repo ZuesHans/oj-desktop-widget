@@ -69,23 +69,46 @@ Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (shouldMigrateProblemDatabase(arguments)) {
-    await LocalStore().loadProblemSnapshot();
-    exit(0);
+    try {
+      final directoryIndex = arguments.indexOf('--migration-directory');
+      if (directoryIndex >= 0 && directoryIndex + 1 >= arguments.length) {
+        throw const FormatException('Missing migration directory.');
+      }
+      final store = LocalStore(
+        supportDirectory: directoryIndex < 0
+            ? null
+            : Directory(arguments[directoryIndex + 1]),
+      );
+      await store.recoverPendingProblemTrainingTransaction();
+      await store.loadCoreBackupSnapshot();
+      exit(0);
+    } catch (error) {
+      debugPrint('Local data migration failed (${error.runtimeType}).');
+      exit(1);
+    }
   }
 
   AppConfig? initialConfig;
   var startHidden = false;
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
-    initialConfig = await LocalStore().loadConfig();
-    startHidden = shouldStartHidden(arguments, initialConfig);
+    try {
+      initialConfig =
+          await LocalStore(useFilePreferences: Platform.isWindows).loadConfig();
+      startHidden = shouldStartHidden(arguments, initialConfig);
+    } catch (error) {
+      // Show the recovery page even when preferences cannot be read.
+      debugPrint('Configuration could not be loaded (${error.runtimeType}).');
+    }
     final options = WindowOptions(
       size: appWindowSize,
       minimumSize: appMinimumWindowSize,
       center: true,
       title: AppLabels.appTitle,
       titleBarStyle: TitleBarStyle.normal,
-      backgroundColor: appPaletteFor(initialConfig.colorTheme).surface,
+      backgroundColor:
+          appPaletteFor(initialConfig?.colorTheme ?? AppColorTheme.classic)
+              .surface,
     );
     await windowManager.waitUntilReadyToShow(options, () async {
       // All close requests are routed through the app so unsaved settings can

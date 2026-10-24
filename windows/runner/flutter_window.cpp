@@ -60,6 +60,29 @@ bool FlutterWindow::OnCreate() {
             quick_entry_key_ = *key;
           }
           result->Success(flutter::EncodableValue(registered));
+        } else if (call.method_name() == "canMigrateData") {
+          bool ready = true;
+          ::EnumWindows([](HWND window, LPARAM parameter) -> BOOL {
+            DWORD process_id = 0;
+            ::GetWindowThreadProcessId(window, &process_id);
+            if (process_id == ::GetCurrentProcessId()) return TRUE;
+            wchar_t class_name[128]{};
+            wchar_t title[128]{};
+            ::GetClassNameW(window, class_name, 128);
+            ::GetWindowTextW(window, title, 128);
+            if (wcscmp(class_name, L"OjProblemCompanionWindow") == 0 ||
+                (wcscmp(class_name, L"FLUTTER_RUNNER_WIN32_WINDOW") == 0 &&
+                 wcscmp(title, L"OJ Float") == 0)) {
+              *reinterpret_cast<bool*>(parameter) = false;
+              return FALSE;
+            }
+            return TRUE;
+          }, reinterpret_cast<LPARAM>(&ready));
+          result->Success(flutter::EncodableValue(ready));
+        } else if (call.method_name() == "unregister") {
+          if (quick_entry_hotkey_id_) ::UnregisterHotKey(GetHandle(), quick_entry_hotkey_id_);
+          quick_entry_hotkey_id_ = 0;
+          result->Success();
         } else {
           result->NotImplemented();
         }

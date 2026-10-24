@@ -153,11 +153,25 @@ List<ProblemRecord> filterProblems(
   ProblemPlatform? platform,
   String? tag,
   String? folder,
+  Set<String> tags = const {},
+  bool matchAllTags = false,
 }) {
   final normalizedQuery = query.trim().toLowerCase();
   final normalizedTag = tag?.trim().toLowerCase();
   final normalizedFolder = folder?.trim().toLowerCase();
+  final selectedTags = tags
+      .map((tag) => tag.trim().toLowerCase())
+      .where((tag) => tag.isNotEmpty)
+      .toSet();
   return List.unmodifiable(problems.where((problem) {
+    if (selectedTags.isNotEmpty) {
+      final ownTags = problem.tags.map((t) => t.toLowerCase()).toSet();
+      if (matchAllTags
+          ? !selectedTags.every(ownTags.contains)
+          : !selectedTags.any(ownTags.contains)) {
+        return false;
+      }
+    }
     if (status != null && problem.status != status) {
       return false;
     }
@@ -173,7 +187,6 @@ List<ProblemRecord> filterProblems(
       return false;
     }
     if (normalizedFolder != null &&
-        normalizedFolder.isNotEmpty &&
         problem.folder.toLowerCase() != normalizedFolder) {
       return false;
     }

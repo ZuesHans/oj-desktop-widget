@@ -18,7 +18,7 @@ class AppSurfaceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(appRadiusControl);
+    final radius = BorderRadius.circular(appRadiusCard);
     final shape = RoundedRectangleBorder(
       borderRadius: radius,
       side: BorderSide(color: borderColor),
@@ -80,7 +80,7 @@ class AppEmptyState extends StatelessWidget {
                   title,
                   style: TextStyle(
                     color: textPrimaryColor,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: appSpace1),

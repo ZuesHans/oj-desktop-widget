@@ -86,6 +86,7 @@ class HomeActionService {
         config: state.config,
         snapshots: state.snapshots,
         problems: state.problems,
+        problemFolders: state.problemFolders,
         contests: state.contests,
         teammates: state.teammates,
         training: state.training,

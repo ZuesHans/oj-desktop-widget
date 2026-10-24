@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:sqlite3/sqlite3.dart';
 
 import '../models/problem_record.dart';
+import '../models/problem_batch.dart';
 
 const problemDatabaseFileName = 'problem_book.sqlite3';
 
@@ -11,10 +12,12 @@ class ProblemDatabaseSnapshot {
   const ProblemDatabaseSnapshot({
     required this.problems,
     required this.revision,
+    this.folders = const [],
   });
 
   final List<ProblemRecord> problems;
   final int revision;
+  final List<String> folders;
 }
 
 /// SQLite-backed problem storage shared by the Flutter client and the future
@@ -25,7 +28,7 @@ class ProblemDatabaseSnapshot {
 class ProblemDatabase {
   ProblemDatabase(this.file);
 
-  static const schemaVersion = 3;
+  static const schemaVersion = 4;
   static const _legacyMigrationKey = 'legacy_json_migrated';
 
   final File file;
@@ -85,11 +88,17 @@ class ProblemDatabase {
       database.execute('BEGIN');
       final revision = _readRevision(database);
       final problems = _readProblems(database);
+      final folders = database
+          .select(
+              'SELECT name FROM problem_folders ORDER BY name COLLATE NOCASE')
+          .map((row) => row['name'] as String)
+          .toList();
       database.execute('COMMIT');
       problems.sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
       return ProblemDatabaseSnapshot(
         problems: List.unmodifiable(problems),
         revision: revision,
+        folders: List.unmodifiable(folders),
       );
     } catch (_) {
       _rollback(database);
@@ -126,6 +135,25 @@ class ProblemDatabase {
     }
   }
 
+  void applyBatch(Set<String> ids, ProblemBatchChange change) {
+    final database = _open();
+    try {
+      database.execute('BEGIN IMMEDIATE');
+      final now = DateTime.now();
+      _upsertAll(
+          database,
+          _readProblems(database)
+              .where((p) => ids.contains(p.id))
+              .map((p) => change.apply(p, now)));
+      database.execute('COMMIT');
+    } catch (_) {
+      _rollback(database);
+      rethrow;
+    } finally {
+      database.close();
+    }
+  }
+
   void deleteProblem(String id) {
     final database = _open();
     try {
@@ -140,11 +168,17 @@ class ProblemDatabase {
     }
   }
 
-  void replaceProblems(List<ProblemRecord> problems) {
+  void replaceProblems(List<ProblemRecord> problems, {List<String>? folders}) {
     final database = _open();
     try {
       database.execute('BEGIN IMMEDIATE');
       database.execute('DELETE FROM problems');
+      if (folders != null) {
+        database.execute('DELETE FROM problem_folders');
+        for (final folder in folders) {
+          _createFolder(database, folder);
+        }
+      }
       _upsertAll(database, problems);
       database.execute('COMMIT');
     } catch (_) {
@@ -189,6 +223,13 @@ class ProblemDatabase {
         _runMigration(database, () {
           _migrateSchema2To3(database);
           database.execute('PRAGMA user_version = 3');
+        });
+        currentVersion = 3;
+      }
+      if (currentVersion == 3) {
+        _runMigration(database, () {
+          _migrateSchema3To4(database);
+          database.execute('PRAGMA user_version = 4');
         });
       }
       database.execute('PRAGMA synchronous = NORMAL');
@@ -286,6 +327,44 @@ class ProblemDatabase {
     database.execute(
       'CREATE INDEX IF NOT EXISTS problems_folder_idx ON problems(folder)',
     );
+  }
+
+  void createFolder(String name) {
+    final database = _open();
+    try {
+      _createFolder(database, name);
+    } finally {
+      database.close();
+    }
+  }
+
+  static void _createFolder(Database database, String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    database.execute(
+        'INSERT OR IGNORE INTO problem_folders(name) VALUES (?)', [trimmed]);
+  }
+
+  static void _migrateSchema3To4(Database database) {
+    database.execute(
+        'CREATE TABLE problem_folders (name TEXT PRIMARY KEY COLLATE NOCASE NOT NULL CHECK(length(trim(name)) > 0))');
+    database.execute(
+        "INSERT OR IGNORE INTO problem_folders(name) SELECT DISTINCT trim(folder) FROM problems WHERE trim(folder) != ''");
+    for (final operation in ['INSERT', 'UPDATE', 'DELETE']) {
+      database.execute(
+          '''CREATE TRIGGER folders_revision_after_${operation.toLowerCase()}
+        AFTER $operation ON problem_folders BEGIN
+          UPDATE problem_change_state SET revision = revision + 1 WHERE singleton = 1;
+        END''');
+    }
+    // Both clients register folders through the same database triggers.
+    for (final operation in ['INSERT', 'UPDATE OF folder']) {
+      final name = operation.startsWith('INSERT') ? 'insert' : 'update';
+      database.execute('''CREATE TRIGGER problems_folder_after_$name
+        AFTER $operation ON problems WHEN length(trim(NEW.folder)) > 0 BEGIN
+          INSERT INTO problem_folders(name) SELECT trim(NEW.folder) WHERE NOT EXISTS (SELECT 1 FROM problem_folders WHERE name = trim(NEW.folder) COLLATE NOCASE);
+        END''');
+    }
   }
 
   static void _upsertAll(Database database, Iterable<ProblemRecord> problems) {

@@ -8,6 +8,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/oj_catalog.dart';
 import '../../core/solved_totals.dart';
@@ -24,6 +25,7 @@ import '../../services/browser_import_service.dart';
 import '../../services/heatmap_service.dart';
 import '../../services/home_action_service.dart';
 import '../../services/local_store.dart';
+import '../../services/data_recovery_service.dart';
 import '../../services/oj_controller.dart';
 import '../../services/quick_entry_hotkey_service.dart';
 import '../../services/refresh_service.dart';
@@ -36,19 +38,23 @@ import '../heatmap/heatmap_entry_panel.dart';
 import '../heatmap/heatmap_page.dart';
 import '../problems/problems_entry_panel.dart';
 import '../problems/problems_page.dart';
+import '../problems/problem_editor.dart';
 import '../refresh_logs/refresh_logs_entry_panel.dart';
 import '../refresh_logs/refresh_logs_page.dart';
 import '../settings/settings_page.dart';
 import '../teammates/teammates_entry_panel.dart';
 import '../teammates/teammates_page.dart';
 import '../training/training_page.dart';
+import '../training/training_agenda_panel.dart';
 import 'dashboard_navigation.dart';
-import 'dashboard_overview_layout.dart';
+import '../shared/app_surface_card.dart';
 import 'daily_panel.dart';
 import 'home_summary_panel.dart';
 import 'home_summary_view_model.dart';
 import 'oj_tile.dart';
 import 'window_header.dart';
+import 'startup_status_page.dart';
+import 'first_run_card.dart';
 
 export 'home_summary_view_model.dart';
 
@@ -61,6 +67,7 @@ class OjFloatHome extends StatefulWidget {
     this.browserImportServer,
     this.enablePlatformIntegration = true,
     this.autoInitializeController = true,
+    this.storage,
   });
 
   final AppConfig? initialConfig;
@@ -69,6 +76,7 @@ class OjFloatHome extends StatefulWidget {
   final BrowserImportServer? browserImportServer;
   final bool enablePlatformIntegration;
   final bool autoInitializeController;
+  final LocalStore? storage;
 
   @override
   State<OjFloatHome> createState() => _OjFloatHomeState();
@@ -97,6 +105,11 @@ class _OjFloatHomeState extends State<OjFloatHome>
   bool _previousMinimized = false;
   bool _exiting = false;
   bool _handlingWindowClose = false;
+  bool _ready = false;
+  bool _initializing = false;
+  bool _restoring = false;
+  Object? _initializationError;
+  bool _finishingOnboarding = false;
 
   @override
   void initState() {
@@ -106,7 +119,11 @@ class _OjFloatHomeState extends State<OjFloatHome>
     _browserImportServer = widget.browserImportServer ?? BrowserImportServer();
     _browserImportTokenStore = SecureBrowserImportTokenStore();
     _controller = OjController(
-      storage: LocalStore(),
+      storage: widget.storage ??
+          LocalStore(
+              useFilePreferences: Platform.isWindows &&
+                  widget.enablePlatformIntegration &&
+                  widget.autoInitializeController),
       startupService: widget.enablePlatformIntegration
           ? LaunchAtStartupService()
           : NoopStartupService(),
@@ -133,24 +150,41 @@ class _OjFloatHomeState extends State<OjFloatHome>
       _windowShell.addTrayListener(this);
       _windowShell.addWindowListener(this);
     }
+    _ready = !widget.autoInitializeController;
     if (widget.autoInitializeController) {
       unawaited(_initialize());
     }
   }
 
   Future<void> _initialize() async {
+    if (_initializing || _ready) return;
+    setState(() {
+      _initializing = true;
+      _initializationError = null;
+    });
     try {
       // A silent startup must expose its tray affordance before any network
       // refresh begins, otherwise a slow provider can leave the app hidden and
       // temporarily unreachable.
       if (widget.enablePlatformIntegration && widget.initialConfig != null) {
-        await _applyShellConfig(widget.initialConfig!);
+        try {
+          await _applyShellConfig(widget.initialConfig!,
+              persistFallback: false);
+        } catch (error) {
+          if (mounted) _showFeedback('托盘未就绪，已显示主窗口：$error');
+        }
       }
-      await _controller.init();
-      if (widget.enablePlatformIntegration && Platform.isWindows) {
+      await _controller.init(refreshOnStart: false);
+      if (!mounted) return;
+      setState(() => _ready = true);
+      if (widget.enablePlatformIntegration &&
+          Platform.isWindows &&
+          _controller.state.config.moduleEnabled(DashboardModule.problems)) {
         await _registerQuickEntry();
       }
-      _syncToken = await _controller.loadSyncToken();
+      _syncToken = widget.enablePlatformIntegration
+          ? await _controller.loadSyncToken()
+          : '';
       if (widget.enablePlatformIntegration) {
         await _startBrowserImportService();
       }
@@ -162,8 +196,73 @@ class _OjFloatHomeState extends State<OjFloatHome>
         await _windowShell.showAndFocus();
       }
       if (mounted) {
-        _showFeedback('初始化失败：$error');
+        if (_ready) {
+          _showFeedback('本地数据已读取，部分桌面服务未就绪：$error');
+        } else {
+          setState(() => _initializationError = error);
+        }
       }
+    } finally {
+      if (mounted) setState(() => _initializing = false);
+      if (mounted && _ready) unawaited(_refreshAfterStartup());
+    }
+  }
+
+  Future<void> _refreshAfterStartup() async {
+    try {
+      await _controller.refresh();
+      if (mounted) await _controller.maybeAutoRefreshTeammates();
+    } catch (error) {
+      if (mounted) _showFeedback('自动刷新未完成：$error');
+    }
+  }
+
+  Future<void> _restoreLocalData() async {
+    final selection = await FilePicker.platform
+        .pickFiles(type: FileType.custom, allowedExtensions: const ['json']);
+    final path = selection?.files.single.path;
+    if (path == null || !mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('从备份恢复本地数据？'),
+        content: const Text('先校验备份，再替换本地题库与训练记录。'
+            '当前数据文件夹会完整保留。请先关闭题库小程序。'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('恢复')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _restoring = true);
+    try {
+      final directory = await _controller.storage.recoveryDirectory();
+      final retained =
+          await DataRecoveryService().restore(File(path), directory);
+      if (!mounted) return;
+      _showFeedback('恢复完成，原始文件保留在 ${retained.path}');
+      await _initialize();
+    } catch (error) {
+      if (mounted) setState(() => _initializationError = error);
+    } finally {
+      if (mounted) setState(() => _restoring = false);
+    }
+  }
+
+  Future<void> _openDataDirectory() async {
+    try {
+      final directory = await _controller.storage.recoveryDirectory();
+      if (!await launchUrl(directory.uri,
+          mode: LaunchMode.externalApplication)) {
+        throw const FileSystemException('无法打开数据文件夹。');
+      }
+    } catch (error) {
+      if (mounted) _showFeedback('$error');
     }
   }
 
@@ -193,7 +292,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
         await _windowShell.showAndFocus();
         break;
       case WindowShellTrayCommand.refresh:
-        await _controller.refresh();
+        if (_ready) await _controller.refresh();
         break;
       case WindowShellTrayCommand.exit:
         await _exitApp();
@@ -221,7 +320,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
       if (!await _confirmSettingsCanLeave()) {
         return;
       }
-      if (_controller.state.config.closeToTray) {
+      if (_ready && _controller.state.config.closeToTray) {
         await _windowShell.hide();
       } else {
         await _exitApp(confirmUnsaved: false);
@@ -237,39 +336,59 @@ class _OjFloatHomeState extends State<OjFloatHome>
       animation: _controller,
       builder: (context, _) {
         return Theme(
-          data: buildAppTheme(_controller.state.config.colorTheme),
-          child: Stack(children: [
-            Offstage(
-                offstage: _quickEntry,
-                child: OverflowBox(
-                    minWidth: _quickEntry ? appWindowSize.width : null,
-                    maxWidth: _quickEntry ? appWindowSize.width : null,
-                    minHeight: _quickEntry ? appWindowSize.height : null,
-                    maxHeight: _quickEntry ? appWindowSize.height : null,
-                    child: DashboardShell(
-                      header: WindowHeader(
-                        sectionLabel: sectionLabel(_dashboardSection),
-                        refreshing: _controller.refreshing,
-                        onRefresh:
-                            _controller.refreshing ? null : _controller.refresh,
-                        quickEntryHotkey:
-                            _controller.state.config.quickEntryHotkey,
-                        onQuickEntry: () => unawaited(_openQuickEntry()),
-                        onSettings: () => unawaited(
-                          _selectSection(DashboardSection.settings),
-                        ),
-                      ),
-                      currentSection: _dashboardSection,
-                      onSectionSelected: (section) =>
-                          unawaited(_selectSection(section)),
-                      child: _dashboardContent(context),
-                    ))),
-            if (_quickEntry)
-              QuickEntryView(
-                  onParse: _controller.parseProblemLink,
-                  onSave: _controller.saveProblem,
-                  onClose: () => unawaited(_closeQuickEntry())),
-          ]),
+          data: buildAppTheme(
+            _controller.state.config.colorTheme,
+            _controller.state.config.appearanceMode,
+            MediaQuery.platformBrightnessOf(context),
+            _controller.state.config.compactDensity,
+          ),
+          child: !_ready
+              ? StartupStatusPage(
+                  error: _initializationError,
+                  restoring: _restoring,
+                  onRetry: () => unawaited(_initialize()),
+                  onRestore: () => unawaited(_restoreLocalData()),
+                  onOpenDirectory: () => unawaited(_openDataDirectory()),
+                )
+              : Stack(children: [
+                  Offstage(
+                      offstage: _quickEntry,
+                      child: OverflowBox(
+                          minWidth: _quickEntry ? appWindowSize.width : null,
+                          maxWidth: _quickEntry ? appWindowSize.width : null,
+                          minHeight: _quickEntry ? appWindowSize.height : null,
+                          maxHeight: _quickEntry ? appWindowSize.height : null,
+                          child: DashboardShell(
+                            header: WindowHeader(
+                              sectionLabel: sectionLabel(_effectiveSection),
+                              refreshing: _controller.refreshing,
+                              onRefresh: _controller.refreshing ||
+                                      !_controller.state.config.moduleEnabled(
+                                          DashboardModule.ojAccounts)
+                                  ? null
+                                  : _controller.refresh,
+                              quickEntryHotkey:
+                                  _controller.state.config.quickEntryHotkey,
+                              onQuickEntry: _controller.state.config
+                                      .moduleEnabled(DashboardModule.problems)
+                                  ? () => unawaited(_openQuickEntry())
+                                  : null,
+                              onSettings: () => unawaited(
+                                _selectSection(DashboardSection.settings),
+                              ),
+                            ),
+                            currentSection: _effectiveSection,
+                            sections: _sections,
+                            onSectionSelected: (section) =>
+                                unawaited(_selectSection(section)),
+                            child: _dashboardContent(context),
+                          ))),
+                  if (_quickEntry)
+                    QuickEntryView(
+                        onParse: _controller.parseProblemLink,
+                        onSave: _controller.saveProblem,
+                        onClose: () => unawaited(_closeQuickEntry())),
+                ]),
         );
       },
     );
@@ -281,13 +400,21 @@ class _OjFloatHomeState extends State<OjFloatHome>
     });
     try {
       await _hotkeyService.register(_controller.state.config.quickEntryHotkey);
+      if (!mounted ||
+          !_controller.state.config.moduleEnabled(DashboardModule.problems)) {
+        await _hotkeyService.unregister();
+      }
     } catch (error) {
       if (mounted) _showFeedback('快捷键未生效：$error');
     }
   }
 
   Future<void> _openQuickEntry() async {
-    if (_quickTransition) return;
+    if (!_ready ||
+        _quickTransition ||
+        !_controller.state.config.moduleEnabled(DashboardModule.problems)) {
+      return;
+    }
     if (_quickEntry) {
       if (widget.enablePlatformIntegration) await _windowShell.showAndFocus();
       return;
@@ -336,11 +463,26 @@ class _OjFloatHomeState extends State<OjFloatHome>
     }
   }
 
+  List<DashboardSection> get _sections => [
+        for (final module in _controller.state.config.dashboardOrder)
+          if (_controller.state.config.moduleEnabled(module)) ...[
+            sectionForModule(module),
+            if (module == DashboardModule.training) DashboardSection.todos,
+          ],
+        DashboardSection.settings,
+      ];
+
+  DashboardSection get _effectiveSection =>
+      _sections.contains(_dashboardSection)
+          ? _dashboardSection
+          : _sections.first;
+
   Future<void> _selectSection(DashboardSection section) async {
-    if (section == _dashboardSection) {
+    if (!_sections.contains(section)) return;
+    if (section == _effectiveSection) {
       return;
     }
-    if (_dashboardSection == DashboardSection.settings) {
+    if (_effectiveSection == DashboardSection.settings) {
       final canLeave = await _confirmSettingsCanLeave();
       if (!canLeave) {
         return;
@@ -352,13 +494,15 @@ class _OjFloatHomeState extends State<OjFloatHome>
   }
 
   Widget _dashboardContent(BuildContext context) {
-    return switch (_dashboardSection) {
+    return switch (_effectiveSection) {
       DashboardSection.summary => ListView(
           key: const ValueKey('dashboard-section-summary'),
-          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
           children: _dashboardSummaryWidgets(context),
         ),
-      DashboardSection.training => TrainingPage(
+      DashboardSection.training || DashboardSection.todos => TrainingPage(
+          key: ValueKey(_effectiveSection),
+          tasksOnly: _effectiveSection == DashboardSection.todos,
           problems: _controller.state.problems,
           contests: _controller.state.contests,
           training: _controller.state.training,
@@ -384,6 +528,9 @@ class _OjFloatHomeState extends State<OjFloatHome>
         ),
       DashboardSection.problems => ProblemsPage(
           problems: _controller.state.problems,
+          folders: _controller.state.problemFolders,
+          onCreateFolder: _controller.createProblemFolder,
+          onBatch: _controller.applyProblemBatch,
           onBack: () {},
           onParseLink: _controller.parseProblemLink,
           onSave: _controller.saveProblem,
@@ -393,7 +540,10 @@ class _OjFloatHomeState extends State<OjFloatHome>
           onTogglePinned: _controller.toggleProblemPinned,
           onRestore: _controller.restoreProblem,
           onPermanentDelete: _controller.permanentlyDeleteProblem,
-          onStartTraining: (problem) => _startTraining(problem, null),
+          onStartTraining:
+              _controller.state.config.moduleEnabled(DashboardModule.training)
+                  ? (problem) => _startTraining(problem, null)
+                  : null,
           showBackButton: false,
         ),
       DashboardSection.refreshLogs => RefreshLogsPage(
@@ -423,7 +573,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
         ),
       DashboardSection.ojAccounts => ListView(
           key: const ValueKey('dashboard-section-oj-accounts'),
-          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
           children: [
             const DashboardSectionTitle(section: DashboardSection.ojAccounts),
             const SizedBox(height: 10),
@@ -434,13 +584,16 @@ class _OjFloatHomeState extends State<OjFloatHome>
                 results: _controller.state.latest[meta.id] ?? const [],
                 today: _controller.todayDeltaFor(meta.id),
                 accountActivity: _controller.todayActivityByAccountFor(meta.id),
+                snapshots: _controller.state.snapshots,
+                refreshIntervalMinutes:
+                    _controller.state.config.refreshIntervalMinutes,
               ),
             ),
           ],
         ),
       DashboardSection.daily => ListView(
           key: const ValueKey('dashboard-section-daily'),
-          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
           children: [
             const DashboardSectionTitle(section: DashboardSection.daily),
             const SizedBox(height: 10),
@@ -451,6 +604,8 @@ class _OjFloatHomeState extends State<OjFloatHome>
           key: _settingsKey,
           config: _controller.state.config,
           initialSyncToken: _syncToken,
+          onExport: _exportData,
+          onImport: _importData,
           browserImportToken: _browserImportToken,
           browserImportRunning: _browserImportServer.isRunning,
           browserImportPort:
@@ -475,61 +630,138 @@ class _OjFloatHomeState extends State<OjFloatHome>
       syncing: _controller.syncing,
       lastSyncResult: _controller.lastSyncResult,
     );
+    final config = _controller.state.config;
+    final panels = <DashboardModule, Widget>{
+      DashboardModule.summary: HomeSummaryPanel(
+        viewModel: viewModel,
+        enabledActions: [
+          for (final target in HomeActionTarget.values)
+            if (config
+                .moduleEnabled(DashboardModule.values.byName(target.name)))
+              target
+        ],
+        onOpenSettings: () =>
+            unawaited(_selectSection(DashboardSection.settings)),
+        onRefresh: config.moduleEnabled(DashboardModule.ojAccounts) &&
+                !_controller.refreshing
+            ? _controller.refresh
+            : null,
+        onOpenAction: _openHomeAction,
+      ),
+      DashboardModule.training: TrainingAgendaPanel(
+        training: _controller.state.training,
+        problems: _controller.state.problems,
+        onOpen: () => unawaited(_selectSection(DashboardSection.todos)),
+        onStart: (problem, taskId) =>
+            unawaited(_startTraining(problem, taskId)),
+      ),
+      DashboardModule.heatmap: HeatmapEntryPanel(
+          summary: HeatmapSummary.fromSnapshots(_controller.state.snapshots),
+          onOpen: () => unawaited(_selectSection(DashboardSection.heatmap)),
+          onExport: _exportData,
+          onImport: _importData),
+      DashboardModule.problems: ProblemsEntryPanel(
+          problems: _controller.state.problems,
+          onOpen: () => unawaited(_selectSection(DashboardSection.problems))),
+      DashboardModule.refreshLogs: RefreshLogsEntryPanel(
+          logs: _controller.state.refreshLogs,
+          onOpen: () =>
+              unawaited(_selectSection(DashboardSection.refreshLogs))),
+      DashboardModule.contests: ContestsEntryPanel(
+          contests: _controller.state.contests,
+          onOpen: () => unawaited(_selectSection(DashboardSection.contests))),
+      DashboardModule.teammates: TeammatesEntryPanel(
+          teammates: _controller.state.teammates,
+          todayRanking: _controller.teammateTodayRanking(),
+          onOpen: () => unawaited(_selectSection(DashboardSection.teammates))),
+      DashboardModule.ojAccounts:
+          _workspaceEntry(DashboardModule.ojAccounts, '查看五个平台的账号、通过数与刷新状态'),
+      DashboardModule.daily: DailyPanel(state: _controller.state),
+    };
     return [
       const DashboardSectionTitle(
-        section: DashboardSection.summary,
-        subtitle: '先看今天是否有推进，再处理补题、刷新和同步问题。',
-      ),
-      const SizedBox(height: 10),
-      DashboardOverviewLayout(
-        primary: HomeSummaryPanel(
-          viewModel: viewModel,
-          onOpenSettings: () => unawaited(
-            _selectSection(DashboardSection.settings),
-          ),
-          onRefresh: _controller.refreshing ? null : _controller.refresh,
-          onOpenAction: _openHomeAction,
+          section: DashboardSection.summary, subtitle: '先看今天是否有进步，再继续训练与复盘。'),
+      const SizedBox(height: 14),
+      if (widget.autoInitializeController &&
+          !config.onboardingComplete &&
+          _controller.state.problems.isEmpty &&
+          config.moduleEnabled(DashboardModule.problems)) ...[
+        FirstRunCard(
+          busy: _finishingOnboarding,
+          onCreateProblem: () => unawaited(_createFirstProblem()),
+          onConnectAccounts: () => unawaited(_openSetup(accounts: true)),
+          onBrowserHelp: () => unawaited(_openSetup(accounts: false)),
+          onSkip: () => unawaited(_finishOnboarding()),
         ),
-        aside: [
-          HeatmapEntryPanel(
-            summary: HeatmapSummary.fromSnapshots(_controller.state.snapshots),
-            onOpen: () => unawaited(
-              _selectSection(DashboardSection.heatmap),
-            ),
-            onExport: _exportData,
-            onImport: _importData,
-          ),
-          ProblemsEntryPanel(
-            problems: _controller.state.problems,
-            onOpen: () => unawaited(
-              _selectSection(DashboardSection.problems),
-            ),
-          ),
-          RefreshLogsEntryPanel(
-            logs: _controller.state.refreshLogs,
-            onOpen: () => unawaited(
-              _selectSection(DashboardSection.refreshLogs),
-            ),
-          ),
-        ],
-        bottom: [
-          ContestsEntryPanel(
-            contests: _controller.state.contests,
-            onOpen: () => unawaited(
-              _selectSection(DashboardSection.contests),
-            ),
-          ),
-          TeammatesEntryPanel(
-            teammates: _controller.state.teammates,
-            todayRanking: _controller.teammateTodayRanking(),
-            onOpen: () => unawaited(
-              _selectSection(DashboardSection.teammates),
-            ),
-          ),
-          DailyPanel(state: _controller.state),
-        ],
-      ),
+        const SizedBox(height: 16),
+      ],
+      LayoutBuilder(builder: (context, constraints) {
+        final halfWidth = constraints.maxWidth >= 700
+            ? (constraints.maxWidth - appSpace4) / 2
+            : constraints.maxWidth;
+        return Wrap(spacing: appSpace4, runSpacing: appSpace4, children: [
+          for (final module in config.dashboardOrder)
+            if (config.moduleEnabled(module))
+              SizedBox(
+                  key: ValueKey('dashboard-module-${module.name}'),
+                  width: module == DashboardModule.summary ||
+                          config.wideDashboardModules.contains(module)
+                      ? constraints.maxWidth
+                      : halfWidth,
+                  child: panels[module]),
+        ]);
+      }),
     ];
+  }
+
+  Widget _workspaceEntry(DashboardModule module, String description) =>
+      AppSurfaceCard(
+        child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(dashboardModuleIcon(module), color: accentColor),
+            title: Text(dashboardModuleLabel(module),
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text(description),
+            trailing: const Icon(Icons.arrow_forward),
+            onTap: () => unawaited(_selectSection(sectionForModule(module)))),
+      );
+
+  Future<void> _finishOnboarding() async {
+    if (_finishingOnboarding) return;
+    setState(() => _finishingOnboarding = true);
+    try {
+      await _controller.saveConfig(
+          _controller.state.config.copyWith(onboardingComplete: true));
+    } catch (error) {
+      if (mounted) _showFeedback('无法保存引导状态：$error');
+    } finally {
+      if (mounted) setState(() => _finishingOnboarding = false);
+    }
+  }
+
+  Future<void> _createFirstProblem() async {
+    final problem = await showDialog<ProblemRecord>(
+      context: context,
+      builder: (context) => ProblemEditorDialog(
+          folders: _controller.state.problemFolders,
+          onParseLink: _controller.parseProblemLink),
+    );
+    if (problem == null || !mounted) return;
+    try {
+      await _controller.saveProblem(problem);
+      await _finishOnboarding();
+      if (mounted) await _selectSection(DashboardSection.problems);
+    } catch (error) {
+      if (mounted) _showFeedback('题目未能保存：$error');
+    }
+  }
+
+  Future<void> _openSetup({required bool accounts}) async {
+    await _selectSection(DashboardSection.settings);
+    await WidgetsBinding.instance.endOfFrame;
+    if (mounted) {
+      await _settingsKey.currentState?.revealSetup(accounts: accounts);
+    }
   }
 
   void _openHomeAction(HomeActionTarget target) {
@@ -548,7 +780,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
     final nativeHotkey = widget.enablePlatformIntegration && Platform.isWindows;
     // Native registration reserves the new combination before releasing the old
     // one. A conflict must not persist an unusable setting or show save success.
-    if (nativeHotkey) {
+    if (nativeHotkey && result.config.moduleEnabled(DashboardModule.problems)) {
       await _hotkeyService.register(result.config.quickEntryHotkey);
     }
     try {
@@ -563,15 +795,17 @@ class _OjFloatHomeState extends State<OjFloatHome>
     } catch (_) {
       // saveConfig may persist successfully then fail at startup integration.
       // Restore the registration to whichever config actually remains in state.
-      if (nativeHotkey) {
+      if (widget.enablePlatformIntegration) {
         try {
-          await _hotkeyService
-              .register(_controller.state.config.quickEntryHotkey);
+          await _syncProblemEntrypoints();
         } catch (error) {
           if (mounted) _showFeedback('恢复快捷键失败：$error');
         }
       }
       rethrow;
+    }
+    if (widget.enablePlatformIntegration) {
+      await _syncProblemEntrypoints();
     }
     if (mounted) {
       setState(() => _syncToken = result.syncToken);
@@ -580,7 +814,8 @@ class _OjFloatHomeState extends State<OjFloatHome>
     }
   }
 
-  Future<void> _applyShellConfig(AppConfig config) async {
+  Future<void> _applyShellConfig(AppConfig config,
+      {bool persistFallback = true}) async {
     try {
       if (config.closeToTray) {
         await _windowShell.setTrayEnabled(true);
@@ -596,7 +831,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
         closeToTray: false,
         launchAtStartup: false,
       );
-      await _controller.saveConfig(fallback);
+      if (persistFallback) await _controller.saveConfig(fallback);
       rethrow;
     }
   }
@@ -609,6 +844,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
   }
 
   Future<void> _importData() async {
+    if (!await _confirmSettingsCanLeave() || !mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -635,6 +871,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
     }
     if (feedback.isSuccess && widget.enablePlatformIntegration) {
       await _applyShellConfig(_controller.state.config);
+      await _syncProblemEntrypoints();
     }
     _showFeedback(feedback.message);
   }
@@ -693,13 +930,35 @@ class _OjFloatHomeState extends State<OjFloatHome>
     }
   }
 
+  Future<void> _syncProblemEntrypoints() async {
+    if (_controller.state.config.moduleEnabled(DashboardModule.problems)) {
+      if (Platform.isWindows) await _registerQuickEntry();
+      await _startBrowserImportService();
+    } else {
+      if (Platform.isWindows) await _hotkeyService.unregister();
+      await _stopBrowserImportServer();
+    }
+  }
+
   Future<void> _startBrowserImportService() async {
+    if (!_controller.state.config.moduleEnabled(DashboardModule.problems)) {
+      return;
+    }
     try {
       final token = await _browserImportTokenStore.getOrCreateToken();
+      if (!mounted ||
+          !_controller.state.config.moduleEnabled(DashboardModule.problems)) {
+        return;
+      }
       await _browserImportServer.start(
         token: token,
         importer: _controller.importBrowserProblem,
       );
+      if (!mounted ||
+          !_controller.state.config.moduleEnabled(DashboardModule.problems)) {
+        await _stopBrowserImportServer();
+        return;
+      }
       if (mounted) {
         setState(() {
           _browserImportToken = token;
@@ -720,11 +979,16 @@ class _OjFloatHomeState extends State<OjFloatHome>
       final token = await _browserImportTokenStore.rotateToken();
       if (_browserImportServer.isRunning) {
         await _browserImportServer.updateToken(token);
-      } else {
+      } else if (_controller.state.config
+          .moduleEnabled(DashboardModule.problems)) {
         await _browserImportServer.start(
           token: token,
           importer: _controller.importBrowserProblem,
         );
+      }
+      if (!mounted ||
+          !_controller.state.config.moduleEnabled(DashboardModule.problems)) {
+        await _stopBrowserImportServer();
       }
       if (mounted) {
         setState(() {
@@ -755,7 +1019,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
   }
 
   Future<bool> _confirmSettingsCanLeave() async {
-    if (_dashboardSection != DashboardSection.settings) {
+    if (_effectiveSection != DashboardSection.settings) {
       return true;
     }
     return await _settingsKey.currentState?.confirmCanLeave() ?? true;

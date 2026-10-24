@@ -7,15 +7,17 @@ import '../core/time.dart';
 import '../models/app_config.dart';
 import '../models/fetch_result.dart';
 import '../providers/oj_provider.dart';
+import 'module_http_client.dart';
 
 class RefreshService {
   RefreshService({
-    required this.client,
+    required http.Client client,
     required this.providers,
     DateTime Function()? now,
-  }) : now = now ?? DateTime.now;
+  })  : client = ModuleHttpClient(client),
+        now = now ?? DateTime.now;
 
-  final http.Client client;
+  final ModuleHttpClient client;
   final Map<String, OjProvider> providers;
   final DateTime Function() now;
 

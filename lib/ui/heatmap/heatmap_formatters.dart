@@ -72,7 +72,7 @@ class HeatmapStat extends StatelessWidget {
                 style: TextStyle(
                   color: textSecondaryColor,
                   fontSize: 11,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 2),
@@ -83,7 +83,7 @@ class HeatmapStat extends StatelessWidget {
                 style: TextStyle(
                   color: textPrimaryColor,
                   fontSize: 16,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],

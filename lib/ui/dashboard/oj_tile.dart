@@ -4,6 +4,7 @@ import '../../core/solved_totals.dart';
 import '../../models/app_config.dart';
 import '../../models/fetch_result.dart';
 import '../../models/oj_meta.dart';
+import '../../models/solved_snapshot.dart';
 import '../../services/daily_summary_service.dart';
 import '../app_theme.dart';
 
@@ -15,6 +16,8 @@ class OjTile extends StatelessWidget {
     required this.results,
     required this.today,
     required this.accountActivity,
+    this.snapshots = const [],
+    this.refreshIntervalMinutes = 60,
   });
 
   final OjMeta meta;
@@ -22,6 +25,8 @@ class OjTile extends StatelessWidget {
   final List<FetchResult> results;
   final int today;
   final Map<String, DailyActivityValue> accountActivity;
+  final List<SolvedSnapshot> snapshots;
+  final int refreshIntervalMinutes;
 
   @override
   Widget build(BuildContext context) {
@@ -57,10 +62,10 @@ class OjTile extends StatelessWidget {
     };
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(appRadiusCard),
         border: Border.all(color: borderColor),
       ),
       child: Row(
@@ -69,10 +74,10 @@ class OjTile extends StatelessWidget {
             radius: 18,
             backgroundColor: enabled
                 ? Theme.of(context).colorScheme.primaryContainer
-                : Colors.grey.shade200,
+                : cardMutedColor,
             child: Text(meta.name.characters.first),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -80,7 +85,7 @@ class OjTile extends StatelessWidget {
                 Text(meta.name,
                     style: TextStyle(
                       color: textPrimaryColor,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w500,
                     )),
                 Text(
                   usernames.isEmpty ? meta.hint : usernames.join(', '),
@@ -92,6 +97,8 @@ class OjTile extends StatelessWidget {
                   (result) => _AccountResultLine(
                     result: result,
                     activity: accountActivity[result.username],
+                    lastSuccess: _lastSuccess(result),
+                    staleAfter: Duration(minutes: refreshIntervalMinutes * 2),
                   ),
                 ),
                 ...pendingUsernames.map(
@@ -106,7 +113,7 @@ class OjTile extends StatelessWidget {
               Text(solvedText,
                   style: TextStyle(
                     color: textPrimaryColor,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   )),
               Text(
                 todayText,
@@ -118,13 +125,33 @@ class OjTile extends StatelessWidget {
       ),
     );
   }
+
+  DateTime? _lastSuccess(FetchResult result) {
+    DateTime? latest =
+        result.status == FetchStatus.success ? result.fetchedAt : null;
+    for (final snapshot in snapshots) {
+      if (snapshot.ojId == meta.id &&
+          snapshot.username == result.username &&
+          snapshot.status == FetchStatus.success &&
+          (latest == null || snapshot.fetchedAt.isAfter(latest))) {
+        latest = snapshot.fetchedAt;
+      }
+    }
+    return latest;
+  }
 }
 
 class _AccountResultLine extends StatelessWidget {
-  const _AccountResultLine({required this.result, required this.activity});
+  const _AccountResultLine(
+      {required this.result,
+      required this.activity,
+      required this.lastSuccess,
+      required this.staleAfter});
 
   final FetchResult result;
   final DailyActivityValue? activity;
+  final DateTime? lastSuccess;
+  final Duration staleAfter;
 
   @override
   Widget build(BuildContext context) {
@@ -141,6 +168,9 @@ class _AccountResultLine extends StatelessWidget {
     };
     final color =
         result.status == FetchStatus.failure ? dangerColor : textSecondaryColor;
+    final stale = lastSuccess != null &&
+        (result.status == FetchStatus.failure ||
+            DateTime.now().difference(lastSuccess!) > staleAfter);
 
     return Padding(
       padding: const EdgeInsets.only(top: 3),
@@ -162,22 +192,38 @@ class _AccountResultLine extends StatelessWidget {
                 style: TextStyle(
                   color: color,
                   fontSize: 12,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
           ),
           if (result.error != null)
-            Text(
-              result.error!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: dangerColor, fontSize: 12),
-            ),
+            Tooltip(
+                message: result.error!,
+                child: Text(
+                  result.error!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: dangerColor, fontSize: 12),
+                )),
+          Text(
+              lastSuccess == null
+                  ? '尚无成功记录'
+                  : '上次成功 ${_timestamp(lastSuccess!)}${stale ? ' · 数据待更新' : ''}',
+              style: Theme.of(context).textTheme.bodySmall),
+          if (result.fetchedAt != null && result.status == FetchStatus.failure)
+            Text('本次失败 ${_timestamp(result.fetchedAt!)}',
+                style: Theme.of(context).textTheme.bodySmall),
         ],
       ),
     );
   }
+}
+
+String _timestamp(DateTime value) {
+  final local = value.toLocal();
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
 }
 
 class _PendingAccountLine extends StatelessWidget {

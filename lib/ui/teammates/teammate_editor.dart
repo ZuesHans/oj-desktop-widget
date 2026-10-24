@@ -214,7 +214,7 @@ class _TeammateEditorTitle extends StatelessWidget {
             style: TextStyle(
               color: textPrimaryColor,
               fontSize: 22,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),

@@ -92,6 +92,9 @@ void main() {
       config: AppConfig.defaults().copyWith(closeToTray: true),
     );
     await openSettings(tester);
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('close-to-tray-switch')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('close-to-tray-switch')));
     await tester.pumpAndSettle();
 

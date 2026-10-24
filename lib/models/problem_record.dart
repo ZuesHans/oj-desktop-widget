@@ -537,3 +537,23 @@ String buildProblemId(DateTime time) {
   final micros = time.microsecondsSinceEpoch.toRadixString(36);
   return 'p$micros';
 }
+
+List<String> parseProblemFolders(
+    Object? raw, Iterable<ProblemRecord> problems) {
+  if (raw != null &&
+      (raw is! List ||
+          raw.any((item) => item is! String || item.trim().isEmpty))) {
+    throw const FormatException('文件夹数据无效。');
+  }
+  final names = <String, String>{};
+  for (final name in [
+    ...?((raw as List?)?.cast<String>()),
+    ...problems.map((p) => p.folder)
+  ]) {
+    if (name.trim().isNotEmpty) {
+      names.putIfAbsent(name.trim().toLowerCase(), () => name.trim());
+    }
+  }
+  return List.unmodifiable(names.values.toList()
+    ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase())));
+}

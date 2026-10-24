@@ -6,6 +6,7 @@ import '../../core/solved_totals.dart';
 import '../../models/contest_record.dart';
 import '../app_theme.dart';
 import '../shared/app_surface_card.dart';
+import '../shared/app_page_header.dart';
 import '../shared/pill.dart';
 import 'contest_editor.dart';
 
@@ -46,72 +47,32 @@ class ContestsPage extends StatelessWidget {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(
-                  appSpace4, 10, appSpace4, appSpace2),
-              child: AppSurfaceCard(
-                child: Row(
-                  children: [
-                    if (showBackButton) ...[
-                      IconButton(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+              child: AppPageHeader(
+                title: '比赛记录',
+                subtitle: contests.isEmpty
+                    ? '记录每一场比赛，留下值得再想一遍的思路。'
+                    : '共 ${contests.length} 场 · 最近 #${latest!.rank}',
+                leading: showBackButton
+                    ? IconButton(
                         key: const ValueKey('contests-back-button'),
                         tooltip: '返回',
                         onPressed: onBack,
-                        icon: const Icon(Icons.arrow_back),
-                      ),
-                      const SizedBox(width: appSpace1),
-                    ],
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: accentColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(appRadiusControl),
-                        border: Border.all(
-                            color: accentColor.withValues(alpha: 0.2)),
-                      ),
-                      child:
-                          Icon(Icons.emoji_events_outlined, color: accentColor),
-                    ),
-                    const SizedBox(width: appSpace3),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '比赛记录',
-                            style: TextStyle(
-                              color: textPrimaryColor,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            contests.isEmpty
-                                ? '记录训练赛、校内赛和模拟赛排名'
-                                : '共 ${contests.length} 场 · 最近 #${latest!.rank}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                color: textSecondaryColor, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: appSpace2),
-                    FilledButton.icon(
-                      key: const ValueKey('add-contest-button'),
-                      onPressed: () => _openEditor(context),
-                      icon: const Icon(Icons.add),
-                      label: const Text('新增'),
-                    ),
-                  ],
-                ),
+                        icon: const Icon(Icons.arrow_back))
+                    : null,
+                actions: [
+                  FilledButton.icon(
+                    key: const ValueKey('add-contest-button'),
+                    onPressed: () => _openEditor(context),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('新增'),
+                  )
+                ],
               ),
             ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                 children: [
                   _ContestSummary(
                     total: contests.length,
@@ -119,9 +80,9 @@ class ContestsPage extends StatelessWidget {
                     bestRank: bestRank,
                     averageRank: averageRank,
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 16),
                   _RankChartCard(points: rankPoints),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 16),
                   if (contests.isEmpty)
                     const _EmptyContestList()
                   else
@@ -297,7 +258,7 @@ class _SummaryTile extends StatelessWidget {
                 style: TextStyle(
                   color: textPrimaryColor,
                   fontSize: 18,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -339,7 +300,7 @@ class _RankChartCardState extends State<_RankChartCard> {
                   '排名曲线',
                   style: TextStyle(
                     color: textPrimaryColor,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     fontSize: 16,
                   ),
                 ),
@@ -350,7 +311,7 @@ class _RankChartCardState extends State<_RankChartCard> {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 16),
           if (widget.points.length < 2)
             SizedBox(
               height: 180,
@@ -435,7 +396,7 @@ class _SelectedContest extends StatelessWidget {
             record.title,
             style: TextStyle(
               color: textPrimaryColor,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
           Pill(label: record.date),
@@ -478,7 +439,7 @@ class _ContestListItem extends StatelessWidget {
                   style: TextStyle(
                     color: textPrimaryColor,
                     fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -550,7 +511,7 @@ class _RankChip extends StatelessWidget {
         '#$rank',
         style: TextStyle(
           color: accentColor,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );

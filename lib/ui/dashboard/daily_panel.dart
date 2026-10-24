@@ -15,10 +15,10 @@ class DailyPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final summary = state.todaySummary;
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(appRadiusCard),
         border: Border.all(color: borderColor),
       ),
       child: Column(
@@ -29,7 +29,7 @@ class DailyPanel extends StatelessWidget {
               const Expanded(
                 child: Text(
                   '每日总结',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                 ),
               ),
               Pill(label: summary.date),

@@ -77,6 +77,11 @@ void main() {
         database.execute('DROP TRIGGER problems_revision_after_insert');
         database.execute('DROP TRIGGER problems_revision_after_update');
         database.execute('DROP TRIGGER problems_revision_after_delete');
+        database.execute('DROP TRIGGER problems_folder_after_insert');
+        database.execute('DROP TRIGGER problems_folder_after_update');
+        database.execute('DROP TABLE problem_folders');
+        database.execute('DROP INDEX problems_folder_idx');
+        database.execute('ALTER TABLE problems DROP COLUMN folder');
         database.execute('DROP TABLE problem_change_state');
         database.execute('PRAGMA user_version = 1');
       } finally {

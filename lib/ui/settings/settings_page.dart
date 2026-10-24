@@ -5,6 +5,11 @@ import '../../models/app_config.dart';
 import '../../models/quick_entry_shortcut.dart';
 import '../app_theme.dart';
 import '../shared/app_surface_card.dart';
+import '../shared/app_page_header.dart';
+import 'dashboard_customization.dart';
+import 'appearance_settings.dart';
+import 'app_update_settings.dart';
+import 'companion_connection_panel.dart';
 
 class SettingsPageResult {
   const SettingsPageResult({
@@ -24,6 +29,8 @@ class SettingsPage extends StatefulWidget {
     required this.config,
     required this.initialSyncToken,
     required this.onSave,
+    this.onExport,
+    this.onImport,
     this.browserImportToken = '',
     this.browserImportRunning = false,
     this.browserImportPort = 27121,
@@ -35,6 +42,8 @@ class SettingsPage extends StatefulWidget {
     this.automaticBackupError = '',
   });
 
+  final VoidCallback? onExport;
+  final VoidCallback? onImport;
   final AppConfig config;
   final String initialSyncToken;
   final Future<void> Function(SettingsPageResult result) onSave;
@@ -70,11 +79,27 @@ class SettingsPageState extends State<SettingsPage> {
   late bool _autoSyncAfterRefresh;
   late bool _automaticBackupEnabled;
   late AppColorTheme _colorTheme;
+  late List<DashboardModule> _dashboardModules;
+  late List<DashboardModule> _dashboardOrder;
+  late List<DashboardModule> _wideDashboardModules;
+  late AppAppearanceMode _appearanceMode;
+  late bool _compactDensity;
   late TimeOfDay _automaticBackupTime;
   late String _automaticBackupDirectoryPath;
 
   bool _dirty = false;
   bool _saving = false;
+  final _browserSectionKey = GlobalKey();
+  final _accountsSectionKey = GlobalKey();
+
+  Future<void> revealSetup({required bool accounts}) async {
+    final target =
+        (accounts ? _accountsSectionKey : _browserSectionKey).currentContext;
+    if (target != null) {
+      await Scrollable.ensureVisible(target,
+          duration: const Duration(milliseconds: 180), alignment: 0);
+    }
+  }
 
   @override
   void initState() {
@@ -108,11 +133,20 @@ class SettingsPageState extends State<SettingsPage> {
     _autoSyncAfterRefresh = widget.config.sync.autoSyncAfterRefresh;
     _automaticBackupEnabled = widget.config.automaticBackup.enabled;
     _colorTheme = widget.config.colorTheme;
+    _restoreWorkspaceValues();
     _automaticBackupTime = TimeOfDay(
       hour: widget.config.automaticBackup.timeMinutes ~/ 60,
       minute: widget.config.automaticBackup.timeMinutes % 60,
     );
     _automaticBackupDirectoryPath = widget.config.automaticBackup.directoryPath;
+  }
+
+  @override
+  void didUpdateWidget(covariant SettingsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.config != widget.config && !_dirty && !_saving) {
+      _restoreSavedValues();
+    }
   }
 
   @override
@@ -177,6 +211,7 @@ class SettingsPageState extends State<SettingsPage> {
       _autoSyncAfterRefresh = widget.config.sync.autoSyncAfterRefresh;
       _automaticBackupEnabled = widget.config.automaticBackup.enabled;
       _colorTheme = widget.config.colorTheme;
+      _restoreWorkspaceValues();
       _quickEntryHotkeyController.text = widget.config.quickEntryHotkey;
       _automaticBackupTime = TimeOfDay(
         hour: widget.config.automaticBackup.timeMinutes ~/ 60,
@@ -188,11 +223,19 @@ class SettingsPageState extends State<SettingsPage> {
     });
   }
 
+  void _restoreWorkspaceValues() {
+    _dashboardModules = [...widget.config.dashboardModules];
+    _dashboardOrder = [...widget.config.dashboardOrder];
+    _wideDashboardModules = [...widget.config.wideDashboardModules];
+    _appearanceMode = widget.config.appearanceMode;
+    _compactDensity = widget.config.compactDensity;
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListView(
       key: const ValueKey('dashboard-section-settings'),
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
       children: [
         Align(
           alignment: Alignment.topCenter,
@@ -204,36 +247,34 @@ class SettingsPageState extends State<SettingsPage> {
                 _buildHeader(),
                 const SizedBox(height: appSpace4),
                 _SettingsSection(
+                  icon: Icons.palette_outlined,
+                  title: '外观',
+                  subtitle: '挑选喜欢的配色，调整明暗与内容密度。保存后应用。',
+                  child: AppearanceSettings(
+                    colorTheme: _colorTheme,
+                    appearanceMode: _appearanceMode,
+                    compactDensity: _compactDensity,
+                    onThemeChanged: (value) => setState(() {
+                      _colorTheme = value;
+                      _dirty = true;
+                    }),
+                    onModeChanged: (value) => setState(() {
+                      _appearanceMode = value;
+                      _dirty = true;
+                    }),
+                    onDensityChanged: (value) => setState(() {
+                      _compactDensity = value;
+                      _dirty = true;
+                    }),
+                  ),
+                ),
+                const SizedBox(height: appSpace4),
+                _SettingsSection(
                   icon: Icons.schedule_outlined,
                   title: '常规',
                   subtitle: '控制自动刷新频率和客户端后台行为',
                   child: Column(
                     children: [
-                      DropdownButtonFormField<AppColorTheme>(
-                        key: const ValueKey('color-theme-field'),
-                        initialValue: _colorTheme,
-                        decoration: const InputDecoration(
-                          labelText: '配色皮肤',
-                          helperText: '保存后立即应用到整个工作台',
-                        ),
-                        items: [
-                          for (final theme in AppColorTheme.values)
-                            DropdownMenuItem(
-                              value: theme,
-                              child: Text(_colorThemeLabel(theme)),
-                            ),
-                        ],
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setState(() {
-                            _colorTheme = value;
-                            _dirty = true;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: appSpace2),
-                      _ColorThemePreview(theme: _colorTheme),
-                      const SizedBox(height: appSpace3),
                       TextField(
                         key: const ValueKey('quick-entry-hotkey-field'),
                         controller: _quickEntryHotkeyController,
@@ -296,6 +337,38 @@ class SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
                 const SizedBox(height: appSpace4),
+                AppSurfaceCard(
+                  child: ExpansionTile(
+                    key: const ValueKey('dashboard-customization-section'),
+                    tilePadding: EdgeInsets.zero,
+                    title: Text('桌面与功能',
+                        style: Theme.of(context).textTheme.titleMedium),
+                    subtitle: Text('${_dashboardModules.length} 个功能区已开启 · '
+                        '开关、排序和宽度'),
+                    leading: const Icon(Icons.dashboard_customize_outlined),
+                    children: [
+                      const SizedBox(height: appSpace3),
+                      DashboardCustomization(
+                        enabled: _dashboardModules,
+                        order: _dashboardOrder,
+                        wide: _wideDashboardModules,
+                        onEnabledChanged: (value) => setState(() {
+                          _dashboardModules = value;
+                          _dirty = true;
+                        }),
+                        onOrderChanged: (value) => setState(() {
+                          _dashboardOrder = value;
+                          _dirty = true;
+                        }),
+                        onWideChanged: (value) => setState(() {
+                          _wideDashboardModules = value;
+                          _dirty = true;
+                        }),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: appSpace4),
                 _SettingsSection(
                   icon: Icons.backup_outlined,
                   title: '自动备份',
@@ -324,7 +397,7 @@ class SettingsPageState extends State<SettingsPage> {
                               '备份时间',
                               style: TextStyle(
                                 color: textPrimaryColor,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ),
@@ -344,7 +417,7 @@ class SettingsPageState extends State<SettingsPage> {
                         '保存位置',
                         style: TextStyle(
                           color: textPrimaryColor,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -407,6 +480,24 @@ class SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                       ],
+                      if (widget.onExport != null ||
+                          widget.onImport != null) ...[
+                        const SizedBox(height: appSpace3),
+                        Wrap(spacing: 8, runSpacing: 8, children: [
+                          if (widget.onExport != null)
+                            OutlinedButton.icon(
+                                key: const ValueKey('settings-export-backup'),
+                                onPressed: widget.onExport,
+                                icon: const Icon(Icons.download_outlined),
+                                label: const Text('导出完整备份')),
+                          if (widget.onImport != null)
+                            OutlinedButton.icon(
+                                key: const ValueKey('settings-import-backup'),
+                                onPressed: widget.onImport,
+                                icon: const Icon(Icons.restore_outlined),
+                                label: const Text('导入备份')),
+                        ]),
+                      ],
                       if (widget.automaticBackupError.isNotEmpty) ...[
                         const SizedBox(height: appSpace2),
                         Text(
@@ -415,7 +506,7 @@ class SettingsPageState extends State<SettingsPage> {
                           style: TextStyle(
                             color: dangerColor,
                             fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
@@ -424,12 +515,19 @@ class SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: appSpace4),
                 _SettingsSection(
+                  key: _browserSectionKey,
                   icon: Icons.extension_outlined,
                   title: '浏览器导入',
-                  subtitle: 'Edge / Chrome 扩展只发送当前题目的公开页面信息',
+                  subtitle: '推荐使用题库小程序与油猴脚本，原有扩展也继续可用',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      const CompanionConnectionPanel(),
+                      const SizedBox(height: 16),
+                      const Divider(),
+                      const SizedBox(height: 12),
+                      const Text('完整客户端扩展 · Edge / Chrome'),
+                      const SizedBox(height: 12),
                       Row(
                         children: [
                           Icon(
@@ -458,7 +556,7 @@ class SettingsPageState extends State<SettingsPage> {
                         style: TextStyle(
                           color: textSecondaryColor,
                           fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -603,6 +701,7 @@ class SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: appSpace4),
                 _SettingsSection(
+                  key: _accountsSectionKey,
                   icon: Icons.account_circle_outlined,
                   title: 'OJ 账号',
                   subtitle: '启用需要统计的平台，并填写公开用户名或 ID',
@@ -643,6 +742,13 @@ class SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: appSpace4),
                 _buildActions(),
+                const SizedBox(height: 16),
+                const _SettingsSection(
+                  icon: Icons.info_outline,
+                  title: '关于与更新',
+                  subtitle: '版本信息与安装包下载',
+                  child: AppUpdateSettings(),
+                ),
               ],
             ),
           ),
@@ -651,45 +757,10 @@ class SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildHeader() {
-    return Row(
-      children: [
-        Container(
-          width: 38,
-          height: 38,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: accentColor.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(appRadiusControl),
-          ),
-          child: Icon(Icons.tune, color: accentColor, size: 21),
-        ),
-        const SizedBox(width: appSpace3),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '设置',
-                style: TextStyle(
-                  color: textPrimaryColor,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              Text(
-                _dirty ? '有未保存的更改' : '配置客户端、同步和 OJ 账号',
-                style: TextStyle(
-                  color: _dirty ? accentColor : textSecondaryColor,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+  Widget _buildHeader() => AppPageHeader(
+        title: '设置',
+        subtitle: _dirty ? '有未保存的更改' : '让工作台适合你的训练习惯。',
+      );
 
   Widget _buildActions() {
     return Row(
@@ -760,6 +831,11 @@ class SettingsPageState extends State<SettingsPage> {
     final config = widget.config.copyWith(
       refreshIntervalMinutes: interval,
       colorTheme: _colorTheme,
+      dashboardModules: _dashboardModules,
+      dashboardOrder: _dashboardOrder,
+      wideDashboardModules: _wideDashboardModules,
+      appearanceMode: _appearanceMode,
+      compactDensity: _compactDensity,
       quickEntryHotkey: shortcut.label,
       accounts: accounts,
       closeToTray: _closeToTray,
@@ -855,6 +931,7 @@ String _formatBackupDateTime(DateTime time) {
 
 class _SettingsSection extends StatelessWidget {
   const _SettingsSection({
+    super.key,
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -869,7 +946,7 @@ class _SettingsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppSurfaceCard(
-      padding: const EdgeInsets.all(appSpace4),
+      padding: const EdgeInsets.all(22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -885,9 +962,11 @@ class _SettingsSection extends StatelessWidget {
                       title,
                       style: TextStyle(
                         color: textPrimaryColor,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 16,
                       ),
                     ),
+                    const SizedBox(height: 4),
                     Text(
                       subtitle,
                       style: TextStyle(color: textSecondaryColor, fontSize: 12),
@@ -899,77 +978,6 @@ class _SettingsSection extends StatelessWidget {
           ),
           const SizedBox(height: appSpace3),
           child,
-        ],
-      ),
-    );
-  }
-}
-
-String _colorThemeLabel(AppColorTheme theme) {
-  return switch (theme) {
-    AppColorTheme.githubLight => 'GitHub Light · 开发者浅色',
-    AppColorTheme.terminalDark => 'Terminal Dark · 竞赛终端',
-    AppColorTheme.classic => 'Classic · 经典蓝',
-    AppColorTheme.dark => 'Dark · 原版深色',
-    AppColorTheme.candy => 'Candy · 糖果粉蓝',
-  };
-}
-
-class _ColorThemePreview extends StatelessWidget {
-  const _ColorThemePreview({required this.theme});
-
-  final AppColorTheme theme;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = appPaletteFor(theme);
-    return Container(
-      key: const ValueKey('color-theme-preview'),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: palette.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('皮肤预览 · 不影响尚未保存的设置',
-              style: TextStyle(color: palette.textSecondary, fontSize: 12)),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: palette.card,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: palette.border),
-            ),
-            child: Row(children: [
-              Icon(Icons.auto_stories_outlined, color: palette.accent),
-              const SizedBox(width: 10),
-              Expanded(
-                  child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('我的题目与笔记',
-                      style: TextStyle(
-                          color: palette.textPrimary,
-                          fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 4),
-                  Text('由你安排，随时记录',
-                      style: TextStyle(
-                          color: palette.textSecondary, fontSize: 12)),
-                ],
-              )),
-              for (final color in palette.heatmapLevels)
-                Container(
-                    width: 12,
-                    height: 12,
-                    margin: const EdgeInsets.only(left: 3),
-                    decoration: BoxDecoration(
-                        color: color, borderRadius: BorderRadius.circular(2))),
-            ]),
-          ),
         ],
       ),
     );

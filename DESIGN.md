@@ -6,6 +6,36 @@ OJ Float is a calm Windows desktop command center for competitive programming pr
 
 This contract describes the current visual system and the guardrails for the visual only refactor. It is the source of truth before future UI work under `lib/ui/**`.
 
+## Current workspace revision
+
+The approved integrated workspace preview is the visual reference for the current
+desktop UI. This revision supersedes the older compact typography and spacing
+values below; existing actions, data, keys, and platform behavior remain intact.
+
+* Use Segoe UI with Microsoft YaHei fallback, 14 px body text with 1.55 line
+  height, 12 px secondary copy, 16 px medium section titles, and 25 px medium
+  page titles. Reserve larger numbers for metrics; avoid heavy CJK headings.
+* Feature pages use `AppPageHeader`: a plain heading and short subtitle on the
+  page background, optional back button, and trailing actions. Do not nest the
+  page heading in another card. Page margins are 24 px and card gaps are 16 px.
+* Cards use 12 px corners and 20 px padding; controls use 8 px corners; metadata
+  tags use 6 px corners. Borders use the palette border color. Avoid seeded
+  Material surface tints or unrelated outline colors.
+* Preserve every existing palette. Sage, Ink, and Warm follow the integrated
+  preview in both light and dark modes. Settings offers visual palette choices
+  and a local preview; changes apply only when saved.
+* Customization belongs in Settings. Module toggles, ordering, and widths do not
+  appear on the home page. Navigation keeps a dedicated todo entry connected to
+  the existing training schedule; Settings remains at the bottom of the rail.
+* Home uses one progress summary and an ordered, responsive module layout.
+  Secondary shortcuts use quiet text; missing optional accounts are neutral.
+  Actual refresh failures retain a visible error state.
+* The problem library retains folders, search, combined tags, batch actions,
+  status, favorites, pins, notes, analysis, and training actions. Use list rows
+  with comfortable spacing and a folder rail where space permits.
+* Verify populated and empty views at 1120 by 760 and 900 by 620, light and dark
+  themes, settings save behavior, and the todo entry using real Flutter widgets.
+
 ## 2. Non Functional Change Guardrails
 
 Future visual work may change presentation only. It must not change business behavior or user flows.

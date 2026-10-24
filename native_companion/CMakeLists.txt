@@ -6,6 +6,16 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# The Flutter manifest is the single source for both executable versions.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../pubspec.yaml" OJ_MANIFEST)
+string(REGEX MATCH "version: ([0-9]+)\\.([0-9]+)\\.([0-9]+)[^\n+]*\\+([0-9]+)" OJ_VERSION_MATCH "${OJ_MANIFEST}")
+if(NOT OJ_VERSION_MATCH)
+  message(FATAL_ERROR "Unable to read product version from pubspec.yaml")
+endif()
+set(OJ_VERSION_STRING "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}.${CMAKE_MATCH_3}+${CMAKE_MATCH_4}")
+set(OJ_VERSION_NUMERIC "${CMAKE_MATCH_1},${CMAKE_MATCH_2},${CMAKE_MATCH_3},${CMAKE_MATCH_4}")
+configure_file(resources/app_version.h.in app_version.h @ONLY)
+
 add_library(oj_companion_database STATIC
   src/browser_import.cpp
   src/problem_database.cpp
@@ -18,14 +28,17 @@ add_executable(oj_problem_companion WIN32
   resources/app.rc
   src/main.cpp
 )
-target_include_directories(oj_problem_companion PRIVATE resources)
+target_include_directories(oj_problem_companion PRIVATE resources "${CMAKE_CURRENT_BINARY_DIR}")
 target_compile_definitions(oj_problem_companion PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_link_libraries(oj_problem_companion PRIVATE
   oj_companion_database
   comctl32
+  comdlg32
+  uxtheme
   ole32
   shell32
   ws2_32
+  advapi32
 )
 
 add_executable(oj_companion_tests
@@ -60,3 +73,4 @@ endif()
 
 enable_testing()
 add_test(NAME oj_companion_database COMMAND oj_companion_tests)
+set_tests_properties(oj_companion_database PROPERTIES TIMEOUT 45)

@@ -14,6 +14,7 @@ import '../models/teammate.dart';
 import '../models/training.dart';
 import 'daily_summary_service.dart';
 import 'local_store.dart';
+import 'app_data_directory.dart';
 
 class ExportResult {
   const ExportResult({
@@ -44,6 +45,7 @@ class ParsedPortableBackup {
     required this.config,
     required this.snapshots,
     required this.problems,
+    this.problemFolders = const [],
     required this.contests,
     required this.teammates,
     required this.training,
@@ -52,6 +54,7 @@ class ParsedPortableBackup {
   final AppConfig config;
   final List<SolvedSnapshot> snapshots;
   final List<ProblemRecord> problems;
+  final List<String> problemFolders;
   final List<ContestRecord> contests;
   final TeammateStoreData teammates;
   final TrainingStoreData training;
@@ -61,6 +64,7 @@ Future<ExportResult> exportOjData({
   required AppConfig config,
   required List<SolvedSnapshot> snapshots,
   List<ProblemRecord> problems = const [],
+  List<String> problemFolders = const [],
   List<ContestRecord> contests = const [],
   TeammateStoreData teammates = const TeammateStoreData(),
   TrainingStoreData training = const TrainingStoreData(),
@@ -90,6 +94,7 @@ Future<ExportResult> exportOjData({
     config: config,
     snapshots: snapshots,
     problems: problems,
+    problemFolders: problemFolders,
     contests: contests,
     teammates: teammates,
     training: training,
@@ -119,7 +124,7 @@ Future<Directory> exportDirectoryForOjData() async {
   } on MissingPluginException {
     // Widget tests do not load the desktop path provider plugin.
   }
-  final support = await getApplicationSupportDirectory();
+  final support = await applicationDataDirectory();
   return Directory('${support.path}${Platform.pathSeparator}exports');
 }
 
@@ -127,6 +132,7 @@ String buildPortableBackupJson({
   required AppConfig config,
   required List<SolvedSnapshot> snapshots,
   List<ProblemRecord> problems = const [],
+  List<String> problemFolders = const [],
   List<ContestRecord> contests = const [],
   TeammateStoreData teammates = const TeammateStoreData(),
   TrainingStoreData training = const TrainingStoreData(),
@@ -142,6 +148,7 @@ String buildPortableBackupJson({
       'config': buildPortableConfigJson(config),
       'snapshots':
           retainedSnapshots.map((snapshot) => snapshot.toJson()).toList(),
+      'problemFolders': parseProblemFolders(problemFolders, problems),
       'problems': problems.map((problem) => problem.toStorageJson()).toList(),
       'contests': contests.map((contest) => contest.toStorageJson()).toList(),
       'teammates': trimTeammateStoreData(teammates, now: exportedAt).toJson(),
@@ -281,6 +288,7 @@ ParsedPortableBackup parsePortableBackupJson(String jsonText) {
     config: AppConfig.fromPortableJson(Map<String, dynamic>.from(rawConfig)),
     snapshots: retainRecentSnapshots(snapshots),
     problems: List.unmodifiable(problems),
+    problemFolders: parseProblemFolders(data['problemFolders'], problems),
     contests: List.unmodifiable(contests),
     teammates: teammates,
     training: training,
@@ -304,6 +312,11 @@ Map<String, Object?> buildPortableConfigJson(AppConfig config) {
     'dashboardModules':
         config.dashboardModules.map((module) => module.id).toList(),
     'colorTheme': config.colorTheme.id,
+    'dashboardOrder': config.dashboardOrder.map((module) => module.id).toList(),
+    'wideDashboardModules':
+        config.wideDashboardModules.map((module) => module.id).toList(),
+    'appearanceMode': config.appearanceMode.name,
+    'compactDensity': config.compactDensity,
     'accounts': [
       for (final meta in supportedOjs)
         {

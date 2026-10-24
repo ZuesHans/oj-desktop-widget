@@ -2,28 +2,31 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/app_config.dart';
 import '../models/contest_record.dart';
 import '../models/problem_record.dart';
+import '../models/problem_batch.dart';
 import '../models/refresh_log_entry.dart';
 import '../models/solved_snapshot.dart';
 import '../models/teammate.dart';
 import '../models/training.dart';
 import 'problem_database.dart';
+import 'app_data_directory.dart';
 
 const maxStoredSnapshots = 6000;
 
 class CoreStoreSnapshot {
   const CoreStoreSnapshot({
     required this.problems,
+    this.problemFolders = const [],
     required this.training,
     required this.contests,
   });
 
   final List<ProblemRecord> problems;
+  final List<String> problemFolders;
   final TrainingStoreData training;
   final List<ContestRecord> contests;
 }
@@ -42,7 +45,7 @@ List<SolvedSnapshot> retainRecentSnapshots(
 }
 
 class LocalStore {
-  LocalStore({Directory? supportDirectory})
+  LocalStore({Directory? supportDirectory, this.useFilePreferences = false})
       : _supportDirectory = supportDirectory;
 
   static const _configKey = 'app_config_v1';
@@ -57,16 +60,36 @@ class LocalStore {
   static const _maxRefreshLogs = 200;
 
   final Directory? _supportDirectory;
+  // Windows preferences are JSON already. Read them directly so a repaired or
+  // restored file is not hidden by the plugin's process-lifetime cache.
+  final bool useFilePreferences;
   Future<void>? _problemDatabaseInitialization;
   Future<void> _problemTrainingTransactionTail = Future.value();
   Future<void> _coreWriteTail = Future.value();
 
   Future<Directory> supportDirectory() async {
-    return _supportDirectory ?? await getApplicationSupportDirectory();
+    return _supportDirectory ?? await applicationDataDirectory();
   }
 
+  Future<Directory> recoveryDirectory() async =>
+      _supportDirectory ?? await applicationDataDestination();
+
   Future<AppConfig> loadConfig() async {
+    if (useFilePreferences) {
+      final file = await _preferencesFile();
+      final values = await _loadFilePreferences(file);
+      final raw = values['flutter.$_configKey'];
+      if (raw == null) return AppConfig.defaults();
+      final json = Map<String, dynamic>.from(jsonDecode(raw as String) as Map);
+      final config = AppConfig.fromJson(json);
+      if (json['configVersion'] != currentAppConfigVersion) {
+        values['flutter.$_configKey'] = jsonEncode(config.toJson());
+        await _writeJsonAtomically(file, values);
+      }
+      return config;
+    }
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
     final raw = prefs.getString(_configKey);
     if (raw == null) {
       return AppConfig.defaults();
@@ -74,8 +97,7 @@ class LocalStore {
     try {
       final data = jsonDecode(raw);
       if (data is! Map) {
-        debugPrint('应用配置 JSON 无效：应为对象。');
-        return AppConfig.defaults();
+        throw const FormatException('应用配置应为 JSON 对象。');
       }
       final json = Map<String, dynamic>.from(data);
       final config = AppConfig.fromJson(json);
@@ -84,14 +106,39 @@ class LocalStore {
       }
       return config;
     } catch (_) {
-      debugPrint('解析应用配置失败，已使用默认值。');
-      return AppConfig.defaults();
+      throw const FormatException('无法读取应用配置，请修复配置文件或恢复完整备份。');
     }
   }
 
   Future<void> saveConfig(AppConfig config) async {
+    if (useFilePreferences) {
+      final file = await _preferencesFile();
+      final values = await _loadFilePreferences(file);
+      values['flutter.$_configKey'] = jsonEncode(config.toJson());
+      await _writeJsonAtomically(file, values);
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_configKey, jsonEncode(config.toJson()));
+  }
+
+  Future<File> _preferencesFile() async =>
+      File('${(await supportDirectory()).path}/shared_preferences.json');
+
+  Future<Map<String, dynamic>> _loadFilePreferences(File file) async {
+    if (!await _hasStoredFile(file)) return {};
+    return _readParsedJsonWithBackup(file, (value) {
+      if (value is! Map) {
+        throw const FormatException('配置文件应为 JSON 对象。');
+      }
+      final values = Map<String, dynamic>.from(value);
+      final raw = values['flutter.$_configKey'];
+      if (raw != null &&
+          (raw is! String || jsonDecode(raw) is! Map<String, dynamic>)) {
+        throw const FormatException('应用配置损坏，请修复配置文件或恢复完整备份。');
+      }
+      return values;
+    });
   }
 
   Future<List<SolvedSnapshot>> loadSnapshots() async {
@@ -230,6 +277,17 @@ class LocalStore {
   Future<void> saveProblems(List<ProblemRecord> problems) async {
     await _enqueueCoreWrite(() => _upsertProblems(problems));
   }
+
+  Future<void> applyProblemBatch(Set<String> ids, ProblemBatchChange change) =>
+      _enqueueCoreWrite(() async {
+        await _ensureProblemDatabase();
+        (await _problemDatabaseHandle()).applyBatch(ids, change);
+      });
+
+  Future<void> createProblemFolder(String name) => _enqueueCoreWrite(() async {
+        await _ensureProblemDatabase();
+        (await _problemDatabaseHandle()).createFolder(name);
+      });
 
   Future<void> replaceProblems(List<ProblemRecord> problems) async {
     await _enqueueCoreWrite(() => _replaceProblems(problems));
@@ -403,12 +461,13 @@ class LocalStore {
   Future<void> replaceCoreData(
     List<ProblemRecord> problems,
     TrainingStoreData training,
-    List<ContestRecord> contests,
-  ) {
+    List<ContestRecord> contests, {
+    List<String>? problemFolders,
+  }) {
     return _enqueueCoreWrite(
       () => _enqueueProblemTrainingTransaction(
         () => _commitCoreTransaction(
-          _ProblemMutation.replace(problems),
+          _ProblemMutation.replace(problems, folders: problemFolders),
           training,
           contests: contests,
         ),
@@ -420,16 +479,14 @@ class LocalStore {
 
   Future<CoreStoreSnapshot> loadCoreBackupSnapshot() {
     return _enqueueCoreWrite(() async {
+      final snapshot = await loadProblemSnapshot();
       return CoreStoreSnapshot(
-        problems: await _loadCoreProblemsStrict(),
+        problems: snapshot.problems,
+        problemFolders: snapshot.folders,
         training: await _loadCoreTrainingStrict(),
         contests: await _loadCoreContestsStrict(),
       );
     });
-  }
-
-  Future<List<ProblemRecord>> _loadCoreProblemsStrict() async {
-    return (await loadProblemSnapshot()).problems;
   }
 
   Future<TrainingStoreData> _loadCoreTrainingStrict() async {
@@ -476,6 +533,7 @@ class LocalStore {
         ? _ProblemMutation.fromJson(json['problemMutation'])
         : _ProblemMutation.replace(
             _parseTransactionProblems(json['problems']),
+            folders: (json['problemFolders'] as List?)?.cast<String>(),
           );
     final rawTraining = json['training'];
     if (rawTraining is! Map) {
@@ -513,6 +571,8 @@ class LocalStore {
         'problems': problemMutation.problems
             .map((item) => item.toStorageJson())
             .toList(),
+      if (problemMutation.folders != null)
+        'problemFolders': problemMutation.folders,
       'training': training.toJson(),
       if (contests != null)
         'contests': contests.map((item) => item.toStorageJson()).toList(),
@@ -533,9 +593,11 @@ class LocalStore {
     await _clearProblemTrainingTransaction(transaction);
   }
 
-  Future<void> _replaceProblems(List<ProblemRecord> problems) async {
+  Future<void> _replaceProblems(List<ProblemRecord> problems,
+      {List<String>? folders}) async {
     await _ensureProblemDatabase();
-    (await _problemDatabaseHandle()).replaceProblems(problems);
+    (await _problemDatabaseHandle())
+        .replaceProblems(problems, folders: folders);
   }
 
   Future<void> _upsertProblems(Iterable<ProblemRecord> problems) async {
@@ -551,7 +613,7 @@ class LocalStore {
   Future<void> _applyProblemMutation(_ProblemMutation mutation) async {
     switch (mutation.type) {
       case _ProblemMutationType.replace:
-        await _replaceProblems(mutation.problems);
+        await _replaceProblems(mutation.problems, folders: mutation.folders);
         return;
       case _ProblemMutationType.upsert:
         await _upsertProblems(mutation.problems);
@@ -610,14 +672,12 @@ class LocalStore {
   }
 
   Future<File> _snapshotFile() async {
-    final directory =
-        _supportDirectory ?? await getApplicationSupportDirectory();
+    final directory = await supportDirectory();
     return File('${directory.path}${Platform.pathSeparator}$_snapshotsFile');
   }
 
   Future<File> _problemsFileHandle() async {
-    final directory =
-        _supportDirectory ?? await getApplicationSupportDirectory();
+    final directory = await supportDirectory();
     return File('${directory.path}${Platform.pathSeparator}$_problemsFile');
   }
 
@@ -631,7 +691,20 @@ class LocalStore {
   }
 
   Future<void> _ensureProblemDatabase() {
-    return _problemDatabaseInitialization ??= _initializeProblemDatabase();
+    return _initializeProblemDatabaseWithRetry();
+  }
+
+  Future<void> _initializeProblemDatabaseWithRetry() async {
+    final operation =
+        _problemDatabaseInitialization ??= _initializeProblemDatabase();
+    try {
+      await operation;
+    } catch (_) {
+      if (identical(_problemDatabaseInitialization, operation)) {
+        _problemDatabaseInitialization = null;
+      }
+      rethrow;
+    }
   }
 
   Future<void> _initializeProblemDatabase() async {
@@ -651,32 +724,27 @@ class LocalStore {
   }
 
   Future<File> _contestsFileHandle() async {
-    final directory =
-        _supportDirectory ?? await getApplicationSupportDirectory();
+    final directory = await supportDirectory();
     return File('${directory.path}${Platform.pathSeparator}$_contestsFile');
   }
 
   Future<File> _teammatesFileHandle() async {
-    final directory =
-        _supportDirectory ?? await getApplicationSupportDirectory();
+    final directory = await supportDirectory();
     return File('${directory.path}${Platform.pathSeparator}$_teammatesFile');
   }
 
   Future<File> _refreshLogsFileHandle() async {
-    final directory =
-        _supportDirectory ?? await getApplicationSupportDirectory();
+    final directory = await supportDirectory();
     return File('${directory.path}${Platform.pathSeparator}$_refreshLogsFile');
   }
 
   Future<File> _trainingFileHandle() async {
-    final directory =
-        _supportDirectory ?? await getApplicationSupportDirectory();
+    final directory = await supportDirectory();
     return File('${directory.path}${Platform.pathSeparator}$_trainingFile');
   }
 
   Future<File> _problemTrainingTransactionFileHandle() async {
-    final directory =
-        _supportDirectory ?? await getApplicationSupportDirectory();
+    final directory = await supportDirectory();
     return File(
       '${directory.path}${Platform.pathSeparator}'
       '$_problemTrainingTransactionFile',
@@ -691,11 +759,14 @@ class _ProblemMutation {
     required this.type,
     this.problems = const [],
     this.problemIds = const [],
+    this.folders,
   });
 
-  factory _ProblemMutation.replace(List<ProblemRecord> problems) {
+  factory _ProblemMutation.replace(List<ProblemRecord> problems,
+      {List<String>? folders}) {
     return _ProblemMutation._(
       type: _ProblemMutationType.replace,
+      folders: folders,
       problems: List.unmodifiable(problems),
     );
   }
@@ -743,6 +814,7 @@ class _ProblemMutation {
   final _ProblemMutationType type;
   final List<ProblemRecord> problems;
   final List<String> problemIds;
+  final List<String>? folders;
 
   Map<String, dynamic> toJson() => {
         'operation': type.name,

@@ -48,7 +48,7 @@ class WindowHeader extends StatelessWidget {
             'OJ Float',
             style: TextStyle(
               color: textPrimaryColor,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
               fontSize: 16,
             ),
           ),
@@ -63,10 +63,11 @@ class WindowHeader extends StatelessWidget {
               style: TextStyle(color: textSecondaryColor, fontSize: 13),
             ),
           ),
-          IconButton(
-              tooltip: '快速录入 ($quickEntryHotkey)',
-              onPressed: onQuickEntry,
-              icon: const Icon(Icons.add_link)),
+          if (onQuickEntry != null)
+            IconButton(
+                tooltip: '快速录入 ($quickEntryHotkey)',
+                onPressed: onQuickEntry,
+                icon: const Icon(Icons.add_link)),
           IconButton(
             key: const ValueKey('toolbar-refresh-button'),
             tooltip: '立即刷新',

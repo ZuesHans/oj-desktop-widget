@@ -16,14 +16,12 @@ class Pill extends StatelessWidget {
   Widget build(BuildContext context) {
     final foreground = color ?? textPrimaryColor;
     final background = color?.withValues(alpha: 0.1) ?? cardMutedColor;
-    final outline = color?.withValues(alpha: 0.22) ?? borderColor;
 
     return Container(
       padding: appPillPadding,
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(appRadiusPill),
-        border: Border.all(color: outline),
+        borderRadius: BorderRadius.circular(5),
       ),
       child: Text(
         label,
@@ -32,7 +30,7 @@ class Pill extends StatelessWidget {
         style: TextStyle(
           color: foreground,
           fontSize: 12,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
