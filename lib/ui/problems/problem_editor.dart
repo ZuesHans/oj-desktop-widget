@@ -10,10 +10,12 @@ class ProblemEditorDialog extends StatefulWidget {
   const ProblemEditorDialog({
     super.key,
     this.initial,
+    this.folders = const [],
     required this.onParseLink,
   });
 
   final ProblemRecord? initial;
+  final List<String> folders;
   final Future<ParsedProblemLink> Function(String url) onParseLink;
 
   @override
@@ -25,11 +27,13 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
   late final TextEditingController _titleController;
   late final TextEditingController _urlController;
   late final TextEditingController _tagsController;
+  late final TextEditingController _folderController;
   late final TextEditingController _dateController;
   late final TextEditingController _noteController;
   late final TextEditingController _analysisController;
   late ProblemPlatform _platform;
-  late ProblemStatus _status;
+  late ProblemWorkflowStatus _status;
+  late String _externalId;
   bool _parsing = false;
   String? _parseMessage;
 
@@ -41,12 +45,14 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
     _urlController = TextEditingController(text: initial?.url ?? '');
     _tagsController =
         TextEditingController(text: initial?.tags.join(', ') ?? '');
+    _folderController = TextEditingController(text: initial?.folder ?? '');
     _dateController =
         TextEditingController(text: initial?.date ?? dateKey(DateTime.now()));
     _noteController = TextEditingController(text: initial?.note ?? '');
     _analysisController = TextEditingController(text: initial?.analysis ?? '');
     _platform = initial?.platform ?? ProblemPlatform.other;
-    _status = initial?.status ?? ProblemStatus.TODO;
+    _status = initial?.workflowStatus ?? ProblemWorkflowStatus.backlog;
+    _externalId = initial?.externalId ?? '';
   }
 
   @override
@@ -54,6 +60,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
     _titleController.dispose();
     _urlController.dispose();
     _tagsController.dispose();
+    _folderController.dispose();
     _dateController.dispose();
     _noteController.dispose();
     _analysisController.dispose();
@@ -64,7 +71,15 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       key: const ValueKey('problem-editor-dialog'),
-      title: Text(widget.initial == null ? '添加题目' : '编辑题目'),
+      titlePadding:
+          const EdgeInsets.fromLTRB(appSpace5, appSpace5, appSpace5, 0),
+      contentPadding:
+          const EdgeInsets.fromLTRB(appSpace5, appSpace3, appSpace5, appSpace3),
+      actionsPadding:
+          const EdgeInsets.fromLTRB(appSpace4, 0, appSpace4, appSpace4),
+      title: _ProblemEditorTitle(
+        title: widget.initial == null ? '添加题目' : '编辑题目',
+      ),
       content: SizedBox(
         width: 620,
         child: Form(
@@ -155,7 +170,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
                         ),
                         SizedBox(
                           width: itemWidth,
-                          child: DropdownButtonFormField<ProblemStatus>(
+                          child: DropdownButtonFormField<ProblemWorkflowStatus>(
                             isExpanded: true,
                             key: const ValueKey('problem-status-field'),
                             initialValue: _status,
@@ -164,14 +179,16 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
                               border: OutlineInputBorder(),
                             ),
                             items: [
-                              for (final status in ProblemStatus.values)
+                              for (final status in ProblemWorkflowStatus.values)
                                 DropdownMenuItem(
                                   value: status,
-                                  child: Text(problemStatusLabel(status)),
+                                  child:
+                                      Text(problemWorkflowStatusLabel(status)),
                                 ),
                             ],
                             onChanged: (value) => setState(
-                              () => _status = value ?? ProblemStatus.TODO,
+                              () => _status =
+                                  value ?? ProblemWorkflowStatus.backlog,
                             ),
                           ),
                         ),
@@ -200,6 +217,23 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
                     border: OutlineInputBorder(),
                   ),
                 ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('problem-folder-field'),
+                  controller: _folderController,
+                  decoration: const InputDecoration(
+                    labelText: '文件夹（可选）',
+                    hintText: '例如：动态规划、待复习',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                if (widget.folders.isNotEmpty)
+                  Wrap(spacing: 6, children: [
+                    for (final folder in widget.folders)
+                      ActionChip(
+                          label: Text(folder),
+                          onPressed: () => _folderController.text = folder)
+                  ]),
                 const SizedBox(height: 12),
                 TextFormField(
                   key: const ValueKey('problem-note-field'),
@@ -260,6 +294,7 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
         _titleController.text = parsed.title;
         _urlController.text = parsed.url;
         _platform = parsed.platform;
+        _externalId = parsed.externalId;
         _parseMessage = '解析完成';
       });
     } catch (error) {
@@ -286,30 +321,56 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
     }
     final now = DateTime.now();
     final initial = widget.initial;
+    final url = _urlController.text.trim();
+    final externalId = _externalIdForSavedUrl(url, initial);
     final record = initial == null
         ? ProblemRecord.create(
             title: _titleController.text,
-            url: _urlController.text,
+            url: url,
             platform: _platform,
-            status: _status,
+            workflowStatus: _status,
             tags: normalizeProblemTags(_tagsController.text.split(',')),
+            folder: _folderController.text,
             date: _dateController.text.trim(),
             note: _noteController.text,
             analysis: _analysisController.text,
+            externalId: externalId,
             now: now,
           )
         : initial.copyWith(
             title: _titleController.text,
-            url: _urlController.text,
+            url: url,
             platform: _platform,
-            status: _status,
+            workflowStatus: _status,
             tags: normalizeProblemTags(_tagsController.text.split(',')),
+            folder: _folderController.text,
             date: _dateController.text.trim(),
             note: _noteController.text,
             analysis: _analysisController.text,
+            externalId: externalId,
             updatedAt: now,
           );
     Navigator.pop(context, record);
+  }
+
+  String _externalIdForSavedUrl(String url, ProblemRecord? initial) {
+    try {
+      final uri = normalizeProblemUri(url);
+      final extracted = extractProblemExternalId(uri, _platform);
+      if (extracted.isNotEmpty) {
+        return extracted;
+      }
+      if (initial == null ||
+          initial.platform != _platform ||
+          normalizeProblemUri(initial.url) != uri) {
+        return '';
+      }
+    } catch (_) {
+      if (initial == null) {
+        return '';
+      }
+    }
+    return _externalId.trim();
   }
 
   String? _required(String? value) {
@@ -329,5 +390,42 @@ class _ProblemEditorDialogState extends State<ProblemEditorDialog> {
       return '日期无效';
     }
     return null;
+  }
+}
+
+class _ProblemEditorTitle extends StatelessWidget {
+  const _ProblemEditorTitle({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: accentColor.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(appRadiusControl),
+            border: Border.all(color: accentColor.withValues(alpha: 0.2)),
+          ),
+          child: Icon(Icons.auto_stories_outlined, color: accentColor),
+        ),
+        const SizedBox(width: appSpace3),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: textPrimaryColor,
+              fontSize: 22,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

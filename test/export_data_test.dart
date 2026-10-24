@@ -15,16 +15,18 @@ void main() {
     );
 
     final data = jsonDecode(jsonText) as Map<String, dynamic>;
-    expect(data['schemaVersion'], 1);
+    expect(data['schemaVersion'], 2);
     expect(data['app'], 'oj_float');
     expect(data['exportType'], 'portable_backup');
     expect(data['exportedAt'], '2026-06-18T21:30:00.000');
 
     final config = data['config'] as Map<String, dynamic>;
     expect(config['refreshIntervalMinutes'], 45);
-    expect(config['alwaysOnTop'], isFalse);
-    expect(config['showInTaskbar'], isFalse);
-    expect(config['closeToTray'], isFalse);
+    expect(config.containsKey('closeToTray'), isFalse);
+    expect(config.containsKey('launchAtStartup'), isFalse);
+    expect(config.containsKey('alwaysOnTop'), isFalse);
+    expect(config.containsKey('showInTaskbar'), isFalse);
+    expect(config.containsKey('compactClickTarget'), isFalse);
     final accounts = config['accounts'] as List<dynamic>;
     final codeforces = accounts.cast<Map<String, dynamic>>().firstWhere(
           (account) => account['ojId'] == 'codeforces',
@@ -37,6 +39,7 @@ void main() {
     final contests = data['contests'] as List<dynamic>;
     expect(contests, hasLength(1));
     expect((contests.single as Map<String, dynamic>)['rank'], 3);
+    expect(data['training'], isA<Map<String, dynamic>>());
   });
 
   test('portable backup JSON keeps multiple raw snapshots including failure',
@@ -45,7 +48,13 @@ void main() {
       config: _config(),
       snapshots: [
         _snapshot('2026-06-16', 'alice', 10, hour: 8),
-        _snapshot('2026-06-16', 'alice', 13, hour: 20),
+        _snapshot(
+          '2026-06-16',
+          'alice',
+          13,
+          hour: 20,
+          dailyAcceptedCount: 3,
+        ),
         _failureSnapshot('2026-06-16', 'bob'),
       ],
       exportedAt: DateTime.parse('2026-06-18T21:30:00'),
@@ -65,10 +74,22 @@ void main() {
       config: _config(),
       snapshots: [
         _snapshot('2026-06-17', 'alice', 20, hour: 8),
-        _snapshot('2026-06-17', 'alice', 22, hour: 20),
+        _snapshot(
+          '2026-06-17',
+          'alice',
+          22,
+          hour: 20,
+          dailyAcceptedCount: 2,
+        ),
         _failureSnapshot('2026-06-18', 'alice'),
         _snapshot('2026-06-16', 'alice', 10, hour: 8),
-        _snapshot('2026-06-16', 'alice', 13, hour: 20),
+        _snapshot(
+          '2026-06-16',
+          'alice',
+          13,
+          hour: 20,
+          dailyAcceptedCount: 3,
+        ),
       ],
       exportedAt: DateTime.parse('2026-06-18T21:30:00'),
     );
@@ -99,10 +120,45 @@ void main() {
     expect(data['config'], isA<Map<String, dynamic>>());
   });
 
+  test('portable backup keeps only the latest 6000 snapshots', () {
+    final base = DateTime.parse('2026-01-01T00:00:00');
+    final snapshots = [
+      for (var i = 6004; i >= 0; i--)
+        SolvedSnapshot(
+          date: '2026-01-01',
+          fetchedAt: base.add(Duration(minutes: i)),
+          ojId: 'codeforces',
+          username: 'alice',
+          status: FetchStatus.success,
+          solvedCount: i,
+        ),
+    ];
+
+    final data = jsonDecode(
+      buildPortableBackupJson(
+        config: _config(),
+        snapshots: snapshots,
+        exportedAt: DateTime.parse('2026-06-18T21:30:00'),
+      ),
+    ) as Map<String, dynamic>;
+    final exported =
+        (data['snapshots'] as List<dynamic>).cast<Map<String, dynamic>>();
+
+    expect(exported, hasLength(maxStoredSnapshots));
+    expect(exported.first['solvedCount'], 5);
+    expect(exported.last['solvedCount'], 6004);
+  });
+
   test('daily summary CSV keeps the auxiliary header and rows', () {
     final csv = buildDailySummaryCsv([
       _snapshot('2026-06-16', 'alice', 10, hour: 8),
-      _snapshot('2026-06-16', 'alice', 13, hour: 20),
+      _snapshot(
+        '2026-06-16',
+        'alice',
+        13,
+        hour: 20,
+        dailyAcceptedCount: 3,
+      ),
     ]);
 
     expect(csv, startsWith('date,totalDelta,active\n'));
@@ -126,7 +182,13 @@ void main() {
         config: _config(),
         snapshots: [
           _snapshot('2026-06-16', 'alice', 10, hour: 8),
-          _snapshot('2026-06-16', 'alice', 13, hour: 20),
+          _snapshot(
+            '2026-06-16',
+            'alice',
+            13,
+            hour: 20,
+            dailyAcceptedCount: 3,
+          ),
         ],
         problems: [_problem()],
         contests: [_contest()],
@@ -147,6 +209,41 @@ void main() {
       expect(
         await result.dailySummaryFile.readAsString(),
         contains('2026-06-16,3,true'),
+      );
+    } finally {
+      await directory.delete(recursive: true);
+    }
+  });
+
+  test('repeated exports in one minute never overwrite an earlier backup',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('oj_export_test_');
+    try {
+      final first = await exportOjData(
+        config: _config(),
+        snapshots: const [],
+        now: DateTime.parse('2026-06-18T21:30:00'),
+        directory: directory,
+        writeDailySummary: false,
+      );
+      final firstText = await first.backupFile.readAsString();
+      final second = await exportOjData(
+        config: _config(),
+        snapshots: const [],
+        now: DateTime.parse('2026-06-18T21:30:30'),
+        directory: directory,
+        writeDailySummary: false,
+      );
+
+      expect(first.backupFile.path, isNot(second.backupFile.path));
+      expect(second.backupFile.path, endsWith('_1.json'));
+      expect(await first.backupFile.readAsString(), firstText);
+      expect(parsePortableBackupJson(firstText), isA<ParsedPortableBackup>());
+      expect(
+        directory.listSync().whereType<File>().where(
+              (file) => file.path.endsWith('.tmp'),
+            ),
+        isEmpty,
       );
     } finally {
       await directory.delete(recursive: true);
@@ -183,8 +280,6 @@ ProblemRecord _problem() {
 AppConfig _config() {
   return AppConfig(
     refreshIntervalMinutes: 45,
-    alwaysOnTop: false,
-    showInTaskbar: false,
     closeToTray: false,
     accounts: {
       for (final meta in supportedOjs)
@@ -203,6 +298,7 @@ SolvedSnapshot _snapshot(
   String username,
   int solvedCount, {
   int hour = 8,
+  int? dailyAcceptedCount,
 }) {
   return SolvedSnapshot(
     date: date,
@@ -213,6 +309,10 @@ SolvedSnapshot _snapshot(
     username: username,
     status: FetchStatus.success,
     solvedCount: solvedCount,
+    dailyAcceptedCount: dailyAcceptedCount,
+    dailyActivityAccuracy: dailyAcceptedCount == null
+        ? DailyActivityAccuracy.unknown
+        : DailyActivityAccuracy.exact,
   );
 }
 

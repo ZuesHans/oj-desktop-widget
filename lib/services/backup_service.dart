@@ -11,7 +11,10 @@ import '../models/fetch_result.dart';
 import '../models/problem_record.dart';
 import '../models/solved_snapshot.dart';
 import '../models/teammate.dart';
+import '../models/training.dart';
 import 'daily_summary_service.dart';
+import 'local_store.dart';
+import 'app_data_directory.dart';
 
 class ExportResult {
   const ExportResult({
@@ -25,10 +28,16 @@ class ExportResult {
   final File dailySummaryFile;
 }
 
+enum BackupImportScope { portable, coreTraining }
+
 class ImportResult {
-  const ImportResult({required this.safetyBackupFile});
+  const ImportResult({
+    required this.safetyBackupFile,
+    required this.scope,
+  });
 
   final File safetyBackupFile;
+  final BackupImportScope scope;
 }
 
 class ParsedPortableBackup {
@@ -36,23 +45,29 @@ class ParsedPortableBackup {
     required this.config,
     required this.snapshots,
     required this.problems,
+    this.problemFolders = const [],
     required this.contests,
     required this.teammates,
+    required this.training,
   });
 
   final AppConfig config;
   final List<SolvedSnapshot> snapshots;
   final List<ProblemRecord> problems;
+  final List<String> problemFolders;
   final List<ContestRecord> contests;
   final TeammateStoreData teammates;
+  final TrainingStoreData training;
 }
 
 Future<ExportResult> exportOjData({
   required AppConfig config,
   required List<SolvedSnapshot> snapshots,
   List<ProblemRecord> problems = const [],
+  List<String> problemFolders = const [],
   List<ContestRecord> contests = const [],
   TeammateStoreData teammates = const TeammateStoreData(),
+  TrainingStoreData training = const TrainingStoreData(),
   DateTime? now,
   Directory? directory,
   String prefix = 'oj_float_backup',
@@ -62,27 +77,35 @@ Future<ExportResult> exportOjData({
   final exportDirectory = directory ?? await exportDirectoryForOjData();
   await exportDirectory.create(recursive: true);
 
-  final backupFile = File(
-    '${exportDirectory.path}${Platform.pathSeparator}'
-    '${buildExportFileName(prefix, 'json', exportTime)}',
+  final backupFile = await _availableExportFile(
+    exportDirectory,
+    prefix,
+    'json',
+    exportTime,
   );
-  final dailySummaryFile = File(
-    '${exportDirectory.path}${Platform.pathSeparator}'
-    '${buildExportFileName('oj_float_daily_summary', 'csv', exportTime)}',
+  final dailySummaryFile = await _availableExportFile(
+    exportDirectory,
+    'oj_float_daily_summary',
+    'csv',
+    exportTime,
   );
 
-  await backupFile.writeAsString(
-    buildPortableBackupJson(
-      config: config,
-      snapshots: snapshots,
-      problems: problems,
-      contests: contests,
-      teammates: teammates,
-      exportedAt: exportTime,
-    ),
+  final backupText = buildPortableBackupJson(
+    config: config,
+    snapshots: snapshots,
+    problems: problems,
+    problemFolders: problemFolders,
+    contests: contests,
+    teammates: teammates,
+    training: training,
+    exportedAt: exportTime,
   );
+  await _writeVerifiedPortableBackup(backupFile, backupText);
   if (writeDailySummary) {
-    await dailySummaryFile.writeAsString(buildDailySummaryCsv(snapshots));
+    await dailySummaryFile.writeAsString(
+      buildDailySummaryCsv(snapshots),
+      flush: true,
+    );
   }
 
   return ExportResult(
@@ -101,7 +124,7 @@ Future<Directory> exportDirectoryForOjData() async {
   } on MissingPluginException {
     // Widget tests do not load the desktop path provider plugin.
   }
-  final support = await getApplicationSupportDirectory();
+  final support = await applicationDataDirectory();
   return Directory('${support.path}${Platform.pathSeparator}exports');
 }
 
@@ -109,22 +132,28 @@ String buildPortableBackupJson({
   required AppConfig config,
   required List<SolvedSnapshot> snapshots,
   List<ProblemRecord> problems = const [],
+  List<String> problemFolders = const [],
   List<ContestRecord> contests = const [],
   TeammateStoreData teammates = const TeammateStoreData(),
+  TrainingStoreData training = const TrainingStoreData(),
   required DateTime exportedAt,
 }) {
+  final retainedSnapshots = retainRecentSnapshots(snapshots);
   return const JsonEncoder.withIndent('  ').convert(
     {
-      'schemaVersion': 1,
+      'schemaVersion': 2,
       'app': 'oj_float',
       'exportType': 'portable_backup',
       'exportedAt': exportedAt.toIso8601String(),
       'config': buildPortableConfigJson(config),
-      'snapshots': snapshots.map((snapshot) => snapshot.toJson()).toList(),
+      'snapshots':
+          retainedSnapshots.map((snapshot) => snapshot.toJson()).toList(),
+      'problemFolders': parseProblemFolders(problemFolders, problems),
       'problems': problems.map((problem) => problem.toStorageJson()).toList(),
       'contests': contests.map((contest) => contest.toStorageJson()).toList(),
       'teammates': trimTeammateStoreData(teammates, now: exportedAt).toJson(),
-      'dailyStats': buildDailyStatsJson(snapshots),
+      'training': training.toJson(),
+      'dailyStats': buildDailyStatsJson(retainedSnapshots),
     },
   );
 }
@@ -135,7 +164,8 @@ ParsedPortableBackup parsePortableBackupJson(String jsonText) {
     throw const FormatException('备份 JSON 必须是对象。');
   }
   final data = Map<String, dynamic>.from(decoded);
-  if (data['schemaVersion'] != 1) {
+  final schemaVersion = data['schemaVersion'];
+  if (schemaVersion != 1 && schemaVersion != 2) {
     throw const FormatException('备份版本不受支持。');
   }
   if (data['app'] != 'oj_float') {
@@ -242,12 +272,26 @@ ParsedPortableBackup parsePortableBackupJson(String jsonText) {
     );
   }
 
+  var training = const TrainingStoreData();
+  final rawTraining = data['training'];
+  if (rawTraining != null) {
+    if (rawTraining is! Map) {
+      throw const FormatException('备份训练数据必须是对象。');
+    }
+    training = TrainingStoreData.tryFromJson(
+          Map<String, dynamic>.from(rawTraining),
+        ) ??
+        const TrainingStoreData();
+  }
+
   return ParsedPortableBackup(
     config: AppConfig.fromPortableJson(Map<String, dynamic>.from(rawConfig)),
-    snapshots: List.unmodifiable(snapshots),
+    snapshots: retainRecentSnapshots(snapshots),
     problems: List.unmodifiable(problems),
+    problemFolders: parseProblemFolders(data['problemFolders'], problems),
     contests: List.unmodifiable(contests),
     teammates: teammates,
+    training: training,
   );
 }
 
@@ -265,14 +309,14 @@ DateTime _latestTeammateDate(TeammateStoreData teammates) {
 Map<String, Object?> buildPortableConfigJson(AppConfig config) {
   return {
     'refreshIntervalMinutes': config.refreshIntervalMinutes,
-    'launchAtStartup': config.launchAtStartup,
-    'alwaysOnTop': config.alwaysOnTop,
-    'showInTaskbar': config.showInTaskbar,
-    'closeToTray': config.closeToTray,
     'dashboardModules':
         config.dashboardModules.map((module) => module.id).toList(),
     'colorTheme': config.colorTheme.id,
-    'compactClickTarget': config.compactClickTarget.id,
+    'dashboardOrder': config.dashboardOrder.map((module) => module.id).toList(),
+    'wideDashboardModules':
+        config.wideDashboardModules.map((module) => module.id).toList(),
+    'appearanceMode': config.appearanceMode.name,
+    'compactDensity': config.compactDensity,
     'accounts': [
       for (final meta in supportedOjs)
         {
@@ -323,4 +367,39 @@ String buildExportFileName(String prefix, String extension, DateTime time) {
       '${local.hour.toString().padLeft(2, '0')}'
       '${local.minute.toString().padLeft(2, '0')}';
   return '${prefix}_$timestamp.$extension';
+}
+
+Future<File> _availableExportFile(
+  Directory directory,
+  String prefix,
+  String extension,
+  DateTime time,
+) async {
+  final baseName = buildExportFileName(prefix, extension, time);
+  final dot = baseName.lastIndexOf('.');
+  final stem = dot < 0 ? baseName : baseName.substring(0, dot);
+  final suffix = dot < 0 ? '' : baseName.substring(dot);
+  var index = 0;
+  while (true) {
+    final name = index == 0 ? baseName : '${stem}_$index$suffix';
+    final file = File('${directory.path}${Platform.pathSeparator}$name');
+    if (!await file.exists() && !await File('${file.path}.tmp').exists()) {
+      return file;
+    }
+    index++;
+  }
+}
+
+Future<void> _writeVerifiedPortableBackup(File target, String text) async {
+  final temporary = File('${target.path}.tmp');
+  try {
+    await temporary.writeAsString(text, flush: true);
+    parsePortableBackupJson(await temporary.readAsString());
+    await temporary.rename(target.path);
+  } catch (_) {
+    if (await temporary.exists()) {
+      await temporary.delete();
+    }
+    rethrow;
+  }
 }

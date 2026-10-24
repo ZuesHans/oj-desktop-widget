@@ -1,13 +1,19 @@
 import '../core/time.dart';
 import '../models/solved_snapshot.dart';
+import '../models/fetch_result.dart';
 import '../ui/app_theme.dart';
 import 'daily_summary_service.dart';
 
 class HeatmapDay {
-  const HeatmapDay({required this.date, required this.delta});
+  const HeatmapDay({
+    required this.date,
+    required this.delta,
+    this.accuracy = DailyActivityAccuracy.exact,
+  });
 
   final String date;
   final int delta;
+  final DailyActivityAccuracy accuracy;
 
   bool get active => delta > 0;
 
@@ -44,7 +50,7 @@ class HeatmapSummary {
     DateTime? startDate,
   }) {
     final normalizedToday = _startOfDay(today ?? DateTime.now());
-    final deltasByDate = _dailyDeltasByDate(snapshots);
+    final summariesByDate = _dailySummariesByDate(snapshots);
     final days = <HeatmapDay>[];
     final start = weeks == null
         ? _startOfWeek(startDate ?? heatmapDefaultStartDate)
@@ -58,13 +64,37 @@ class HeatmapSummary {
         !date.isAfter(end);
         date = date.add(const Duration(days: 1))) {
       final key = dateKey(date);
-      days.add(HeatmapDay(date: key, delta: deltasByDate[key] ?? 0));
+      final summary = summariesByDate[key];
+      days.add(
+        HeatmapDay(
+          date: key,
+          delta: summary?.totalDelta ?? 0,
+          accuracy: summary == null
+              ? DailyActivityAccuracy.exact
+              : summary.hasUnknown
+                  ? DailyActivityAccuracy.unknown
+                  : summary.hasEstimated
+                      ? DailyActivityAccuracy.estimated
+                      : DailyActivityAccuracy.exact,
+        ),
+      );
     }
 
     return HeatmapSummary(
       days: List.unmodifiable(days),
-      currentStreak: _currentStreak(deltasByDate, normalizedToday),
-      longestStreak: _longestStreak(deltasByDate),
+      currentStreak: _currentStreak(
+        {
+          for (final entry in summariesByDate.entries)
+            entry.key: entry.value.totalDelta
+        },
+        normalizedToday,
+      ),
+      longestStreak: _longestStreak(
+        {
+          for (final entry in summariesByDate.entries)
+            entry.key: entry.value.totalDelta
+        },
+      ),
       activeDays: days.where((day) => day.active).length,
       totalDelta: days.fold(0, (sum, day) => sum + day.delta),
     );
@@ -77,14 +107,15 @@ class HeatmapSummary {
   final int totalDelta;
 }
 
-Map<String, int> _dailyDeltasByDate(List<SolvedSnapshot> snapshots) {
+Map<String, DailySummary> _dailySummariesByDate(
+  List<SolvedSnapshot> snapshots,
+) {
   final dates = {
     for (final snapshot in snapshots) snapshot.date,
   }.toList()
     ..sort();
   return {
-    for (final date in dates)
-      date: DailySummary.fromSnapshots(date, snapshots).totalDelta,
+    for (final date in dates) date: DailySummary.fromSnapshots(date, snapshots),
   };
 }
 

@@ -8,14 +8,15 @@ import '../core/solved_totals.dart';
 import '../core/time.dart';
 import '../models/teammate.dart';
 import '../providers/oj_provider.dart';
+import 'module_http_client.dart';
 
 class TeammateService {
   TeammateService({
-    required this.client,
+    required http.Client client,
     required this.providers,
-  });
+  }) : client = ModuleHttpClient(client);
 
-  final http.Client client;
+  final ModuleHttpClient client;
   final Map<String, OjProvider> providers;
 
   TeammateStoreData addTeammate(

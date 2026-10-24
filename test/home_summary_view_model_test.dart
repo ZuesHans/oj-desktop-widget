@@ -27,13 +27,13 @@ void main() {
       },
       snapshots: [
         _snapshot('2026-07-04T08:00:00', 40),
-        _snapshot('2026-07-04T20:00:00', 42),
+        _snapshot('2026-07-04T20:00:00', 42, dailyAcceptedCount: 2),
       ],
       todaySummary: DailySummary.fromSnapshots(
         '2026-07-04',
         [
           _snapshot('2026-07-04T08:00:00', 40),
-          _snapshot('2026-07-04T20:00:00', 42),
+          _snapshot('2026-07-04T20:00:00', 42, dailyAcceptedCount: 2),
         ],
       ),
     );
@@ -108,7 +108,11 @@ AppConfig _configWithCodeforcesAccount() {
   );
 }
 
-SolvedSnapshot _snapshot(String fetchedAt, int solvedCount) {
+SolvedSnapshot _snapshot(
+  String fetchedAt,
+  int solvedCount, {
+  int? dailyAcceptedCount,
+}) {
   final parsed = DateTime.parse(fetchedAt);
   return SolvedSnapshot(
     date:
@@ -116,6 +120,10 @@ SolvedSnapshot _snapshot(String fetchedAt, int solvedCount) {
     ojId: 'codeforces',
     username: 'alice',
     solvedCount: solvedCount,
+    dailyAcceptedCount: dailyAcceptedCount,
+    dailyActivityAccuracy: dailyAcceptedCount == null
+        ? DailyActivityAccuracy.unknown
+        : DailyActivityAccuracy.exact,
     fetchedAt: parsed,
     status: FetchStatus.success,
   );

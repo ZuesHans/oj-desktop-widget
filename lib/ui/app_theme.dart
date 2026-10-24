@@ -1,15 +1,28 @@
 import 'package:flutter/material.dart';
 
-import '../models/app_config.dart';
+import '../models/app_config.dart' show AppColorTheme, AppAppearanceMode;
 
-const compactWindowSize = Size(340, 154);
-const compactMinimumWindowSize = Size(300, 132);
-const largeFloatWindowSize = Size(380, 540);
-const largeFloatMinimumWindowSize = Size(330, 440);
-const dashboardWindowSize = Size(960, 680);
-const dashboardMinimumWindowSize = Size(760, 520);
-const heatmapWindowSize = Size(560, 560);
-const heatmapMinimumWindowSize = Size(440, 420);
+const appWindowSize = Size(1120, 760);
+const appMinimumWindowSize = Size(900, 620);
+
+const appRadiusControl = 8.0;
+const appRadiusCard = 12.0;
+const appRadiusCompact = 20.0;
+const appRadiusPill = 999.0;
+
+const appSpace1 = 4.0;
+const appSpace2 = 8.0;
+const appSpace3 = 12.0;
+const appSpace4 = 16.0;
+const appSpace5 = 18.0;
+const appSpace6 = 24.0;
+
+const appCardPadding = EdgeInsets.all(20);
+const appControlPadding = EdgeInsets.symmetric(
+  horizontal: appSpace3,
+  vertical: 10,
+);
+const appPillPadding = EdgeInsets.symmetric(horizontal: appSpace2, vertical: 3);
 
 class AppPalette {
   const AppPalette({
@@ -22,10 +35,6 @@ class AppPalette {
     required this.textSecondary,
     required this.accent,
     required this.danger,
-    required this.compactSurface,
-    required this.compactLabel,
-    required this.compactText,
-    required this.compactShadow,
     required this.heatmapLevels,
   });
 
@@ -38,33 +47,44 @@ class AppPalette {
   final Color textSecondary;
   final Color accent;
   final Color danger;
-  final Color compactSurface;
-  final Color compactLabel;
-  final Color compactText;
-  final Color compactShadow;
   final List<Color> heatmapLevels;
 }
 
-const _classicPalette = AppPalette(
+const _githubLightPalette = AppPalette(
   brightness: Brightness.light,
-  surface: Color(0xFFF6F7F4),
+  surface: Color(0xFFF6F8FA),
   card: Color(0xFFFFFFFF),
-  cardMuted: Color(0xFFF4F6F3),
-  border: Color(0xFFE1E4DE),
-  textPrimary: Color(0xFF17211D),
-  textSecondary: Color(0xFF64706A),
-  accent: Color(0xFF2F6F4E),
-  danger: Color(0xFFB3261E),
-  compactSurface: Color(0xF2F9FBF8),
-  compactLabel: Color(0xFF42655C),
-  compactText: Color(0xFF10231E),
-  compactShadow: Color(0x26000000),
+  cardMuted: Color(0xFFF0F3F6),
+  border: Color(0xFFD0D7DE),
+  textPrimary: Color(0xFF1F2328),
+  textSecondary: Color(0xFF656D76),
+  accent: Color(0xFF0969DA),
+  danger: Color(0xFFCF222E),
   heatmapLevels: [
-    Color(0xFFEFF3EF),
-    Color(0xFF9BE9A8),
-    Color(0xFF40C463),
-    Color(0xFF30A14E),
-    Color(0xFF216E39),
+    Color(0xFFEAF2E9),
+    Color(0xFFACD7A5),
+    Color(0xFF6FBA65),
+    Color(0xFF3B9140),
+    Color(0xFF216E39)
+  ],
+);
+
+const _terminalDarkPalette = AppPalette(
+  brightness: Brightness.dark,
+  surface: Color(0xFF0F1115),
+  card: Color(0xFF171A21),
+  cardMuted: Color(0xFF202630),
+  border: Color(0xFF303846),
+  textPrimary: Color(0xFFE6EDF3),
+  textSecondary: Color(0xFF8B98A8),
+  accent: Color(0xFF58A6FF),
+  danger: Color(0xFFF85149),
+  heatmapLevels: [
+    Color(0xFF202630),
+    Color(0xFF1F4E38),
+    Color(0xFF28754B),
+    Color(0xFF35A866),
+    Color(0xFF74D990)
   ],
 );
 
@@ -78,16 +98,12 @@ const _oceanPalette = AppPalette(
   textSecondary: Color(0xFF5E7077),
   accent: Color(0xFF197B8A),
   danger: Color(0xFFC43D4B),
-  compactSurface: Color(0xF2F4FBFD),
-  compactLabel: Color(0xFF2F7280),
-  compactText: Color(0xFF0E2D35),
-  compactShadow: Color(0x24072E36),
   heatmapLevels: [
-    Color(0xFFE7F1F4),
-    Color(0xFFB8E3EA),
-    Color(0xFF76C7D2),
-    Color(0xFF369EAD),
-    Color(0xFF176B78),
+    Color(0xFFEAF4F7),
+    Color(0xFFB5DDE2),
+    Color(0xFF79BBC7),
+    Color(0xFF4698AB),
+    Color(0xFF197B8A)
   ],
 );
 
@@ -101,16 +117,31 @@ const _rosePalette = AppPalette(
   textSecondary: Color(0xFF75656A),
   accent: Color(0xFFA33F62),
   danger: Color(0xFFB3261E),
-  compactSurface: Color(0xF2FFF7FA),
-  compactLabel: Color(0xFF9B4967),
-  compactText: Color(0xFF34161F),
-  compactShadow: Color(0x26000000),
   heatmapLevels: [
-    Color(0xFFF5E9EE),
-    Color(0xFFF4B8CB),
-    Color(0xFFE6799F),
-    Color(0xFFB84570),
-    Color(0xFF7F284B),
+    Color(0xFFF8ECEF),
+    Color(0xFFF0C7D4),
+    Color(0xFFD995AE),
+    Color(0xFFBE6588),
+    Color(0xFFA33F62)
+  ],
+);
+
+const _classicPalette = AppPalette(
+  brightness: Brightness.light,
+  surface: Color(0xFFF5F7FA),
+  card: Color(0xFFFFFFFF),
+  cardMuted: Color(0xFFEEF3F8),
+  border: Color(0xFFDDE5EE),
+  textPrimary: Color(0xFF17202A),
+  textSecondary: Color(0xFF607080),
+  accent: Color(0xFF2563EB),
+  danger: Color(0xFFD14343),
+  heatmapLevels: [
+    Color(0xFFEFF3EF),
+    Color(0xFF9BE9A8),
+    Color(0xFF40C463),
+    Color(0xFF30A14E),
+    Color(0xFF216E39),
   ],
 );
 
@@ -124,10 +155,6 @@ const _darkPalette = AppPalette(
   textSecondary: Color(0xFFA7B2AD),
   accent: Color(0xFF77C69A),
   danger: Color(0xFFFF8A80),
-  compactSurface: Color(0xF01A2026),
-  compactLabel: Color(0xFF93D7AF),
-  compactText: Color(0xFFF5FFF8),
-  compactShadow: Color(0x66000000),
   heatmapLevels: [
     Color(0xFF20262C),
     Color(0xFF1F4E38),
@@ -147,10 +174,6 @@ const _candyPalette = AppPalette(
   textSecondary: Color(0xFF69767D),
   accent: Color(0xFF31A9D8),
   danger: Color(0xFFC23B61),
-  compactSurface: Color(0xF8FFFFFF),
-  compactLabel: Color(0xFFE9789E),
-  compactText: Color(0xFF23323A),
-  compactShadow: Color(0x240A6A8C),
   heatmapLevels: [
     Color(0xFFFFEFF5),
     Color(0xFFF5A9B8),
@@ -160,14 +183,111 @@ const _candyPalette = AppPalette(
   ],
 );
 
-AppPalette appPaletteFor(AppColorTheme theme) {
-  return switch (theme) {
+AppPalette appPaletteFor(AppColorTheme theme, {Brightness? brightness}) {
+  final palette = switch (theme) {
+    AppColorTheme.githubLight => _githubLightPalette,
+    AppColorTheme.terminalDark => _terminalDarkPalette,
     AppColorTheme.classic => _classicPalette,
-    AppColorTheme.ocean => _oceanPalette,
-    AppColorTheme.rose => _rosePalette,
     AppColorTheme.dark => _darkPalette,
     AppColorTheme.candy => _candyPalette,
+    AppColorTheme.ocean => _oceanPalette,
+    AppColorTheme.rose => _rosePalette,
+    AppColorTheme.sage ||
+    AppColorTheme.ink ||
+    AppColorTheme.warm =>
+      _studioPalette(theme, brightness ?? Brightness.light),
   };
+  if (brightness == null || brightness == palette.brightness) return palette;
+  final dark = brightness == Brightness.dark;
+  return AppPalette(
+    brightness: brightness,
+    surface: dark ? const Color(0xFF131B24) : const Color(0xFFF5F7FA),
+    card: dark ? const Color(0xFF1C2835) : Colors.white,
+    cardMuted: dark ? const Color(0xFF263649) : const Color(0xFFEEF3F8),
+    border: dark ? const Color(0xFF384B61) : const Color(0xFFDDE5EE),
+    textPrimary: dark ? const Color(0xFFE6EDF7) : const Color(0xFF203047),
+    textSecondary: dark ? const Color(0xFFA6B5CC) : const Color(0xFF62718A),
+    accent: Color.lerp(palette.accent, dark ? Colors.white : Colors.black,
+        dark ? 0.38 : 0.28)!,
+    danger: dark ? const Color(0xFFFFA29B) : const Color(0xFFAE3D37),
+    heatmapLevels:
+        dark ? _darkPalette.heatmapLevels : _classicPalette.heatmapLevels,
+  );
+}
+
+AppPalette _studioPalette(AppColorTheme theme, Brightness brightness) {
+  final dark = brightness == Brightness.dark;
+  final colors = switch (theme) {
+    AppColorTheme.ink => dark
+        ? [
+            0xFF141B2B,
+            0xFF1D273A,
+            0xFF303F64,
+            0xFF35445F,
+            0xFFE1E9FA,
+            0xFFA6B5CF,
+            0xFFB1C3FF
+          ]
+        : [
+            0xFFF3F5FA,
+            0xFFFFFFFF,
+            0xFFEAF0FE,
+            0xFFDFE5F0,
+            0xFF26344E,
+            0xFF66748D,
+            0xFF4B63A8
+          ],
+    AppColorTheme.warm => dark
+        ? [
+            0xFF211D18,
+            0xFF2D271F,
+            0xFF493923,
+            0xFF4C4134,
+            0xFFF1E4D1,
+            0xFFBBAA92,
+            0xFFEBC08B
+          ]
+        : [
+            0xFFF9F5EE,
+            0xFFFFFCF6,
+            0xFFF4E9D8,
+            0xFFE9DFCF,
+            0xFF493A2B,
+            0xFF7D6B56,
+            0xFF94612E
+          ],
+    _ => dark
+        ? [
+            0xFF131C20,
+            0xFF1B282D,
+            0xFF28443A,
+            0xFF344941,
+            0xFFE4EFEC,
+            0xFFA2B7B0,
+            0xFF8BD4B8
+          ]
+        : [
+            0xFFF3F6F6,
+            0xFFFFFFFF,
+            0xFFE7F3ED,
+            0xFFDDE7E2,
+            0xFF203532,
+            0xFF60746E,
+            0xFF276E59
+          ],
+  };
+  return AppPalette(
+      brightness: brightness,
+      surface: Color(colors[0]),
+      card: Color(colors[1]),
+      cardMuted: Color(colors[2]),
+      border: Color(colors[3]),
+      textPrimary: Color(colors[4]),
+      textSecondary: Color(colors[5]),
+      accent: Color(colors[6]),
+      danger: Color(dark ? 0xFFF0A29B : 0xFFAE3D37),
+      heatmapLevels:
+          dark ? _darkPalette.heatmapLevels : _classicPalette.heatmapLevels);
 }
 
 var appSurfaceColor = _classicPalette.surface;
@@ -178,14 +298,10 @@ var textPrimaryColor = _classicPalette.textPrimary;
 var textSecondaryColor = _classicPalette.textSecondary;
 var accentColor = _classicPalette.accent;
 var dangerColor = _classicPalette.danger;
-var compactSurfaceColor = _classicPalette.compactSurface;
-var compactLabelColor = _classicPalette.compactLabel;
-var compactTextColor = _classicPalette.compactText;
-var compactShadowColor = _classicPalette.compactShadow;
 var heatmapLevelColors = _classicPalette.heatmapLevels;
 
-void applyAppColorTheme(AppColorTheme theme) {
-  final palette = appPaletteFor(theme);
+void applyAppColorTheme(AppColorTheme theme, {Brightness? brightness}) {
+  final palette = appPaletteFor(theme, brightness: brightness);
   appSurfaceColor = palette.surface;
   cardColor = palette.card;
   cardMutedColor = palette.cardMuted;
@@ -194,30 +310,42 @@ void applyAppColorTheme(AppColorTheme theme) {
   textSecondaryColor = palette.textSecondary;
   accentColor = palette.accent;
   dangerColor = palette.danger;
-  compactSurfaceColor = palette.compactSurface;
-  compactLabelColor = palette.compactLabel;
-  compactTextColor = palette.compactText;
-  compactShadowColor = palette.compactShadow;
   heatmapLevelColors = palette.heatmapLevels;
 }
 
-const appSystemFontFamily = 'Microsoft YaHei UI';
+const appSystemFontFamily = 'Segoe UI';
 const appSystemFontFallback = <String>[
   'Segoe UI Variable Text',
-  'Segoe UI',
+  'Microsoft YaHei UI',
   'Microsoft YaHei',
   'SimSun',
   'Arial',
 ];
 
-ThemeData buildAppTheme([AppColorTheme colorTheme = AppColorTheme.classic]) {
-  applyAppColorTheme(colorTheme);
-  final palette = appPaletteFor(colorTheme);
+ThemeData buildAppTheme([
+  AppColorTheme colorTheme = AppColorTheme.classic,
+  AppAppearanceMode appearanceMode = AppAppearanceMode.system,
+  Brightness? systemBrightness,
+  bool compactDensity = false,
+]) {
+  final brightness = switch (appearanceMode) {
+    AppAppearanceMode.system => systemBrightness,
+    AppAppearanceMode.light => Brightness.light,
+    AppAppearanceMode.dark => Brightness.dark,
+  };
+  // Preserve dark skins in system mode; explicit light/dark takes precedence.
+  final effective = appearanceMode == AppAppearanceMode.system &&
+          (colorTheme == AppColorTheme.terminalDark ||
+              colorTheme == AppColorTheme.dark)
+      ? Brightness.dark
+      : brightness;
+  applyAppColorTheme(colorTheme, brightness: effective);
+  final palette = appPaletteFor(colorTheme, brightness: effective);
   final controlShape = RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(8),
+    borderRadius: BorderRadius.circular(appRadiusControl),
   );
   final inputBorder = OutlineInputBorder(
-    borderRadius: BorderRadius.circular(8),
+    borderRadius: BorderRadius.circular(appRadiusControl),
     borderSide: BorderSide(color: palette.border),
   );
   final colorScheme = ColorScheme.fromSeed(
@@ -225,9 +353,16 @@ ThemeData buildAppTheme([AppColorTheme colorTheme = AppColorTheme.classic]) {
     brightness: palette.brightness,
   ).copyWith(
     surface: palette.card,
+    surfaceTint: Colors.transparent,
     onSurface: palette.textPrimary,
     onSurfaceVariant: palette.textSecondary,
     primary: palette.accent,
+    onPrimary:
+        ThemeData.estimateBrightnessForColor(palette.accent) == Brightness.light
+            ? const Color(0xFF10242B)
+            : Colors.white,
+    outline: palette.border,
+    outlineVariant: palette.border,
     error: palette.danger,
   );
   final base = ThemeData(
@@ -236,14 +371,53 @@ ThemeData buildAppTheme([AppColorTheme colorTheme = AppColorTheme.classic]) {
     scaffoldBackgroundColor: Colors.transparent,
     fontFamily: appSystemFontFamily,
     fontFamilyFallback: appSystemFontFallback,
-    visualDensity: VisualDensity.compact,
+    visualDensity:
+        compactDensity ? VisualDensity.compact : VisualDensity.standard,
   );
-  final textTheme = base.textTheme.apply(
-    fontFamily: appSystemFontFamily,
-    fontFamilyFallback: appSystemFontFallback,
-    bodyColor: palette.textPrimary,
-    displayColor: palette.textPrimary,
-  );
+  final textTheme = base.textTheme
+      .apply(
+        fontFamily: appSystemFontFamily,
+        fontFamilyFallback: appSystemFontFallback,
+        bodyColor: palette.textPrimary,
+        displayColor: palette.textPrimary,
+      )
+      .copyWith(
+        headlineSmall: TextStyle(
+            fontSize: 25,
+            height: 1.3,
+            fontWeight: FontWeight.w500,
+            color: palette.textPrimary,
+            letterSpacing: -0.4),
+        titleLarge: TextStyle(
+            fontSize: 22,
+            height: 1.35,
+            fontWeight: FontWeight.w500,
+            color: palette.textPrimary),
+        titleMedium: TextStyle(
+            fontSize: 16,
+            height: 1.5,
+            fontWeight: FontWeight.w500,
+            color: palette.textPrimary),
+        bodyLarge:
+            TextStyle(fontSize: 14, height: 1.6, color: palette.textPrimary),
+        bodyMedium:
+            TextStyle(fontSize: 14, height: 1.55, color: palette.textPrimary),
+        bodySmall:
+            TextStyle(fontSize: 12, height: 1.5, color: palette.textSecondary),
+        labelLarge: TextStyle(
+            fontSize: 13,
+            height: 1.4,
+            fontWeight: FontWeight.w500,
+            color: palette.textPrimary),
+        labelMedium: TextStyle(
+            fontSize: 12,
+            height: 1.4,
+            fontWeight: FontWeight.w400,
+            color: palette.textPrimary),
+      )
+      .apply(
+          fontFamily: appSystemFontFamily,
+          fontFamilyFallback: appSystemFontFallback);
 
   return base.copyWith(
     textTheme: textTheme,
@@ -257,6 +431,7 @@ ThemeData buildAppTheme([AppColorTheme colorTheme = AppColorTheme.classic]) {
     ),
     dialogTheme: base.dialogTheme.copyWith(
       backgroundColor: palette.card,
+      surfaceTintColor: Colors.transparent,
       titleTextStyle: textTheme.titleLarge,
       contentTextStyle: textTheme.bodyMedium,
     ),
@@ -264,7 +439,7 @@ ThemeData buildAppTheme([AppColorTheme colorTheme = AppColorTheme.classic]) {
       filled: true,
       fillColor: palette.card,
       isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      contentPadding: appControlPadding,
       border: inputBorder,
       enabledBorder: inputBorder,
       focusedBorder: inputBorder.copyWith(
@@ -275,9 +450,11 @@ ThemeData buildAppTheme([AppColorTheme colorTheme = AppColorTheme.classic]) {
     ),
     listTileTheme: base.listTileTheme.copyWith(
       dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+      contentPadding: const EdgeInsets.symmetric(horizontal: appSpace2),
       iconColor: palette.textSecondary,
       textColor: palette.textPrimary,
+      titleTextStyle: textTheme.bodyMedium,
+      subtitleTextStyle: textTheme.bodySmall,
     ),
     chipTheme: base.chipTheme.copyWith(
       backgroundColor: palette.cardMuted,
@@ -288,14 +465,50 @@ ThemeData buildAppTheme([AppColorTheme colorTheme = AppColorTheme.classic]) {
       secondaryLabelStyle:
           textTheme.labelMedium?.copyWith(color: palette.textPrimary),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      shape: const StadiumBorder(),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
     ),
     popupMenuTheme: base.popupMenuTheme.copyWith(
       color: palette.card,
       textStyle: textTheme.bodyMedium?.copyWith(color: palette.textPrimary),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(appRadiusControl),
+      ),
     ),
     dividerTheme: DividerThemeData(color: palette.border),
+    expansionTileTheme: ExpansionTileThemeData(
+      shape: const Border(),
+      collapsedShape: const Border(),
+      textColor: palette.textPrimary,
+      collapsedTextColor: palette.textPrimary,
+      iconColor: palette.textSecondary,
+      collapsedIconColor: palette.textSecondary,
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.disabled)
+              ? palette.textSecondary.withValues(alpha: 0.3)
+              : states.contains(WidgetState.selected)
+                  ? colorScheme.onPrimary
+                  : palette.textSecondary),
+      trackColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.disabled)
+              ? palette.cardMuted
+              : states.contains(WidgetState.selected)
+                  ? palette.accent
+                  : palette.cardMuted),
+      trackOutlineColor: WidgetStateProperty.resolveWith((states) =>
+          states.contains(WidgetState.selected)
+              ? palette.accent
+              : palette.border),
+    ),
+    tabBarTheme: base.tabBarTheme.copyWith(
+      labelStyle: textTheme.labelLarge,
+      unselectedLabelStyle: textTheme.labelLarge,
+      labelColor: palette.accent,
+      unselectedLabelColor: palette.textSecondary,
+      dividerColor: palette.border,
+      indicatorSize: TabBarIndicatorSize.label,
+    ),
     iconTheme: base.iconTheme.copyWith(color: palette.textPrimary),
     iconButtonTheme: IconButtonThemeData(
       style: IconButton.styleFrom(
@@ -308,7 +521,7 @@ ThemeData buildAppTheme([AppColorTheme colorTheme = AppColorTheme.classic]) {
       style: TextButton.styleFrom(
         textStyle: textTheme.labelLarge,
         shape: controlShape,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: appControlPadding,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
     ),
@@ -316,15 +529,16 @@ ThemeData buildAppTheme([AppColorTheme colorTheme = AppColorTheme.classic]) {
       style: FilledButton.styleFrom(
         textStyle: textTheme.labelLarge,
         shape: controlShape,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: appControlPadding,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         textStyle: textTheme.labelLarge,
+        side: BorderSide(color: palette.border),
         shape: controlShape,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: appControlPadding,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
     ),
@@ -332,7 +546,7 @@ ThemeData buildAppTheme([AppColorTheme colorTheme = AppColorTheme.classic]) {
       style: ElevatedButton.styleFrom(
         textStyle: textTheme.labelLarge,
         shape: controlShape,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: appControlPadding,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
     ),

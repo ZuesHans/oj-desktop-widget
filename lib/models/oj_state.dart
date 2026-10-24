@@ -7,6 +7,7 @@ import 'problem_record.dart';
 import 'refresh_log_entry.dart';
 import 'solved_snapshot.dart';
 import 'teammate.dart';
+import 'training.dart';
 
 class OjState {
   const OjState({
@@ -14,8 +15,10 @@ class OjState {
     required this.latest,
     required this.snapshots,
     required this.problems,
+    this.problemFolders = const [],
     required this.contests,
     required this.teammates,
+    required this.training,
     required this.refreshLogs,
     required this.todaySummary,
   });
@@ -29,6 +32,7 @@ class OjState {
       problems: const [],
       contests: const [],
       teammates: const TeammateStoreData(),
+      training: const TrainingStoreData(),
       refreshLogs: const [],
       todaySummary: DailySummary.empty(today),
     );
@@ -38,8 +42,10 @@ class OjState {
   final Map<String, List<FetchResult>> latest;
   final List<SolvedSnapshot> snapshots;
   final List<ProblemRecord> problems;
+  final List<String> problemFolders;
   final List<ContestRecord> contests;
   final TeammateStoreData teammates;
+  final TrainingStoreData training;
   final List<RefreshLogEntry> refreshLogs;
   final DailySummary todaySummary;
 
@@ -48,8 +54,10 @@ class OjState {
     Map<String, List<FetchResult>>? latest,
     List<SolvedSnapshot>? snapshots,
     List<ProblemRecord>? problems,
+    List<String>? problemFolders,
     List<ContestRecord>? contests,
     TeammateStoreData? teammates,
+    TrainingStoreData? training,
     List<RefreshLogEntry>? refreshLogs,
     DailySummary? todaySummary,
   }) {
@@ -58,8 +66,10 @@ class OjState {
       latest: latest ?? this.latest,
       snapshots: snapshots ?? this.snapshots,
       problems: problems ?? this.problems,
+      problemFolders: problemFolders ?? this.problemFolders,
       contests: contests ?? this.contests,
       teammates: teammates ?? this.teammates,
+      training: training ?? this.training,
       refreshLogs: refreshLogs ?? this.refreshLogs,
       todaySummary: todaySummary ?? this.todaySummary,
     );

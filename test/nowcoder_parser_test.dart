@@ -34,6 +34,41 @@ void main() {
     });
   });
 
+  group('nowcoder profile resolution', () {
+    test('uses direct profile URL for numeric user id', () {
+      expect(isNowcoderNumericUserId('123456'), isTrue);
+      expect(isNowcoderNumericUserId('alice'), isFalse);
+      expect(
+        nowcoderProfileUri('123456').toString(),
+        'https://www.nowcoder.com/users/123456',
+      );
+    });
+
+    test('uses search URL for nickname input', () {
+      expect(
+        nowcoderProfileUri('alice').toString(),
+        'https://www.nowcoder.com/search/all?query=alice',
+      );
+    });
+
+    test('parses exact nickname user id from search payload', () {
+      expect(
+        parseNowcoderSearchUserId(
+          'alice',
+          '{"userBrief":{"userId":123,"nickname":"alice"}}',
+        ),
+        '123',
+      );
+      expect(
+        parseNowcoderSearchUserId(
+          'alice',
+          '{"userBrief":{"userId":456,"nickname":"alice2"}}',
+        ),
+        isNull,
+      );
+    });
+  });
+
   group('parseNowcoderOjhuntSolvedCount', () {
     test('reads data.solved from OJ Hunt response', () {
       expect(
@@ -133,6 +168,35 @@ void main() {
       'www.nowcoder.com',
     ]);
     expect(profile.solvedCount, 44);
+    expect(profile.source, 'profile_html');
+  });
+
+  test('provider resolves nickname through search when OJ Hunt fails',
+      () async {
+    final requestedUris = <Uri>[];
+    final client = MockClient((request) async {
+      requestedUris.add(request.url);
+      if (request.url.host == 'ojhunt.com') {
+        return http.Response('temporary failure', 502);
+      }
+      if (request.url.path == '/search/all') {
+        return http.Response(
+          '{"userBrief":{"userId":2468,"nickname":"alice"}}',
+          200,
+        );
+      }
+      return http.Response('{"acceptedCount":45}', 200);
+    });
+
+    final profile = await NowcoderProvider().fetchProfile(client, 'alice');
+
+    expect(requestedUris.map((uri) => uri.toString()), [
+      'https://ojhunt.com/api/crawlers/nowcoder/alice',
+      'https://www.nowcoder.com/search/all?query=alice',
+      'https://www.nowcoder.com/users/2468',
+    ]);
+    expect(profile.solvedCount, 45);
+    expect(profile.profileUrl, 'https://www.nowcoder.com/users/2468');
     expect(profile.source, 'profile_html');
   });
 

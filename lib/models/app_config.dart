@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 
 import '../core/oj_catalog.dart';
+import 'quick_entry_shortcut.dart';
 
 const defaultDashboardModules = <DashboardModule>[
   DashboardModule.summary,
+  DashboardModule.training,
   DashboardModule.heatmap,
   DashboardModule.problems,
   DashboardModule.refreshLogs,
@@ -13,8 +15,16 @@ const defaultDashboardModules = <DashboardModule>[
   DashboardModule.daily,
 ];
 
+const currentAppConfigVersion = 4;
+
+const defaultWideDashboardModules = <DashboardModule>[
+  DashboardModule.training,
+  DashboardModule.daily,
+];
+
 enum DashboardModule {
   summary('summary'),
+  training('training'),
   heatmap('heatmap'),
   problems('problems'),
   refreshLogs('refreshLogs'),
@@ -29,51 +39,53 @@ enum DashboardModule {
 }
 
 enum AppColorTheme {
+  githubLight('githubLight'),
+  terminalDark('terminalDark'),
   classic('classic'),
+  dark('dark'),
+  candy('candy'),
   ocean('ocean'),
   rose('rose'),
-  dark('dark'),
-  candy('candy');
+  sage('sage'),
+  ink('ink'),
+  warm('warm');
 
   const AppColorTheme(this.id);
 
   final String id;
 }
 
-enum CompactClickTarget {
-  largeFloat('largeFloat'),
-  dashboard('dashboard');
-
-  const CompactClickTarget(this.id);
-
-  final String id;
-}
+enum AppAppearanceMode { system, light, dark }
 
 class AppConfig {
   const AppConfig({
     required this.refreshIntervalMinutes,
     required this.accounts,
+    this.configVersion = currentAppConfigVersion,
     this.dashboardModules = defaultDashboardModules,
+    this.dashboardOrder = defaultDashboardModules,
+    this.wideDashboardModules = defaultWideDashboardModules,
     this.colorTheme = AppColorTheme.classic,
-    this.compactClickTarget = CompactClickTarget.largeFloat,
+    this.appearanceMode = AppAppearanceMode.system,
+    this.compactDensity = false,
     this.sync = const SyncConfig(),
+    this.automaticBackup = const AutomaticBackupConfig(),
     this.launchAtStartup = false,
-    this.alwaysOnTop = true,
-    this.showInTaskbar = true,
-    this.closeToTray = true,
+    this.closeToTray = false,
+    this.quickEntryHotkey = 'Ctrl+Shift+O',
+    this.onboardingComplete = true,
   });
 
   factory AppConfig.defaults() {
     return AppConfig(
       refreshIntervalMinutes: 60,
       launchAtStartup: false,
-      alwaysOnTop: true,
-      showInTaskbar: true,
-      closeToTray: true,
+      closeToTray: false,
       sync: const SyncConfig(),
+      automaticBackup: const AutomaticBackupConfig(),
       dashboardModules: defaultDashboardModules,
       colorTheme: AppColorTheme.classic,
-      compactClickTarget: CompactClickTarget.largeFloat,
+      onboardingComplete: false,
       accounts: {
         for (final meta in supportedOjs)
           meta.id: const OjAccountConfig(usernames: [], enabled: false),
@@ -83,25 +95,35 @@ class AppConfig {
 
   factory AppConfig.fromJson(Map<String, dynamic> json) {
     final rawAccounts = json['accounts'];
+    final storedVersion =
+        json['configVersion'] is int ? json['configVersion'] as int : 1;
+    final isLegacyFloatingConfig = storedVersion < 2;
     return AppConfig(
+      configVersion: currentAppConfigVersion,
+      onboardingComplete: json['onboardingComplete'] != false,
       refreshIntervalMinutes: _parseRefreshInterval(
         json['refreshIntervalMinutes'],
       ),
-      launchAtStartup: json['launchAtStartup'] is bool
-          ? json['launchAtStartup'] as bool
+      launchAtStartup:
+          !isLegacyFloatingConfig && json['launchAtStartup'] is bool
+              ? json['launchAtStartup'] as bool
+              : false,
+      closeToTray: !isLegacyFloatingConfig && json['closeToTray'] is bool
+          ? json['closeToTray'] as bool
           : false,
-      alwaysOnTop:
-          json['alwaysOnTop'] is bool ? json['alwaysOnTop'] as bool : true,
-      showInTaskbar:
-          json['showInTaskbar'] is bool ? json['showInTaskbar'] as bool : true,
-      closeToTray:
-          json['closeToTray'] is bool ? json['closeToTray'] as bool : true,
       sync: SyncConfig.fromJson(json['sync']),
-      dashboardModules: _parseDashboardModules(json['dashboardModules']),
-      colorTheme: _parseColorTheme(json['colorTheme']),
-      compactClickTarget: _parseCompactClickTarget(
-        json['compactClickTarget'],
+      automaticBackup: AutomaticBackupConfig.fromJson(
+        json['automaticBackup'],
       ),
+      dashboardModules: _parseDashboardModules(json['dashboardModules']),
+      dashboardOrder: _parseDashboardOrder(
+        json['dashboardOrder'] ?? json['dashboardModules'],
+      ),
+      wideDashboardModules: _parseWideModules(json['wideDashboardModules']),
+      colorTheme: _parseColorTheme(json['colorTheme']),
+      appearanceMode: _parseAppearanceMode(json['appearanceMode']),
+      compactDensity: json['compactDensity'] == true,
+      quickEntryHotkey: _parseQuickEntryHotkey(json['quickEntryHotkey']),
       accounts: {
         for (final meta in supportedOjs)
           meta.id: _parseAccountConfig(
@@ -135,24 +157,23 @@ class AppConfig {
       accounts[ojId] = OjAccountConfig.fromJson(accountJson);
     }
     return AppConfig(
+      configVersion: currentAppConfigVersion,
       refreshIntervalMinutes: _parseRefreshInterval(
         json['refreshIntervalMinutes'],
       ),
-      launchAtStartup: json['launchAtStartup'] is bool
-          ? json['launchAtStartup'] as bool
-          : false,
-      alwaysOnTop:
-          json['alwaysOnTop'] is bool ? json['alwaysOnTop'] as bool : true,
-      showInTaskbar:
-          json['showInTaskbar'] is bool ? json['showInTaskbar'] as bool : true,
-      closeToTray:
-          json['closeToTray'] is bool ? json['closeToTray'] as bool : true,
+      launchAtStartup: false,
+      closeToTray: false,
       sync: const SyncConfig(),
+      automaticBackup: const AutomaticBackupConfig(),
       dashboardModules: _parseDashboardModules(json['dashboardModules']),
-      colorTheme: _parseColorTheme(json['colorTheme']),
-      compactClickTarget: _parseCompactClickTarget(
-        json['compactClickTarget'],
+      dashboardOrder: _parseDashboardOrder(
+        json['dashboardOrder'] ?? json['dashboardModules'],
       ),
+      wideDashboardModules: _parseWideModules(json['wideDashboardModules']),
+      colorTheme: _parseColorTheme(json['colorTheme']),
+      appearanceMode: _parseAppearanceMode(json['appearanceMode']),
+      compactDensity: json['compactDensity'] == true,
+      quickEntryHotkey: _parseQuickEntryHotkey(json['quickEntryHotkey']),
       accounts: accounts,
     );
   }
@@ -204,6 +225,27 @@ class AppConfig {
     return null;
   }
 
+  static List<DashboardModule> _parseDashboardOrder(Object? value) =>
+      List.unmodifiable({
+        ..._parseDashboardModules(value),
+        ...defaultDashboardModules,
+      });
+
+  static List<DashboardModule> _parseWideModules(Object? value) => value == null
+      ? defaultWideDashboardModules
+      : _parseDashboardModules(value);
+
+  static AppAppearanceMode _parseAppearanceMode(Object? value) =>
+      AppAppearanceMode.values.firstWhere(
+        (mode) => mode.name == value,
+        orElse: () => AppAppearanceMode.system,
+      );
+
+  static String _parseQuickEntryHotkey(Object? value) => value is String
+      ? QuickEntryShortcut.parse(value)?.label ??
+          QuickEntryShortcut.defaultLabel
+      : QuickEntryShortcut.defaultLabel;
+
   static AppColorTheme _parseColorTheme(Object? value) {
     if (value is String) {
       for (final theme in AppColorTheme.values) {
@@ -215,69 +257,129 @@ class AppConfig {
     return AppColorTheme.classic;
   }
 
-  static CompactClickTarget _parseCompactClickTarget(Object? value) {
-    if (value is String) {
-      for (final target in CompactClickTarget.values) {
-        if (target.id == value) {
-          return target;
-        }
-      }
-    }
-    return CompactClickTarget.largeFloat;
-  }
-
+  final int configVersion;
   final int refreshIntervalMinutes;
   final Map<String, OjAccountConfig> accounts;
   final List<DashboardModule> dashboardModules;
+  final List<DashboardModule> dashboardOrder;
+  final List<DashboardModule> wideDashboardModules;
   final AppColorTheme colorTheme;
-  final CompactClickTarget compactClickTarget;
+  final AppAppearanceMode appearanceMode;
+  final bool compactDensity;
   final bool launchAtStartup;
-  final bool alwaysOnTop;
-  final bool showInTaskbar;
   final bool closeToTray;
+  final String quickEntryHotkey;
+  final bool onboardingComplete;
   final SyncConfig sync;
+  final AutomaticBackupConfig automaticBackup;
+
+  bool moduleEnabled(DashboardModule module) =>
+      dashboardModules.contains(module);
 
   AppConfig copyWith({
+    int? configVersion,
     int? refreshIntervalMinutes,
     Map<String, OjAccountConfig>? accounts,
     List<DashboardModule>? dashboardModules,
+    List<DashboardModule>? dashboardOrder,
+    List<DashboardModule>? wideDashboardModules,
     AppColorTheme? colorTheme,
-    CompactClickTarget? compactClickTarget,
+    AppAppearanceMode? appearanceMode,
+    bool? compactDensity,
     bool? launchAtStartup,
-    bool? alwaysOnTop,
-    bool? showInTaskbar,
     bool? closeToTray,
+    String? quickEntryHotkey,
+    bool? onboardingComplete,
     SyncConfig? sync,
+    AutomaticBackupConfig? automaticBackup,
   }) {
     return AppConfig(
+      configVersion: configVersion ?? this.configVersion,
       refreshIntervalMinutes:
           refreshIntervalMinutes ?? this.refreshIntervalMinutes,
       accounts: accounts ?? this.accounts,
       dashboardModules: dashboardModules ?? this.dashboardModules,
+      dashboardOrder: dashboardOrder ?? this.dashboardOrder,
+      wideDashboardModules: wideDashboardModules ?? this.wideDashboardModules,
       colorTheme: colorTheme ?? this.colorTheme,
-      compactClickTarget: compactClickTarget ?? this.compactClickTarget,
+      appearanceMode: appearanceMode ?? this.appearanceMode,
+      compactDensity: compactDensity ?? this.compactDensity,
       launchAtStartup: launchAtStartup ?? this.launchAtStartup,
-      alwaysOnTop: alwaysOnTop ?? this.alwaysOnTop,
-      showInTaskbar: showInTaskbar ?? this.showInTaskbar,
       closeToTray: closeToTray ?? this.closeToTray,
+      quickEntryHotkey: quickEntryHotkey ?? this.quickEntryHotkey,
+      onboardingComplete: onboardingComplete ?? this.onboardingComplete,
       sync: sync ?? this.sync,
+      automaticBackup: automaticBackup ?? this.automaticBackup,
     );
   }
 
   Map<String, dynamic> toJson() => {
+        'configVersion': currentAppConfigVersion,
         'refreshIntervalMinutes': refreshIntervalMinutes,
         'launchAtStartup': launchAtStartup,
-        'alwaysOnTop': alwaysOnTop,
-        'showInTaskbar': showInTaskbar,
         'closeToTray': closeToTray,
+        'quickEntryHotkey': quickEntryHotkey,
+        'onboardingComplete': onboardingComplete,
         'dashboardModules':
             dashboardModules.map((module) => module.id).toList(),
+        'dashboardOrder': dashboardOrder.map((module) => module.id).toList(),
+        'wideDashboardModules':
+            wideDashboardModules.map((module) => module.id).toList(),
         'colorTheme': colorTheme.id,
-        'compactClickTarget': compactClickTarget.id,
+        'appearanceMode': appearanceMode.name,
+        'compactDensity': compactDensity,
         'sync': sync.toJson(),
+        'automaticBackup': automaticBackup.toJson(),
         'accounts': {
           for (final entry in accounts.entries) entry.key: entry.value.toJson(),
         },
+      };
+}
+
+class AutomaticBackupConfig {
+  const AutomaticBackupConfig({
+    this.enabled = false,
+    this.timeMinutes = 22 * 60,
+    this.directoryPath = '',
+  });
+
+  factory AutomaticBackupConfig.fromJson(Object? value) {
+    if (value is! Map) {
+      return const AutomaticBackupConfig();
+    }
+    final json = Map<String, dynamic>.from(value);
+    final rawTime = json['timeMinutes'];
+    final timeMinutes =
+        rawTime is int && rawTime >= 0 && rawTime < 24 * 60 ? rawTime : 22 * 60;
+    return AutomaticBackupConfig(
+      enabled: json['enabled'] is bool ? json['enabled'] as bool : false,
+      timeMinutes: timeMinutes,
+      directoryPath: json['directoryPath'] is String
+          ? (json['directoryPath'] as String).trim()
+          : '',
+    );
+  }
+
+  final bool enabled;
+  final int timeMinutes;
+  final String directoryPath;
+
+  AutomaticBackupConfig copyWith({
+    bool? enabled,
+    int? timeMinutes,
+    String? directoryPath,
+  }) {
+    return AutomaticBackupConfig(
+      enabled: enabled ?? this.enabled,
+      timeMinutes: timeMinutes ?? this.timeMinutes,
+      directoryPath: directoryPath?.trim() ?? this.directoryPath,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'enabled': enabled,
+        'timeMinutes': timeMinutes,
+        'directoryPath': directoryPath,
       };
 }
 

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../../core/solved_totals.dart';
 import '../../models/contest_record.dart';
 import '../app_theme.dart';
+import '../shared/app_surface_card.dart';
+import '../shared/app_page_header.dart';
 import '../shared/pill.dart';
 import 'contest_editor.dart';
 
@@ -45,39 +47,32 @@ class ContestsPage extends StatelessWidget {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-              child: Row(
-                children: [
-                  if (showBackButton) ...[
-                    IconButton(
-                      key: const ValueKey('contests-back-button'),
-                      tooltip: '返回',
-                      onPressed: onBack,
-                      icon: const Icon(Icons.arrow_back),
-                    ),
-                    const SizedBox(width: 4),
-                  ],
-                  const Expanded(
-                    child: Text(
-                      '比赛记录',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+              child: AppPageHeader(
+                title: '比赛记录',
+                subtitle: contests.isEmpty
+                    ? '记录每一场比赛，留下值得再想一遍的思路。'
+                    : '共 ${contests.length} 场 · 最近 #${latest!.rank}',
+                leading: showBackButton
+                    ? IconButton(
+                        key: const ValueKey('contests-back-button'),
+                        tooltip: '返回',
+                        onPressed: onBack,
+                        icon: const Icon(Icons.arrow_back))
+                    : null,
+                actions: [
                   FilledButton.icon(
                     key: const ValueKey('add-contest-button'),
                     onPressed: () => _openEditor(context),
-                    icon: const Icon(Icons.add),
+                    icon: const Icon(Icons.add, size: 18),
                     label: const Text('新增'),
-                  ),
+                  )
                 ],
               ),
             ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                 children: [
                   _ContestSummary(
                     total: contests.length,
@@ -85,9 +80,9 @@ class ContestsPage extends StatelessWidget {
                     bestRank: bestRank,
                     averageRank: averageRank,
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 16),
                   _RankChartCard(points: rankPoints),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 16),
                   if (contests.isEmpty)
                     const _EmptyContestList()
                   else
@@ -140,6 +135,27 @@ class ContestsPage extends StatelessWidget {
   }
 
   Future<void> _delete(BuildContext context, ContestRecord contest) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('删除比赛记录？'),
+            content: Text('确认删除「${contest.title}」？此操作无法撤销。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('删除'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed) {
+      return;
+    }
     await onDelete(contest.id);
     if (!context.mounted) {
       return;
@@ -165,13 +181,8 @@ class _ContestSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(appSpace3),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final width = constraints.maxWidth >= 520
@@ -224,7 +235,8 @@ class _SummaryTile extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: cardMutedColor,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(appRadiusControl),
+          border: Border.all(color: borderColor),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -246,7 +258,7 @@ class _SummaryTile extends StatelessWidget {
                 style: TextStyle(
                   color: textPrimaryColor,
                   fontSize: 18,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -276,13 +288,8 @@ class _RankChartCardState extends State<_RankChartCard> {
             _selectedIndex! >= widget.points.length
         ? null
         : widget.points[_selectedIndex!];
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(appSpace3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -293,7 +300,7 @@ class _RankChartCardState extends State<_RankChartCard> {
                   '排名曲线',
                   style: TextStyle(
                     color: textPrimaryColor,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     fontSize: 16,
                   ),
                 ),
@@ -304,7 +311,7 @@ class _RankChartCardState extends State<_RankChartCard> {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 16),
           if (widget.points.length < 2)
             SizedBox(
               height: 180,
@@ -377,7 +384,8 @@ class _SelectedContest extends StatelessWidget {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: cardMutedColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(appRadiusControl),
+        border: Border.all(color: borderColor),
       ),
       child: Wrap(
         spacing: 8,
@@ -388,7 +396,7 @@ class _SelectedContest extends StatelessWidget {
             record.title,
             style: TextStyle(
               color: textPrimaryColor,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
           Pill(label: record.date),
@@ -416,13 +424,7 @@ class _ContestListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
+    return AppSurfaceCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -437,7 +439,7 @@ class _ContestListItem extends StatelessWidget {
                   style: TextStyle(
                     color: textPrimaryColor,
                     fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -502,13 +504,14 @@ class _RankChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: accentColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(appRadiusPill),
+        border: Border.all(color: accentColor.withValues(alpha: 0.22)),
       ),
       child: Text(
         '#$rank',
         style: TextStyle(
           color: accentColor,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -520,18 +523,10 @@ class _EmptyContestList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 120,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
-      child: Text(
-        '还没有比赛记录，先新增一场训练赛吧。',
-        style: TextStyle(color: textSecondaryColor),
-      ),
+    return const AppEmptyState(
+      icon: Icons.emoji_events_outlined,
+      title: '还没有比赛记录',
+      message: '先新增一场训练赛，排名曲线会在至少 2 场后显示。',
     );
   }
 }

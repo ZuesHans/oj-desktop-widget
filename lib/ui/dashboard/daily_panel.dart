@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/oj_catalog.dart';
 import '../../models/oj_state.dart';
+import '../../models/fetch_result.dart';
 import '../app_theme.dart';
 import '../shared/pill.dart';
 
@@ -14,10 +15,10 @@ class DailyPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final summary = state.todaySummary;
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(appRadiusCard),
         border: Border.all(color: borderColor),
       ),
       child: Column(
@@ -28,7 +29,7 @@ class DailyPanel extends StatelessWidget {
               const Expanded(
                 child: Text(
                   '每日总结',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                 ),
               ),
               Pill(label: summary.date),
@@ -40,7 +41,8 @@ class DailyPanel extends StatelessWidget {
           else
             ...supportedOjs.map((meta) {
               final delta = summary.deltas[meta.id];
-              if (delta == null) {
+              final accuracy = summary.accuracyForPlatform(meta.id);
+              if (delta == null && accuracy != DailyActivityAccuracy.unknown) {
                 return const SizedBox.shrink();
               }
               return Padding(
@@ -48,7 +50,13 @@ class DailyPanel extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(child: Text(meta.name)),
-                    Text('+$delta'),
+                    Text(
+                      switch (accuracy) {
+                        DailyActivityAccuracy.exact => '+${delta ?? 0}',
+                        DailyActivityAccuracy.estimated => '约 +${delta ?? 0}',
+                        DailyActivityAccuracy.unknown => '未知',
+                      },
+                    ),
                   ],
                 ),
               );

@@ -4,6 +4,8 @@ import '../../core/oj_catalog.dart';
 import '../../core/time.dart';
 import '../../models/refresh_log_entry.dart';
 import '../app_theme.dart';
+import '../shared/app_surface_card.dart';
+import '../shared/app_page_header.dart';
 import '../shared/pill.dart';
 
 class RefreshLogsPage extends StatelessWidget {
@@ -28,39 +30,35 @@ class RefreshLogsPage extends StatelessWidget {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-              child: Row(
-                children: [
-                  if (showBackButton) ...[
-                    IconButton(
-                      key: const ValueKey('refresh-logs-back-button'),
-                      tooltip: '返回',
-                      onPressed: onBack,
-                      icon: const Icon(Icons.arrow_back),
-                    ),
-                    const SizedBox(width: 4),
-                  ],
-                  const Expanded(
-                    child: Text(
-                      '刷新日志',
-                      style:
-                          TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                  Pill(label: '最近 ${logs.length} 条'),
-                ],
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+              child: AppPageHeader(
+                title: '刷新日志',
+                subtitle: '查看数据从哪里来，以及每次更新的结果。',
+                leading: showBackButton
+                    ? IconButton(
+                        key: const ValueKey('refresh-logs-back-button'),
+                        tooltip: '返回',
+                        onPressed: onBack,
+                        icon: const Icon(Icons.arrow_back))
+                    : null,
+                actions: [Pill(label: '最近 ${logs.length} 条')],
               ),
             ),
             Expanded(
               child: logs.isEmpty
-                  ? Center(
-                      child: Text(
-                        '暂无刷新记录',
-                        style: TextStyle(color: textSecondaryColor),
+                  ? const Padding(
+                      padding: EdgeInsets.fromLTRB(24, 0, 24, 24),
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: AppEmptyState(
+                          icon: Icons.fact_check_outlined,
+                          title: '暂无刷新记录',
+                          message: '完成一次刷新后，这里会显示来源、状态和数量变化。',
+                        ),
                       ),
                     )
                   : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                       itemCount: logs.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (context, index) =>
@@ -87,13 +85,7 @@ class _RefreshLogCard extends StatelessWidget {
       RefreshLogStatus.blocked => Colors.orange.shade800,
       RefreshLogStatus.failure => dangerColor,
     };
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
+    return AppSurfaceCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -106,7 +98,7 @@ class _RefreshLogCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: textPrimaryColor,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -150,7 +142,7 @@ class _StatusPill extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(color: color, fontWeight: FontWeight.w800),
+        style: TextStyle(color: color, fontWeight: FontWeight.w600),
       ),
     );
   }

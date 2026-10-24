@@ -10,12 +10,19 @@ import 'oj_provider.dart';
 class AtCoderProvider implements OjProvider, OjDailyActivityProvider {
   @override
   Future<OjProfile> fetchProfile(http.Client client, String username) async {
-    final data = await readJson(
-      client,
-      Uri.https('kenkoooo.com', '/atcoder/atcoder-api/v3/user/ac_rank', {
-        'user': username,
-      }),
-    );
+    late final Map<String, dynamic> data;
+    try {
+      data = await readJson(
+        client,
+        Uri.https('kenkoooo.com', '/atcoder/atcoder-api/v3/user/ac_rank', {
+          'user': username,
+        }),
+      );
+    } on FormatException {
+      throw FetchException('AtCoder 统计接口返回格式变化');
+    } on TypeError {
+      throw FetchException('AtCoder 统计接口返回格式变化');
+    }
     final count = data['count'];
     if (count is! int) {
       throw FetchException('AtCoder 统计接口未返回通过数');
@@ -49,7 +56,12 @@ class AtCoderProvider implements OjProvider, OjDailyActivityProvider {
         )
         .timeout(const Duration(seconds: 18));
     ensureOk(response);
-    final data = jsonDecode(response.body);
+    late final Object? data;
+    try {
+      data = jsonDecode(response.body);
+    } on FormatException {
+      throw FetchException('AtCoder submissions 返回格式变化');
+    }
     if (data is! List) {
       throw FetchException('AtCoder submissions 返回格式变化');
     }

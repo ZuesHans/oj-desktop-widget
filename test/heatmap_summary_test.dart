@@ -114,9 +114,9 @@ void main() {
 
   test('same day multiple accounts are summed', () {
     final snapshots = [
-      _snapshot('2026-06-16', 'a', 10, hour: 8),
+      _snapshot('2026-06-15', 'a', 10, hour: 20),
       _snapshot('2026-06-16', 'a', 13, hour: 20),
-      _snapshot('2026-06-16', 'b', 100, hour: 9),
+      _snapshot('2026-06-15', 'b', 100, hour: 21),
       _snapshot('2026-06-16', 'b', 102, hour: 21),
     ];
 
@@ -161,8 +161,11 @@ void main() {
 
 List<SolvedSnapshot> _activeDay(String date,
     {required int from, required int to}) {
+  final previousDate = dateKey(
+    DateTime.parse(date).subtract(const Duration(days: 1)),
+  );
   return [
-    _snapshot(date, 'a', from, hour: 8),
+    _snapshot(previousDate, 'a', from, hour: 20),
     _snapshot(date, 'a', to, hour: 20),
   ];
 }

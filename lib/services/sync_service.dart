@@ -214,6 +214,7 @@ List<Map<String, Object?>> buildOjSyncProblems(
         'platform': problemPlatformValue(problem.platform),
         'status': problem.status.name,
         'tags': problem.tags,
+        if (problem.folder.isNotEmpty) 'folder': problem.folder,
         'date': problem.date,
         'updated_at': problem.updatedAt.toIso8601String(),
         if (config.includeProblemNote) 'note': problem.note,

@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test with coverage
+        run: flutter test --coverage
+
+      - name: Enforce coverage thresholds
+        shell: pwsh
+        run: ./scripts/check_coverage.ps1
+
+      - name: Test browser integration fixtures
+        shell: pwsh
+        run: |
+          ./browser_extension/tampermonkey/build.ps1 -Check
+          node browser_extension/test/extractor.test.js
+          node browser_extension/tampermonkey/test/importer.test.js
+
+      - name: Build and test native C++ companion
+        shell: pwsh
+        run: ./native_companion/build.ps1
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Package installer and portable archive
+        shell: pwsh
+        run: |
+          $compiler = ./scripts/bootstrap_inno.ps1
+          ./scripts/package_windows_release.ps1 -SkipBuild -InnoCompiler $compiler
+
+      - name: Install, overwrite, and uninstall smoke test
+        shell: pwsh
+        run: ./scripts/smoke_windows_installer.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: |
+            dist/*.zip
+            dist/*-setup.exe
+            dist/*-SHA256SUMS.txt
+          if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: analyze-and-test
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-release
+          path: dist
+      - name: Publish verified stable release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $manifest = Get-Content pubspec.yaml -Raw
+          if ($manifest -notmatch '(?m)^version:\s*(\d+\.\d+\.\d+)\+\d+\s*$') { throw 'Invalid stable version.' }
+          $expectedTag = "v$($Matches[1])"
+          if ($env:GITHUB_REF_NAME -ne $expectedTag) { throw 'Tag and manifest version differ.' }
+          $assets = Get-ChildItem dist -File | Select-Object -ExpandProperty FullName
+          gh release create $expectedTag @assets --verify-tag --title "OJ Float $expectedTag" --notes-file docs/release-notes-v0.2.0.md
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub release publishing failed.' }

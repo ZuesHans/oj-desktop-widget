@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../services/heatmap_service.dart';
 import '../app_theme.dart';
+import '../shared/app_surface_card.dart';
+import '../shared/app_page_header.dart';
 import 'heatmap_dialog.dart';
 import 'heatmap_formatters.dart';
 
@@ -25,50 +27,35 @@ class HeatmapPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       key: const ValueKey('heatmap-page'),
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+      padding: const EdgeInsets.all(24),
       children: [
-        Row(
-          children: [
-            if (showBackButton) ...[
-              IconButton(
-                key: const ValueKey('heatmap-back-button'),
-                tooltip: '返回',
-                onPressed: onBack,
-                icon: const Icon(Icons.arrow_back),
-              ),
-              const SizedBox(width: 4),
-            ],
-            Expanded(
-              child: Text(
-                '热力图',
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: textPrimaryColor,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
+        AppPageHeader(
+          title: '热力图',
+          subtitle: '每一天的积累，都在这里留下痕迹。',
+          leading: showBackButton
+              ? IconButton(
+                  key: const ValueKey('heatmap-back-button'),
+                  tooltip: '返回',
+                  onPressed: onBack,
+                  icon: const Icon(Icons.arrow_back))
+              : null,
+          actions: [
             IconButton(
-              key: const ValueKey('heatmap-export-data-button'),
-              tooltip: '导出备份',
-              onPressed: onExport,
-              color: accentColor,
-              icon: const Icon(Icons.download),
-            ),
+                key: const ValueKey('heatmap-export-data-button'),
+                tooltip: '导出备份',
+                onPressed: onExport,
+                icon: const Icon(Icons.download_outlined)),
             IconButton(
-              key: const ValueKey('heatmap-import-backup-button'),
-              tooltip: '导入备份',
-              onPressed: onImport,
-              color: accentColor,
-              icon: const Icon(Icons.upload_file),
-            ),
+                key: const ValueKey('heatmap-import-backup-button'),
+                tooltip: '导入备份',
+                onPressed: onImport,
+                icon: const Icon(Icons.upload_file_outlined)),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 20),
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: appSpace2,
+          runSpacing: appSpace2,
           children: [
             HeatmapStat(label: '当前连续', value: '${summary.currentStreak} 天'),
             HeatmapStat(label: '最长连续', value: '${summary.longestStreak} 天'),
@@ -76,14 +63,9 @@ class HeatmapPage extends StatelessWidget {
             HeatmapStat(label: '累计新增', value: '+${summary.totalDelta}'),
           ],
         ),
-        const SizedBox(height: 18),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: borderColor),
-          ),
+        const SizedBox(height: appSpace5),
+        AppSurfaceCard(
+          padding: const EdgeInsets.all(appSpace4),
           child: HeatmapGrid(days: summary.days),
         ),
       ],
