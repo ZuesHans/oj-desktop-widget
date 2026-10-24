@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>OJ Float 演示题目 - Codeforces 9999D</title>
+<style>
+  :root { --accent: #2f6fed; --border: #e2e5ea; --muted: #6b7280; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    background: #f5f7fa; color: #1f2430;
+  }
+  .page { max-width: 860px; margin: 0 auto; padding: 24px 28px 48px; }
+  .oj-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #eef2ff; color: #2f6fed; border: 1px solid #dbe3ff;
+    border-radius: 999px; padding: 4px 12px; font-size: 13px; font-weight: 600;
+  }
+  .title {
+    font-size: 26px; font-weight: 700; margin: 14px 0 6px; letter-spacing: -0.2px;
+  }
+  .meta { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+  .limits { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .card {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 22px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04);
+  }
+  .card h2 { font-size: 15px; margin: 0 0 10px; }
+  .card p { line-height: 1.7; font-size: 14px; }
+  pre {
+    background: #0f1420; color: #d7e2f3; border-radius: 8px; padding: 14px 16px;
+    overflow-x: auto; font-size: 13px; line-height: 1.6;
+  }
+  .tags { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tag {
+    background: #eef2ff; color: #2f6fed; border-radius: 6px;
+    padding: 4px 10px; font-size: 12px; font-weight: 600;
+  }
+  .save-row { display: flex; align-items: center; gap: 12px; margin-top: 22px; }
+  .save-btn {
+    border: 0; cursor: pointer; border-radius: 8px; padding: 11px 20px;
+    background: var(--accent); color: #fff; font-size: 14px; font-weight: 600;
+  }
+  .save-btn:disabled { opacity: .55; cursor: default; }
+  #status { font-size: 13px; color: var(--muted); }
+  #status.ok { color: #15803d; font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="page">
+    <span class="oj-badge">Codeforces · 演示题目</span>
+    <h1 class="title">D. Demo Problem — Prefix Sum</h1>
+    <div class="meta">题目编号 9999D · 难度 1300</div>
+    <div class="limits">时间限制 2 秒 · 内存限制 256 MB</div>
+
+    <div class="card">
+      <h2>题目描述</h2>
+      <p>给定一个长度为 n 的整数数组 a，以及 q 次询问。每次询问给出区间 [l, r]，请回答该区间内所有元素之和。这是用于 OJ Float 演示的本地 mock 题目，不是真实竞赛题。</p>
+    </div>
+
+    <div class="card">
+      <h2>输入格式</h2>
+      <p>第一行两个整数 n 和 q。第二行 n 个整数。接下来 q 行，每行两个整数 l 和 r。</p>
+    </div>
+
+    <div class="card">
+      <h2>样例</h2>
+      <pre>输入
+5 3
+1 2 3 4 5
+1 3
+2 5
+1 5
+
+输出
+6
+14
+15</pre>
+    </div>
+
+    <div class="card">
+      <h2>标签</h2>
+      <div class="tags">
+        <span class="tag">前缀和</span>
+        <span class="tag">构造</span>
+      </div>
+    </div>
+
+    <div class="save-row">
+      <button id="save" class="save-btn">保存到 OJ Float</button>
+      <span id="status"></span>
+    </div>
+  </div>
+
+  <script>
+    // The demo driver (record_demo.ps1) substitutes __TOKEN__ before opening
+    // this page; it also POSTs directly via import_problem.ps1 for deterministic
+    // timing. This button is the manual, browser-side equivalent.
+    const TOKEN = "__TOKEN__";
+    const payload = {
+      url: "https://codeforces.com/problemset/problem/9999/D",
+      title: "D. Demo Problem — Prefix Sum",
+      platform: "codeforces",
+      externalId: "9999D",
+      difficulty: "1300",
+      tags: ["前缀和", "构造"]
+    };
+    const btn = document.getElementById("save");
+    const status = document.getElementById("status");
+
+    btn.addEventListener("click", async () => {
+      if (!TOKEN || TOKEN === "__TOKEN__") {
+        status.textContent = "未配置导入令牌（请通过 record_demo.ps1 生成页面）";
+        return;
+      }
+      btn.disabled = true;
+      status.textContent = "正在保存到 OJ Float...";
+      try {
+        const response = await fetch("http://127.0.0.1:27121/v1/problems/import", {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer " + TOKEN,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(body.message || body.error || ("HTTP " + response.status));
+        }
+        status.textContent = body.status === "created"
+          ? "✓ 已加入 OJ Float"
+          : "✓ 题目已存在，元数据已合并";
+        status.className = "ok";
+      } catch (error) {
+        status.textContent = "导入失败：" + (error.message || error);
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
