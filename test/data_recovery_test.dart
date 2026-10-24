@@ -138,38 +138,18 @@ void main() {
         storage: LocalStore(supportDirectory: directory),
       ),
     ));
-    await tester.runAsync(() async {
-      for (var i = 0; i < 30; i++) {
-        await tester.pump(const Duration(milliseconds: 20));
-        if (find
+    await _waitFor(
+        tester,
+        () => find
             .byKey(const ValueKey('startup-recovery'))
             .evaluate()
-            .isNotEmpty) {
-          break;
-        }
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-      }
-    });
-    await tester.pumpAndSettle();
+            .isNotEmpty);
     expect(find.byKey(const ValueKey('startup-recovery')), findsOneWidget);
     expect(find.byKey(const ValueKey('dashboard-shell')), findsNothing);
     expect(find.byKey(const ValueKey('toolbar-refresh-button')), findsNothing);
     file.writeAsStringSync(jsonEncode([_problem().toJson()]));
     await tester.tap(find.byKey(const ValueKey('startup-retry')));
-    await tester.runAsync(() async {
-      for (var i = 0; i < 50; i++) {
-        await tester.pump(const Duration(milliseconds: 20));
-        if (find
-                .byKey(const ValueKey('dashboard-shell'))
-                .evaluate()
-                .isNotEmpty &&
-            find.byType(CircularProgressIndicator).evaluate().isEmpty) {
-          break;
-        }
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-      }
-    });
-    await tester.pumpAndSettle();
+    await _waitForStartup(tester);
     expect(find.byKey(const ValueKey('dashboard-shell')), findsOneWidget);
     expect(find.byKey(const ValueKey('startup-recovery')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('dashboard-nav-problems')));
@@ -270,9 +250,12 @@ Future<void> _waitForStartup(WidgetTester tester) async {
 
 Future<void> _waitFor(WidgetTester tester, bool Function() done) async {
   await tester.runAsync(() async {
-    for (var i = 0; i < 100; i++) {
+    final deadline = Stopwatch()..start();
+    while (!done()) {
       await tester.pump(const Duration(milliseconds: 20));
-      if (done()) break;
+      if (deadline.elapsed > const Duration(seconds: 15)) {
+        fail('Local disk operation did not reach the expected UI state.');
+      }
       await Future<void>.delayed(const Duration(milliseconds: 20));
     }
   });
