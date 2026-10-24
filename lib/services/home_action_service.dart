@@ -189,7 +189,7 @@ class ActionFeedback {
 }
 
 Future<File?> _defaultPickBackupFile() async {
-  final selection = await FilePicker.platform.pickFiles(
+  final selection = await FilePicker.pickFiles(
     type: FileType.custom,
     allowedExtensions: const ['json'],
     allowMultiple: false,

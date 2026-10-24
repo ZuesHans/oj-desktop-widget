@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -721,11 +722,10 @@ class _ProblemsPageState extends State<ProblemsPage> {
   Future<void> _exportSelected(BuildContext context) async {
     final selected =
         widget.problems.where((p) => _selectedIds.contains(p.id)).toList();
-    final path = await FilePicker.platform.saveFile(
+    final path = await FilePicker.saveFile(
         dialogTitle: '导出题目 Markdown',
         fileName: 'oj-problems.md',
-        type: FileType.custom,
-        allowedExtensions: ['md']);
+        bytes: Uint8List(0));
     if (path == null) return;
     final buffer = StringBuffer('# OJ 题目导出\n\n');
     for (final p in selected) {
