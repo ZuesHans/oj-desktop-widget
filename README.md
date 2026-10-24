@@ -2,7 +2,7 @@
 
 OJ Float 是一个 Windows 桌面训练客户端，用来集中查看多个 Online Judge 账号的刷题进度、今日增量、补题记录、比赛记录、队友观察和刷新日志。
 
-当前稳定版本：`v0.2.0`（build 8）
+当前稳定版本：`v0.3.0`（build 9）
 
 后续改进、任务认领与验收约定见 [后续改进协作文档](docs/improvement-collaboration.md)。
 
@@ -11,7 +11,7 @@ OJ Float 是一个 Windows 桌面训练客户端，用来集中查看多个 Onli
 在 [GitHub Releases](https://github.com/ZuesHans/oj-desktop-widget/releases/latest) 下载 Windows 10 / 11 x64 安装包：
 
 ```text
-OJ-Float-v0.2.0-windows-x64-setup.exe
+OJ-Float-v0.3.0-windows-x64-setup.exe
 ```
 
 1. 运行安装包，按当前用户安装，无需管理员权限。
@@ -20,9 +20,17 @@ OJ-Float-v0.2.0-windows-x64-setup.exe
 
 后续下载新版安装包覆盖安装即可；卸载默认保留题库、配置和训练记录。设置底部提供手动检查更新和下载入口。安装包尚未进行发布者代码签名。
 
-也提供 `OJ-Float-v0.2.0-windows-x64.zip` 免安装包。请完整解压后运行 `oj_float.exe`，保留同目录的 `data` 和所有 DLL。两种发行方式使用同一份本机数据。发布页附 SHA-256 校验文件。
+也提供 `OJ-Float-v0.3.0-windows-x64.zip` 免安装包。请完整解压后运行 `oj_float.exe`，保留同目录的 `data` 和所有 DLL。两种发行方式使用同一份本机数据。发布页附 SHA-256 校验文件。
 
 ## 这一版有什么变化
+
+`v0.3.0` 在 `v0.2.0` 基础上增加窗口状态记忆、仪表盘快捷键、剪贴板预填、诊断日志与发布链加固。
+
+- 记住并恢复窗口大小、位置与最大化状态，开机静默启动时保持隐藏。
+- 仪表盘新增数字键 1–9 切换页签、`Ctrl+N` 快速录入、`Ctrl+,` 打开设置。
+- 快速录入识别剪贴板中的 OJ 题目链接并预填，不自动请求、不覆盖已编辑内容。
+- 新增本地轮转诊断日志（1 MiB × 5）与脱敏导出，异常可复现、隐私不落地。
+- 发布链加固：CI 固定 Flutter 版本、发布说明取自标签、附构建来源证明。
 
 `v0.2.0` 将产品从多级悬浮窗收敛为标准 Windows 桌面客户端：
 
