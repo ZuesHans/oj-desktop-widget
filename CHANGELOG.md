@@ -9,6 +9,7 @@
 - Pre-fill recognized OJ problem links from the clipboard when quick entry opens, without automatic network requests or overwriting user edits.
 - Add rotating diagnostics logging with early framework/async error capture, 1 MiB x 5 rotation, stable-alias redaction of tokens, OJ accounts, URL parameters, and local user paths, plus a settings-page diagnostics export that stays local.
 - Pin the CI Flutter toolchain, derive release notes from the tag with a pre-packaging check, add Dependabot for Actions and pub, and attach build provenance to release assets.
+- Add real screenshots, a script-driven import demo, and a reproducible showcase runbook to the README (docs/images/, scripts/showcase/).
 
 ## v0.2.0-beta - 2026-07-26
 

@@ -24,7 +24,7 @@ OJ-Float-v0.3.0-windows-x64-setup.exe
 
 ## 界面与演示
 
-下面的截图与演示来自可运行的 `v0.2.0`（含当前分支第一组窗口/快捷键改进），使用 [`scripts/showcase/`](scripts/showcase/) 中的可复现演示数据生成，不含任何真实账号、笔记、令牌或本机用户名。完整复现步骤见 [docs/showcase-runbook.md](docs/showcase-runbook.md)。
+下面的截图与演示来自可运行的 `v0.3.0`，使用 [`scripts/showcase/`](scripts/showcase/) 中的可复现演示数据生成，不含任何真实账号、笔记、令牌或本机用户名。完整复现步骤见 [docs/showcase-runbook.md](docs/showcase-runbook.md)。
 
 ### 总览工作台
 
