@@ -240,10 +240,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_windows_releas
 - 增加 rating 趋势和比赛提醒。
 - 继续优化首次启动、空状态、错误状态和网络异常提示。
 
-## 版权
+## 版权与许可
 
 Developer: zueshans
 
 Copyright (C) 2026 zueshans. All rights reserved.
 
-未经开发者许可，不得重新分发、修改、售卖、发布或重新打包本软件。
+本仓库源码可见，但**不是开源许可**：OJ Float 仅授权个人使用；未经开发者书面许可，不得再分发、修改、售卖、发布或重新打包本软件。使用、修改和再分发均受仓库根目录 [LICENSE](LICENSE) 约束；打包进发行版的内容与 README、发布页中的许可表述保持一致。
+
+反馈与贡献方式：
+
+- 使用问题与功能建议：在 [Issues](https://github.com/ZuesHans/oj-desktop-widget/issues) 提出。
+- 安全漏洞：通过 GitHub 私有安全通告（仓库 Security 页 → Report a vulnerability）或直接联系开发者报告，不要在公开 Issue 中披露细节；处理流程见 [SECURITY.md](SECURITY.md)。
+- 提交 Pull Request 即表示同意：你的提交可能被开发者修改并整合进本软件及其发行版，在仓库当前许可下随软件分发，不另行支付报酬。提交前建议先开 Issue 说明意图，避免重复劳动。

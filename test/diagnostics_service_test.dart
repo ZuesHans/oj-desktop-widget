@@ -3,6 +3,7 @@ import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/foundation.dart' show FlutterError, FlutterErrorDetails;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:oj_float/core/app_info.dart';
 import 'package:oj_float/services/diagnostics_service.dart';
 
 import 'test_support.dart';
@@ -137,7 +138,7 @@ void main() {
         await service.exportTo(target);
 
         final content = await target.readAsString();
-        expect(content, contains('0.2.0+8'));
+        expect(content, contains('$appVersion+$appBuildNumber'));
         expect(content, contains('配置 schema 版本: 4'));
         expect(content, contains('数据库 schema 版本: 4'));
         expect(content, contains('refresh codeforces ok'));
