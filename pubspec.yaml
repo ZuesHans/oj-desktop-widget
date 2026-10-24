@@ -13,7 +13,7 @@ dependencies:
   crypto: ^3.0.6
   http: ^1.6.0
   html: ^0.15.4
-  file_picker: ^8.1.7
+  file_picker: ^11.0.3
   flutter_secure_storage: ^9.2.2
   launch_at_startup: ^0.3.1
   path_provider: ^2.1.4
