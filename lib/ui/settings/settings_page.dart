@@ -1,8 +1,12 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/oj_catalog.dart';
 import '../../models/app_config.dart';
 import '../../models/quick_entry_shortcut.dart';
+import '../../services/diagnostics_service.dart';
 import '../app_theme.dart';
 import '../shared/app_surface_card.dart';
 import '../shared/app_page_header.dart';
@@ -96,8 +100,11 @@ class SettingsPageState extends State<SettingsPage> {
     final target =
         (accounts ? _accountsSectionKey : _browserSectionKey).currentContext;
     if (target != null) {
-      await Scrollable.ensureVisible(target,
-          duration: const Duration(milliseconds: 180), alignment: 0);
+      await Scrollable.ensureVisible(
+        target,
+        duration: const Duration(milliseconds: 180),
+        alignment: 0,
+      );
     }
   }
 
@@ -111,8 +118,9 @@ class SettingsPageState extends State<SettingsPage> {
       text: widget.config.sync.endpointUrl,
     );
     _syncTokenController = TextEditingController(text: widget.initialSyncToken);
-    _quickEntryHotkeyController =
-        TextEditingController(text: widget.config.quickEntryHotkey);
+    _quickEntryHotkeyController = TextEditingController(
+      text: widget.config.quickEntryHotkey,
+    );
     _accountControllers = {
       for (final meta in supportedOjs)
         meta.id: TextEditingController(
@@ -341,10 +349,14 @@ class SettingsPageState extends State<SettingsPage> {
                   child: ExpansionTile(
                     key: const ValueKey('dashboard-customization-section'),
                     tilePadding: EdgeInsets.zero,
-                    title: Text('桌面与功能',
-                        style: Theme.of(context).textTheme.titleMedium),
-                    subtitle: Text('${_dashboardModules.length} 个功能区已开启 · '
-                        '开关、排序和宽度'),
+                    title: Text(
+                      '桌面与功能',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    subtitle: Text(
+                      '${_dashboardModules.length} 个功能区已开启 · '
+                      '开关、排序和宽度',
+                    ),
                     leading: const Icon(Icons.dashboard_customize_outlined),
                     children: [
                       const SizedBox(height: appSpace3),
@@ -407,8 +419,9 @@ class SettingsPageState extends State<SettingsPage> {
                                 ? _pickAutomaticBackupTime
                                 : null,
                             icon: const Icon(Icons.schedule_outlined),
-                            label:
-                                Text(_formatBackupTime(_automaticBackupTime)),
+                            label: Text(
+                              _formatBackupTime(_automaticBackupTime),
+                            ),
                           ),
                         ],
                       ),
@@ -483,20 +496,26 @@ class SettingsPageState extends State<SettingsPage> {
                       if (widget.onExport != null ||
                           widget.onImport != null) ...[
                         const SizedBox(height: appSpace3),
-                        Wrap(spacing: 8, runSpacing: 8, children: [
-                          if (widget.onExport != null)
-                            OutlinedButton.icon(
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            if (widget.onExport != null)
+                              OutlinedButton.icon(
                                 key: const ValueKey('settings-export-backup'),
                                 onPressed: widget.onExport,
                                 icon: const Icon(Icons.download_outlined),
-                                label: const Text('导出完整备份')),
-                          if (widget.onImport != null)
-                            OutlinedButton.icon(
+                                label: const Text('导出完整备份'),
+                              ),
+                            if (widget.onImport != null)
+                              OutlinedButton.icon(
                                 key: const ValueKey('settings-import-backup'),
                                 onPressed: widget.onImport,
                                 icon: const Icon(Icons.restore_outlined),
-                                label: const Text('导入备份')),
-                        ]),
+                                label: const Text('导入备份'),
+                              ),
+                          ],
+                        ),
                       ],
                       if (widget.automaticBackupError.isNotEmpty) ...[
                         const SizedBox(height: appSpace2),
@@ -510,6 +529,37 @@ class SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                       ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: appSpace4),
+                _SettingsSection(
+                  icon: Icons.bug_report_outlined,
+                  title: '诊断信息',
+                  subtitle: '导出脱敏后的诊断日志，用于排查刷新、导入或恢复失败',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        '导出内容仅包含应用版本、配置与数据库 schema 版本、最近操作摘要和诊断日志。'
+                        '密码、令牌、Cookie、请求头、原始响应、题库正文、笔记和复盘不会记录；'
+                        'OJ 账号、URL 查询参数和绝对路径中的本机用户名会替换为稳定别名。',
+                        style: TextStyle(
+                          color: textSecondaryColor,
+                          fontSize: 12,
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: appSpace3),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: OutlinedButton.icon(
+                          key: const ValueKey('export-diagnostics-button'),
+                          onPressed: _exportDiagnostics,
+                          icon: const Icon(Icons.download_outlined),
+                          label: const Text('导出诊断信息'),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -806,26 +856,30 @@ class SettingsPageState extends State<SettingsPage> {
 
     final shortcut = QuickEntryShortcut.parse(_quickEntryHotkeyController.text);
     if (shortcut == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content:
-              Text('快捷键需要 Ctrl 或 Alt，加一个字母或数字；可同时加 Shift，例如 Ctrl+Shift+O。')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            '快捷键需要 Ctrl 或 Alt，加一个字母或数字；可同时加 Shift，例如 Ctrl+Shift+O。',
+          ),
+        ),
+      );
       return;
     }
 
     final accounts = {
       for (final meta in supportedOjs)
         meta.id: OjAccountConfig(
-          usernames: OjAccountConfig.normalizeUsernames(
-            [_accountControllers[meta.id]!.text],
-          ),
+          usernames: OjAccountConfig.normalizeUsernames([
+            _accountControllers[meta.id]!.text,
+          ]),
           enabled: _accountEnabled[meta.id] ?? false,
         ),
     };
     if (_automaticBackupEnabled &&
         _automaticBackupDirectoryPath.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先选择自动备份文件夹。')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先选择自动备份文件夹。')));
       return;
     }
     final config = widget.config.copyWith(
@@ -882,9 +936,9 @@ class SettingsPageState extends State<SettingsPage> {
         return;
       }
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('保存设置失败：$error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('保存设置失败：$error')));
     }
   }
 
@@ -912,6 +966,58 @@ class SettingsPageState extends State<SettingsPage> {
       _automaticBackupDirectoryPath = selected.trim();
       _dirty = true;
     });
+  }
+
+  Future<void> _exportDiagnostics() async {
+    final diagnostics = DiagnosticsService.instance ?? DiagnosticsService();
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('导出诊断信息？'),
+            content: const Text(
+              '导出文件包含：应用版本、配置与数据库 schema 版本、'
+              '最近刷新/导入/恢复操作摘要和脱敏后的诊断日志。\n\n'
+              '已脱敏：密码、令牌、Cookie、请求头、原始响应、题库正文、'
+              '笔记与复盘不会记录；OJ 账号、URL 查询参数和绝对路径中的'
+              '本机用户名会替换为稳定别名。\n\n'
+              '导出仅写入你选择的本地文件，不会自动上传或发送给任何人。',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('选择位置并导出'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (confirmed != true || !mounted) return;
+
+    final path = await FilePicker.platform.saveFile(
+      dialogTitle: '导出诊断信息',
+      fileName: 'oj-diagnostics.txt',
+      type: FileType.custom,
+      allowedExtensions: const ['txt'],
+    );
+    if (path == null || !mounted) return;
+
+    try {
+      await diagnostics.exportTo(File(path));
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('诊断信息已导出到 $path')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('导出诊断信息失败：$error')));
+    }
   }
 }
 
