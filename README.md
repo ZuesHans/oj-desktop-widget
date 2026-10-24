@@ -22,6 +22,28 @@ OJ-Float-v0.2.0-windows-x64-setup.exe
 
 也提供 `OJ-Float-v0.2.0-windows-x64.zip` 免安装包。请完整解压后运行 `oj_float.exe`，保留同目录的 `data` 和所有 DLL。两种发行方式使用同一份本机数据。发布页附 SHA-256 校验文件。
 
+## 界面与演示
+
+下面的截图与演示来自可运行的 `v0.2.0`（含当前分支第一组窗口/快捷键改进），使用 [`scripts/showcase/`](scripts/showcase/) 中的可复现演示数据生成，不含任何真实账号、笔记、令牌或本机用户名。完整复现步骤见 [docs/showcase-runbook.md](docs/showcase-runbook.md)。
+
+### 总览工作台
+
+![OJ Float 总览工作台](docs/images/overview.png)
+
+### 题库
+
+![OJ Float 题库](docs/images/problems.png)
+
+### 训练与复盘
+
+![OJ Float 训练与复盘](docs/images/training.png)
+
+### 浏览器存题演示
+
+![浏览器存题演示](docs/images/demo.gif)
+
+演示流程：浏览器题目页 → 一键存题 → 题目出现在客户端题库。该演示为脚本驱动：本地 mock 题目页与 `scripts/showcase/import_problem.ps1` 直接调用客户端的回环导入接口 `127.0.0.1:27121`，等价于浏览器扩展的一键存题动作；未使用真实浏览器扩展或真实题目。
+
 ## 这一版有什么变化
 
 `v0.2.0` 将产品从多级悬浮窗收敛为标准 Windows 桌面客户端：
