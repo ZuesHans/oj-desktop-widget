@@ -315,4 +315,4 @@ flutter test --coverage
 | 2026-10-24 | T10-A / T10-D 发布链 | `codex/release-chain`（合并 19c1451） | YAML 校验、发布说明脚本正反例、打包冒烟通过 | 已合入 | 已随 v0.3.0 发布；资产证明已生成并验证 |
 | 2026-10-24 | T11 许可与贡献说明 | README 与 `SECURITY.md` 更新 | LICENSE 未改；表述口径“源码可见，非开源” | 已合入 | 已随 v0.3.0 发布；最终许可政策待权利人确认 |
 | 2026-10-24 | v0.3.0 发布 | tag `v0.3.0`（94a1d55） | main 与 tag 两条 CI 全绿；发布含 setup/zip/校验清单与来源证明 | 已发布 | v0.3.0；attestation 验证通过 |
-| 2026-10-25 | v0.4.0 发布 | tag `v0.4.0` | Workbench 默认工作台视觉、项目级前端 skills、v1 预览资产；发布含 setup/zip/校验清单与来源证明 | 已发布 | v0.4.0；待 CI 完成后补充 attestation 链接 |
+| 2026-10-25 | v0.4.0 发布 | tag `v0.4.0` | Workbench 默认工作台视觉、项目级前端 skills、v1 预览资产；发布含 setup/zip/校验清单与来源证明 | 已发布 | v0.4.0；tag CI 与 provenance attestation 已完成 |
