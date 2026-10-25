@@ -48,7 +48,7 @@ Required constraints:
 * Preserve all existing widget keys, including keys used by `test/widget_test.dart` and `test/startup_settings_test.dart`.
 * Preserve callback wiring and disabled state contracts. Examples include refresh, settings, compact mode, open dashboard, import, export, save, delete, parse link, open problem, teammate refresh, module sorting, and tray/window callbacks.
 * Preserve platform integration boundaries in `OjFloatHome`, `WindowShellService`, `tray_manager`, and `window_manager`.
-* Preserve `AppPalette`, `buildAppTheme`, `AppSurfaceCard`, `AppEmptyState`, `Pill`, Material 3, and the Microsoft YaHei UI plus Segoe UI fallback stack as the design base.
+* Preserve `AppPalette`, `buildAppTheme`, `AppSurfaceCard`, `AppEmptyState`, `Pill`, Material 3, and the Segoe UI Variable Text plus Microsoft YaHei UI fallback stack as the design base.
 * Do not invent a new app architecture, state management system, data model, sync flow, or navigation flow.
 * If a visual improvement needs a new token or primitive, update this file before code uses it.
 
@@ -67,6 +67,7 @@ Color comes from `AppPalette` in `lib/ui/app_theme.dart`. The live theme is sele
 | Text primary | `textPrimaryColor` | Titles, totals, card values, active nav text. |
 | Text secondary | `textSecondaryColor` | Labels, hints, metadata, inactive nav text, empty copy. |
 | Accent | `accentColor` | Primary actions, selected nav, progress, success tone, focused input border. |
+| Attention | `warningColor` | Daily delta, pending refresh, and other non destructive attention states. |
 | Danger | `dangerColor` | Errors, destructive tone, failed fetches, warning cards. |
 | Compact surface | `compactSurfaceColor` | Small floating widget body. |
 | Compact label | `compactLabelColor` | Small floating widget labels. |
@@ -78,6 +79,7 @@ Color comes from `AppPalette` in `lib/ui/app_theme.dart`. The live theme is sele
 
 | Theme | Surface | Card | Muted | Border | Primary text | Secondary text | Accent | Danger |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Workbench | `#0D1210` | `#151D19` | `#19231F` | `#2B3A33` | `#EDF5EF` | `#9EADA5` | `#83D9A1` | `#ED8178` |
 | Classic | `#F6F7F4` | `#FFFFFF` | `#F4F6F3` | `#E1E4DE` | `#17211D` | `#64706A` | `#2F6F4E` | `#B3261E` |
 | Ocean | `#F2F8FA` | `#FFFFFF` | `#EAF4F7` | `#D3E4E8` | `#10242B` | `#5E7077` | `#197B8A` | `#C43D4B` |
 | Rose | `#FBF5F7` | `#FFFFFF` | `#F8ECEF` | `#EBD5DB` | `#2A1B20` | `#75656A` | `#A33F62` | `#B3261E` |
@@ -87,7 +89,7 @@ Color comes from `AppPalette` in `lib/ui/app_theme.dart`. The live theme is sele
 ### Color Rules
 
 * Accent is for action, selection, focus, active progress, and positive state. Avoid accent as decoration on static content.
-* Danger is for errors, failure, destructive action, and urgent warning. Do not use it for ordinary pending or neutral states.
+* Attention is for pending, stale, or incomplete states that need a glance; danger remains reserved for errors, failure, and destructive actions.
 * Muted surfaces should sit inside cards, not replace the app background.
 * Heatmap colors are a data scale. Do not use them for ordinary status chips.
 * Status colors that are not yet tokenized, such as blue grey fallback info and orange blocked refresh, must be either documented here before refactor or folded into semantic tokens during T2.
@@ -98,12 +100,11 @@ The app uses Material 3 with a CJK first font stack:
 
 | Role | Font |
 | --- | --- |
-| Primary | `Microsoft YaHei UI` |
-| Fallback 1 | `Segoe UI Variable Text` |
-| Fallback 2 | `Segoe UI` |
-| Fallback 3 | `Microsoft YaHei` |
-| Fallback 4 | `SimSun` |
-| Fallback 5 | `Arial` |
+| Primary | `Segoe UI Variable Text` |
+| Fallback 1 | `Microsoft YaHei UI` |
+| Fallback 2 | `Microsoft YaHei` |
+| Fallback 3 | `SimSun` |
+| Fallback 4 | `Arial` |
 
 ### Type Scale
 

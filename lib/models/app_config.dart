@@ -39,6 +39,7 @@ enum DashboardModule {
 }
 
 enum AppColorTheme {
+  workbench('workbench'),
   githubLight('githubLight'),
   terminalDark('terminalDark'),
   classic('classic'),
@@ -65,7 +66,7 @@ class AppConfig {
     this.dashboardModules = defaultDashboardModules,
     this.dashboardOrder = defaultDashboardModules,
     this.wideDashboardModules = defaultWideDashboardModules,
-    this.colorTheme = AppColorTheme.classic,
+    this.colorTheme = AppColorTheme.workbench,
     this.appearanceMode = AppAppearanceMode.system,
     this.compactDensity = false,
     this.sync = const SyncConfig(),
@@ -84,7 +85,7 @@ class AppConfig {
       sync: const SyncConfig(),
       automaticBackup: const AutomaticBackupConfig(),
       dashboardModules: defaultDashboardModules,
-      colorTheme: AppColorTheme.classic,
+      colorTheme: AppColorTheme.workbench,
       onboardingComplete: false,
       accounts: {
         for (final meta in supportedOjs)
@@ -254,7 +255,7 @@ class AppConfig {
         }
       }
     }
-    return AppColorTheme.classic;
+    return AppColorTheme.workbench;
   }
 
   final int configVersion;

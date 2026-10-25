@@ -6,7 +6,7 @@ const appWindowSize = Size(1120, 760);
 const appMinimumWindowSize = Size(900, 620);
 
 const appRadiusControl = 8.0;
-const appRadiusCard = 12.0;
+const appRadiusCard = 9.0;
 const appRadiusCompact = 20.0;
 const appRadiusPill = 999.0;
 
@@ -34,6 +34,7 @@ class AppPalette {
     required this.textPrimary,
     required this.textSecondary,
     required this.accent,
+    required this.warning,
     required this.danger,
     required this.heatmapLevels,
   });
@@ -46,6 +47,7 @@ class AppPalette {
   final Color textPrimary;
   final Color textSecondary;
   final Color accent;
+  final Color warning;
   final Color danger;
   final List<Color> heatmapLevels;
 }
@@ -59,6 +61,7 @@ const _githubLightPalette = AppPalette(
   textPrimary: Color(0xFF1F2328),
   textSecondary: Color(0xFF656D76),
   accent: Color(0xFF0969DA),
+  warning: Color(0xFF9A6700),
   danger: Color(0xFFCF222E),
   heatmapLevels: [
     Color(0xFFEAF2E9),
@@ -78,6 +81,7 @@ const _terminalDarkPalette = AppPalette(
   textPrimary: Color(0xFFE6EDF3),
   textSecondary: Color(0xFF8B98A8),
   accent: Color(0xFF58A6FF),
+  warning: Color(0xFFD29922),
   danger: Color(0xFFF85149),
   heatmapLevels: [
     Color(0xFF202630),
@@ -97,6 +101,7 @@ const _oceanPalette = AppPalette(
   textPrimary: Color(0xFF10242B),
   textSecondary: Color(0xFF5E7077),
   accent: Color(0xFF197B8A),
+  warning: Color(0xFF9A6700),
   danger: Color(0xFFC43D4B),
   heatmapLevels: [
     Color(0xFFEAF4F7),
@@ -116,6 +121,7 @@ const _rosePalette = AppPalette(
   textPrimary: Color(0xFF2A1B20),
   textSecondary: Color(0xFF75656A),
   accent: Color(0xFFA33F62),
+  warning: Color(0xFF9A4056),
   danger: Color(0xFFB3261E),
   heatmapLevels: [
     Color(0xFFF8ECEF),
@@ -135,6 +141,7 @@ const _classicPalette = AppPalette(
   textPrimary: Color(0xFF17202A),
   textSecondary: Color(0xFF607080),
   accent: Color(0xFF2563EB),
+  warning: Color(0xFF9A6700),
   danger: Color(0xFFD14343),
   heatmapLevels: [
     Color(0xFFEFF3EF),
@@ -154,6 +161,7 @@ const _darkPalette = AppPalette(
   textPrimary: Color(0xFFF0F5F2),
   textSecondary: Color(0xFFA7B2AD),
   accent: Color(0xFF77C69A),
+  warning: Color(0xFFEFBB6B),
   danger: Color(0xFFFF8A80),
   heatmapLevels: [
     Color(0xFF20262C),
@@ -161,6 +169,29 @@ const _darkPalette = AppPalette(
     Color(0xFF28754B),
     Color(0xFF35A866),
     Color(0xFF74D990),
+  ],
+);
+
+// The default workspace palette is intentionally quiet and high contrast:
+// dark green surfaces keep the dashboard focused on progress and actions
+// without the glossy gradients that made the previous preview feel generic.
+const _workbenchPalette = AppPalette(
+  brightness: Brightness.dark,
+  surface: Color(0xFF0D1210),
+  card: Color(0xFF151D19),
+  cardMuted: Color(0xFF19231F),
+  border: Color(0xFF2B3A33),
+  textPrimary: Color(0xFFEDF5EF),
+  textSecondary: Color(0xFF9EADA5),
+  accent: Color(0xFF83D9A1),
+  warning: Color(0xFFEFBB6B),
+  danger: Color(0xFFED8178),
+  heatmapLevels: [
+    Color(0xFF26342C),
+    Color(0xFF31563F),
+    Color(0xFF4E8B61),
+    Color(0xFF70BD83),
+    Color(0xFF83D9A1),
   ],
 );
 
@@ -173,6 +204,7 @@ const _candyPalette = AppPalette(
   textPrimary: Color(0xFF23323A),
   textSecondary: Color(0xFF69767D),
   accent: Color(0xFF31A9D8),
+  warning: Color(0xFFB76A2A),
   danger: Color(0xFFC23B61),
   heatmapLevels: [
     Color(0xFFFFEFF5),
@@ -185,6 +217,7 @@ const _candyPalette = AppPalette(
 
 AppPalette appPaletteFor(AppColorTheme theme, {Brightness? brightness}) {
   final palette = switch (theme) {
+    AppColorTheme.workbench => _workbenchPalette,
     AppColorTheme.githubLight => _githubLightPalette,
     AppColorTheme.terminalDark => _terminalDarkPalette,
     AppColorTheme.classic => _classicPalette,
@@ -209,6 +242,7 @@ AppPalette appPaletteFor(AppColorTheme theme, {Brightness? brightness}) {
     textSecondary: dark ? const Color(0xFFA6B5CC) : const Color(0xFF62718A),
     accent: Color.lerp(palette.accent, dark ? Colors.white : Colors.black,
         dark ? 0.38 : 0.28)!,
+    warning: dark ? const Color(0xFFF0C674) : const Color(0xFF8A5A00),
     danger: dark ? const Color(0xFFFFA29B) : const Color(0xFFAE3D37),
     heatmapLevels:
         dark ? _darkPalette.heatmapLevels : _classicPalette.heatmapLevels,
@@ -285,20 +319,22 @@ AppPalette _studioPalette(AppColorTheme theme, Brightness brightness) {
       textPrimary: Color(colors[4]),
       textSecondary: Color(colors[5]),
       accent: Color(colors[6]),
+      warning: Color(dark ? 0xFFEBC08B : 0xFF94612E),
       danger: Color(dark ? 0xFFF0A29B : 0xFFAE3D37),
       heatmapLevels:
           dark ? _darkPalette.heatmapLevels : _classicPalette.heatmapLevels);
 }
 
-var appSurfaceColor = _classicPalette.surface;
-var cardColor = _classicPalette.card;
-var cardMutedColor = _classicPalette.cardMuted;
-var borderColor = _classicPalette.border;
-var textPrimaryColor = _classicPalette.textPrimary;
-var textSecondaryColor = _classicPalette.textSecondary;
-var accentColor = _classicPalette.accent;
-var dangerColor = _classicPalette.danger;
-var heatmapLevelColors = _classicPalette.heatmapLevels;
+var appSurfaceColor = _workbenchPalette.surface;
+var cardColor = _workbenchPalette.card;
+var cardMutedColor = _workbenchPalette.cardMuted;
+var borderColor = _workbenchPalette.border;
+var textPrimaryColor = _workbenchPalette.textPrimary;
+var textSecondaryColor = _workbenchPalette.textSecondary;
+var accentColor = _workbenchPalette.accent;
+var warningColor = _workbenchPalette.warning;
+var dangerColor = _workbenchPalette.danger;
+var heatmapLevelColors = _workbenchPalette.heatmapLevels;
 
 void applyAppColorTheme(AppColorTheme theme, {Brightness? brightness}) {
   final palette = appPaletteFor(theme, brightness: brightness);
@@ -309,11 +345,15 @@ void applyAppColorTheme(AppColorTheme theme, {Brightness? brightness}) {
   textPrimaryColor = palette.textPrimary;
   textSecondaryColor = palette.textSecondary;
   accentColor = palette.accent;
+  warningColor = palette.warning;
   dangerColor = palette.danger;
   heatmapLevelColors = palette.heatmapLevels;
 }
 
-const appSystemFontFamily = 'Segoe UI';
+const appSystemFontFamily = 'Segoe UI Variable Text';
+// Keep numeric emphasis consistent on machines without Cascadia Code. The
+// Windows UI font has the same crisp rhythm and preserves CJK fallback.
+const appMonoFontFamily = appSystemFontFamily;
 const appSystemFontFallback = <String>[
   'Segoe UI Variable Text',
   'Microsoft YaHei UI',
@@ -335,7 +375,8 @@ ThemeData buildAppTheme([
   };
   // Preserve dark skins in system mode; explicit light/dark takes precedence.
   final effective = appearanceMode == AppAppearanceMode.system &&
-          (colorTheme == AppColorTheme.terminalDark ||
+          (colorTheme == AppColorTheme.workbench ||
+              colorTheme == AppColorTheme.terminalDark ||
               colorTheme == AppColorTheme.dark)
       ? Brightness.dark
       : brightness;
@@ -383,11 +424,11 @@ ThemeData buildAppTheme([
       )
       .copyWith(
         headlineSmall: TextStyle(
-            fontSize: 25,
-            height: 1.3,
-            fontWeight: FontWeight.w500,
+            fontSize: 28,
+            height: 1.2,
+            fontWeight: FontWeight.w600,
             color: palette.textPrimary,
-            letterSpacing: -0.4),
+            letterSpacing: -0.7),
         titleLarge: TextStyle(
             fontSize: 22,
             height: 1.35,

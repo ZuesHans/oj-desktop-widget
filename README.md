@@ -2,7 +2,7 @@
 
 OJ Float 是一个 Windows 桌面训练客户端，用来集中查看多个 Online Judge 账号的刷题进度、今日增量、补题记录、比赛记录、队友观察和刷新日志。
 
-当前稳定版本：`v0.3.0`（build 9）
+当前稳定版本：`v0.4.0`（build 10）
 
 后续改进、任务认领与验收约定见 [后续改进协作文档](docs/improvement-collaboration.md)。
 
@@ -11,7 +11,7 @@ OJ Float 是一个 Windows 桌面训练客户端，用来集中查看多个 Onli
 在 [GitHub Releases](https://github.com/ZuesHans/oj-desktop-widget/releases/latest) 下载 Windows 10 / 11 x64 安装包：
 
 ```text
-OJ-Float-v0.3.0-windows-x64-setup.exe
+OJ-Float-v0.4.0-windows-x64-setup.exe
 ```
 
 1. 运行安装包，按当前用户安装，无需管理员权限。
@@ -20,11 +20,11 @@ OJ-Float-v0.3.0-windows-x64-setup.exe
 
 后续下载新版安装包覆盖安装即可；卸载默认保留题库、配置和训练记录。设置底部提供手动检查更新和下载入口。安装包尚未进行发布者代码签名。
 
-也提供 `OJ-Float-v0.3.0-windows-x64.zip` 免安装包。请完整解压后运行 `oj_float.exe`，保留同目录的 `data` 和所有 DLL。两种发行方式使用同一份本机数据。发布页附 SHA-256 校验文件。
+也提供 `OJ-Float-v0.4.0-windows-x64.zip` 免安装包。请完整解压后运行 `oj_float.exe`，保留同目录的 `data` 和所有 DLL。两种发行方式使用同一份本机数据。发布页附 SHA-256 校验文件。
 
 ## 界面与演示
 
-下面的截图与演示来自可运行的 `v0.3.0`，使用 [`scripts/showcase/`](scripts/showcase/) 中的可复现演示数据生成，不含任何真实账号、笔记、令牌或本机用户名。完整复现步骤见 [docs/showcase-runbook.md](docs/showcase-runbook.md)。
+下面的截图与演示来自可运行的 `v0.4.0`，使用 [`scripts/showcase/`](scripts/showcase/) 中的可复现演示数据生成，不含任何真实账号、笔记、令牌或本机用户名。完整复现步骤见 [docs/showcase-runbook.md](docs/showcase-runbook.md)。
 
 ### 总览工作台
 
@@ -45,6 +45,12 @@ OJ-Float-v0.3.0-windows-x64-setup.exe
 演示流程：浏览器题目页 → 一键存题 → 题目出现在客户端题库。该演示为脚本驱动：本地 mock 题目页与 `scripts/showcase/import_problem.ps1` 直接调用客户端的回环导入接口 `127.0.0.1:27121`，等价于浏览器扩展的一键存题动作；未使用真实浏览器扩展或真实题目。
 
 ## 这一版有什么变化
+
+`v0.4.0` 在 `v0.3.0` 的功能基础上交付一版更克制的 Workbench 工作台视觉：
+
+- 默认使用深色绿系 Workbench 配色，保留原有 Classic、Ocean、Rose、Terminal 等主题和外观设置。
+- 重新整理标题栏、导航栏、摘要卡片、状态信息和快捷入口的层级与间距，让桌面窗口更像持续使用的工作台。
+- 保留现有数据、导航、快捷键、窗口行为和平台集成；本次发布集中在界面层与设计资产。
 
 `v0.3.0` 在 `v0.2.0` 基础上增加窗口状态记忆、仪表盘快捷键、剪贴板预填、诊断日志与发布链加固。
 

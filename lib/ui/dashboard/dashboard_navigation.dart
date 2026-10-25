@@ -82,13 +82,13 @@ class _DashboardRail extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('dashboard-nav'),
-      width: 176,
+      width: 232,
       decoration: BoxDecoration(
         color: cardColor,
         border: Border(right: BorderSide(color: borderColor)),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 18, 12, 12),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
         child: Column(children: [
           const _RailHeader(),
           const SizedBox(height: 10),
@@ -103,8 +103,8 @@ class _DashboardRail extends StatelessWidget {
                     onTap: () => onSectionSelected(section)),
           ]))),
           if (sections.contains(DashboardSection.settings)) ...[
-            const SizedBox(height: 8),
-            Divider(height: 16, color: borderColor),
+            const SizedBox(height: 4),
+            Divider(height: 12, color: borderColor),
             DashboardNavButton(
                 section: DashboardSection.settings,
                 selected: currentSection == DashboardSection.settings,
@@ -125,25 +125,48 @@ class _RailHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 2, 8, 6),
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '我的工作台',
-            style: TextStyle(
-              color: textPrimaryColor,
-              fontWeight: FontWeight.w600,
-              fontSize: 15,
+          Row(children: [
+            Container(
+              width: 30,
+              height: 30,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.1),
+                border: Border.all(color: accentColor),
+                borderRadius: BorderRadius.circular(appRadiusControl),
+              ),
+              child: Text('OJ',
+                  style: TextStyle(
+                      color: accentColor,
+                      fontFamily: appMonoFontFamily,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700)),
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            '训练 · 记录 · 复盘',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: textSecondaryColor, fontSize: 12),
-          ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Text('OJ Float',
+                  style: TextStyle(
+                      color: textPrimaryColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600)),
+            ),
+            Text('0.3',
+                style: TextStyle(
+                    color: textSecondaryColor,
+                    fontFamily: appMonoFontFamily,
+                    fontSize: 10)),
+          ]),
+          const SizedBox(height: 16),
+          Text('工作台',
+              style: TextStyle(
+                  color: textSecondaryColor,
+                  fontFamily: appMonoFontFamily,
+                  fontSize: 10,
+                  letterSpacing: 1.1)),
         ],
       ),
     );
@@ -169,14 +192,21 @@ class DashboardNavButton extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 5),
       child: Material(
         color:
-            selected ? accentColor.withValues(alpha: 0.11) : Colors.transparent,
-        borderRadius: BorderRadius.circular(appRadiusControl),
+            selected ? accentColor.withValues(alpha: 0.13) : Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(appRadiusControl),
+          side: BorderSide(
+            color: selected
+                ? accentColor.withValues(alpha: 0.42)
+                : Colors.transparent,
+          ),
+        ),
         child: InkWell(
           key: ValueKey('dashboard-nav-${section.name}'),
           borderRadius: BorderRadius.circular(appRadiusControl),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             child: Row(
               children: [
                 AnimatedContainer(
@@ -222,8 +252,15 @@ class DashboardSectionTitle extends StatelessWidget {
   final String? subtitle;
 
   @override
-  Widget build(BuildContext context) =>
-      AppPageHeader(title: sectionLabel(section), subtitle: subtitle);
+  Widget build(BuildContext context) => AppPageHeader(
+        title: section == DashboardSection.summary
+            ? '今天，先把下一题做完。'
+            : sectionLabel(section),
+        subtitle: subtitle ??
+            (section == DashboardSection.summary
+                ? '看一眼进度，继续训练，留下可复盘的记录。'
+                : null),
+      );
 }
 
 String sectionLabel(DashboardSection section) {

@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-label="OJ Float 深色工作台改版预览">
+  <defs>
+    <style>
+      .sans{font-family:'Segoe UI Variable Text','Segoe UI','Microsoft YaHei UI','Microsoft YaHei',sans-serif}
+      .mono{font-family:'Cascadia Code','Fira Code',Consolas,monospace}
+      .primary{fill:#edf5ef}.muted{fill:#9eada5}.quiet{fill:#718078}.green{fill:#83d9a1}.amber{fill:#efbb6b}
+      .small{font-size:12px}.tiny{font-size:10px}.label{font-size:14px}.title{font-size:15px;font-weight:600}
+    </style>
+    <symbol id="grid" viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
+    <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+    <symbol id="check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6M4 5h3M4 19h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="chart" viewBox="0 0 24 24"><path d="M4 19V5M4 19h16m-13-4 3-4 3 2 4-6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="bookmark" viewBox="0 0 24 24"><path d="M6 4h12v16l-6-3-6 3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+    <symbol id="refresh" viewBox="0 0 24 24"><path d="M19 8a7 7 0 1 0 1 5M19 4v4h-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="cup" viewBox="0 0 24 24"><path d="M8 5h8v4a4 4 0 0 1-8 0zM5 6h3v2a3 3 0 0 1-3-2ZM19 6h-3v2a3 3 0 0 0 3-2ZM12 13v4M8 20h8M9 17h6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="users" viewBox="0 0 24 24"><circle cx="9" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 19c.5-3 2.2-4.5 5.5-4.5s5 1.5 5.5 4.5M16 7a3 3 0 0 1 0 5.8M16 15c2.6.2 4.1 1.5 4.5 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+    <symbol id="settings" viewBox="0 0 24 24"><path d="M4 7h10m4 0h2M4 17h2m4 0h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="8" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
+  </defs>
+  <rect width="1440" height="900" fill="#0d1210"/>
+  <rect width="232" height="900" fill="#111815"/>
+  <path d="M231.5 0v900M232 59.5h1208" stroke="#2b3a33"/>
+  <rect x="232" y="0" width="1208" height="60" fill="#101713"/>
+
+  <!-- Sidebar -->
+  <rect x="24" y="21" width="30" height="30" rx="8" fill="#14271d" stroke="#83d9a1"/>
+  <text x="30" y="41" class="mono green" font-size="11" font-weight="700">OJ</text>
+  <text x="65" y="42" class="sans primary" font-size="16" font-weight="650">OJ Float</text>
+  <text x="193" y="41" class="mono quiet" font-size="10">0.3</text>
+  <text x="26" y="91" class="mono quiet" font-size="10" letter-spacing="1.2">工作台</text>
+  <g class="sans label">
+    <rect x="12" y="105" width="208" height="42" rx="7" fill="#1e3b2b" stroke="#335241"/>
+    <g color="#83d9a1"><use href="#grid" x="27" y="116" width="20" height="20"/></g><text x="57" y="132" class="primary">总览</text>
+    <g color="#718078"><use href="#clock" x="27" y="161" width="20" height="20"/></g><text x="57" y="177" class="muted">训练</text>
+    <g color="#718078"><use href="#check" x="27" y="207" width="20" height="20"/></g><text x="57" y="223" class="muted">待办事项</text><text x="190" y="223" class="mono quiet small">3</text>
+    <g color="#718078"><use href="#chart" x="27" y="253" width="20" height="20"/></g><text x="57" y="269" class="muted">热力图</text>
+    <g color="#718078"><use href="#bookmark" x="27" y="299" width="20" height="20"/></g><text x="57" y="315" class="muted">补题</text>
+    <g color="#718078"><use href="#refresh" x="27" y="345" width="20" height="20"/></g><text x="57" y="361" class="muted">刷新日志</text>
+    <g color="#718078"><use href="#cup" x="27" y="391" width="20" height="20"/></g><text x="57" y="407" class="muted">训练赛</text>
+    <g color="#718078"><use href="#users" x="27" y="437" width="20" height="20"/></g><text x="57" y="453" class="muted">队友</text>
+  </g>
+  <path d="M14 831h204" stroke="#2b3a33"/>
+  <g color="#718078"><use href="#settings" x="27" y="849" width="20" height="20"/></g>
+  <text x="57" y="865" class="sans muted label">设置</text>
+
+  <!-- Toolbar -->
+  <text x="260" y="37" class="sans primary label">总览</text>
+  <text x="305" y="37" class="sans quiet label">/</text>
+  <text x="320" y="37" class="sans muted label">今天</text>
+  <rect x="1011" y="13" width="225" height="34" rx="6" fill="#0d1210" stroke="#2b3a33"/>
+  <circle cx="1031" cy="30" r="5" fill="none" stroke="#718078" stroke-width="1.4"/><path d="m1035 34 4 4" stroke="#718078" stroke-width="1.4" stroke-linecap="round"/>
+  <text x="1048" y="35" class="sans quiet small">查找题目  Ctrl + F</text>
+  <rect x="1247" y="13" width="34" height="34" rx="6" fill="none" stroke="#2b3a33"/><path d="M1264 22v9m-4-4 4 4 4-4M1257 35h14" fill="none" stroke="#9eada5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="1289" y="13" width="34" height="34" rx="6" fill="none" stroke="#2b3a33"/><g color="#9eada5"><use href="#refresh" x="1298" y="22" width="16" height="16"/></g>
+  <rect x="1331" y="13" width="34" height="34" rx="6" fill="none" stroke="#2b3a33"/><g color="#9eada5"><use href="#settings" x="1340" y="22" width="16" height="16"/></g>
+
+  <!-- Page title -->
+  <text x="268" y="116" class="sans primary" font-size="28" font-weight="620" letter-spacing="-.7">今天，先把下一题做完。</text>
+  <text x="268" y="145" class="sans muted label">看一眼进度，继续训练，留下可复盘的记录。</text>
+  <circle cx="1252" cy="132" r="4" fill="#83d9a1"/><circle cx="1252" cy="132" r="7" fill="none" stroke="#1e3b2b" stroke-width="3"/>
+  <text x="1266" y="137" class="mono muted tiny">数据已同步 · 刚刚</text>
+
+  <!-- Main progress panel -->
+  <rect x="268" y="174" width="782" height="275" rx="9" fill="#19231f" stroke="#2b3a33"/>
+  <text x="294" y="207" class="sans muted label">累计通过</text>
+  <rect x="914" y="188" width="116" height="25" rx="5" fill="#17281e" stroke="#3d5948"/>
+  <text x="925" y="205" class="mono green tiny">仅保存在本地</text>
+  <text x="291" y="295" class="mono primary" font-size="62" letter-spacing="-5">0</text>
+  <rect x="364" y="255" width="83" height="28" rx="5" fill="#49351f"/>
+  <text x="375" y="274" class="mono amber small">今日 +7</text>
+  <text x="294" y="324" class="sans muted label">2 个账号 · 2 个平台，积累每一天的进步。</text>
+  <rect x="294" y="345" width="730" height="7" rx="4" fill="#27342d"/><rect x="294" y="345" width="453" height="7" rx="4" fill="#83d9a1"/>
+  <text x="294" y="378" class="sans quiet small">今日训练进度</text><text x="393" y="378" class="mono muted small">2 / 3 项</text>
+  <text x="948" y="378" class="sans green small">刷新数据 ↗</text>
+  <path d="M268 396h782M528.7 397v52M789.3 397v52" stroke="#2b3a33"/>
+  <text x="294" y="421" class="sans quiet small">今日进度</text><text x="294" y="445" class="mono primary" font-size="19">+7</text>
+  <text x="555" y="421" class="sans quiet small">账号状态</text><text x="555" y="445" class="mono primary" font-size="19">2</text>
+  <text x="815" y="421" class="sans quiet small">刷新状态</text><text x="815" y="445" class="mono amber" font-size="17">待刷新</text>
+
+  <!-- Today queue -->
+  <rect x="268" y="467" width="782" height="282" rx="9" fill="#151d19" stroke="#2b3a33"/>
+  <path d="M269 519h780" stroke="#2b3a33"/>
+  <g color="#83d9a1"><use href="#check" x="290" y="484" width="20" height="20"/></g>
+  <text x="321" y="502" class="sans primary title">今天训练</text><text x="965" y="501" class="mono quiet tiny">1 / 3 已处理</text>
+  <path d="M269 596h780M269 673h780" stroke="#2b3a33"/>
+  <circle cx="306" cy="556" r="9" fill="none" stroke="#3c5147" stroke-width="1.5"/>
+  <text x="329" y="551" class="sans primary label">C. Knapsack</text><text x="329" y="572" class="sans quiet small">Codeforces · 待开始</text>
+  <text x="981" y="562" class="sans green small">开始</text>
+  <circle cx="306" cy="634" r="9" fill="none" stroke="#3c5147" stroke-width="1.5"/>
+  <text x="329" y="629" class="sans primary label">两数之和</text><text x="329" y="650" class="sans quiet small">LeetCode · 待开始</text>
+  <text x="981" y="640" class="sans green small">开始</text>
+  <circle cx="306" cy="711" r="9" fill="#1e3b2b" stroke="#83d9a1" stroke-width="1.4"/><path d="m302 711 3 3 6-7" fill="none" stroke="#83d9a1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="329" y="706" class="sans muted label">A. Watermelon</text><text x="329" y="727" class="sans quiet small">Codeforces · 已完成</text>
+  <text x="972" y="713" class="mono green small">完成</text>
+
+  <!-- Right column -->
+  <rect x="1068" y="174" width="340" height="234" rx="9" fill="#151d19" stroke="#2b3a33"/>
+  <path d="M1069 226h338" stroke="#2b3a33"/>
+  <text x="1090" y="207" class="sans primary title">刷新概况</text><text x="1325" y="205" class="mono quiet tiny">最近一次</text>
+  <text x="1090" y="258" class="sans muted small">Codeforces</text><text x="1348" y="258" class="mono green small" text-anchor="end">正常</text><path d="M1090 275h296" stroke="#2b3a33"/>
+  <text x="1090" y="297" class="sans muted small">LeetCode</text><text x="1348" y="297" class="mono green small" text-anchor="end">正常</text><path d="M1090 314h296" stroke="#2b3a33"/>
+  <text x="1090" y="336" class="sans muted small">下次自动刷新</text><text x="1348" y="336" class="mono amber small" text-anchor="end">未开启</text><path d="M1090 353h296" stroke="#2b3a33"/>
+  <text x="1090" y="378" class="sans muted small">同步</text><text x="1348" y="378" class="mono muted small" text-anchor="end">未开启</text>
+
+  <rect x="1068" y="426" width="340" height="171" rx="9" fill="#151d19" stroke="#2b3a33"/>
+  <text x="1090" y="458" class="sans primary title">最近 12 周</text><text x="1338" y="457" class="mono quiet tiny" text-anchor="end">刷题热力</text>
+  <g transform="translate(1090 478)">
+    <g fill="#26342c">
+      <rect x="0" y="0" width="16" height="16" rx="2"/><rect x="22" y="0" width="16" height="16" rx="2"/><rect x="44" y="0" width="16" height="16" rx="2"/><rect x="66" y="0" width="16" height="16" rx="2"/><rect x="88" y="0" width="16" height="16" rx="2"/><rect x="110" y="0" width="16" height="16" rx="2"/><rect x="132" y="0" width="16" height="16" rx="2"/><rect x="154" y="0" width="16" height="16" rx="2"/><rect x="176" y="0" width="16" height="16" rx="2"/><rect x="198" y="0" width="16" height="16" rx="2"/><rect x="220" y="0" width="16" height="16" rx="2"/><rect x="242" y="0" width="16" height="16" rx="2"/>
+      <rect x="0" y="22" width="16" height="16" rx="2"/><rect x="22" y="22" width="16" height="16" rx="2"/><rect x="44" y="22" width="16" height="16" rx="2"/><rect x="66" y="22" width="16" height="16" rx="2"/><rect x="88" y="22" width="16" height="16" rx="2"/><rect x="110" y="22" width="16" height="16" rx="2"/><rect x="132" y="22" width="16" height="16" rx="2"/><rect x="154" y="22" width="16" height="16" rx="2"/><rect x="176" y="22" width="16" height="16" rx="2"/><rect x="198" y="22" width="16" height="16" rx="2"/><rect x="220" y="22" width="16" height="16" rx="2"/><rect x="242" y="22" width="16" height="16" rx="2"/>
+      <rect x="0" y="44" width="16" height="16" rx="2"/><rect x="22" y="44" width="16" height="16" rx="2"/><rect x="44" y="44" width="16" height="16" rx="2"/><rect x="66" y="44" width="16" height="16" rx="2"/><rect x="88" y="44" width="16" height="16" rx="2"/><rect x="110" y="44" width="16" height="16" rx="2"/><rect x="132" y="44" width="16" height="16" rx="2"/><rect x="154" y="44" width="16" height="16" rx="2"/><rect x="176" y="44" width="16" height="16" rx="2"/><rect x="198" y="44" width="16" height="16" rx="2"/><rect x="220" y="44" width="16" height="16" rx="2"/><rect x="242" y="44" width="16" height="16" rx="2"/>
+      <rect x="0" y="66" width="16" height="16" rx="2"/><rect x="22" y="66" width="16" height="16" rx="2"/><rect x="44" y="66" width="16" height="16" rx="2"/><rect x="66" y="66" width="16" height="16" rx="2"/><rect x="88" y="66" width="16" height="16" rx="2"/><rect x="110" y="66" width="16" height="16" rx="2"/><rect x="132" y="66" width="16" height="16" rx="2"/><rect x="154" y="66" width="16" height="16" rx="2"/><rect x="176" y="66" width="16" height="16" rx="2"/><rect x="198" y="66" width="16" height="16" rx="2"/><rect x="220" y="66" width="16" height="16" rx="2"/><rect x="242" y="66" width="16" height="16" rx="2"/>
+    </g>
+    <g fill="#31563f"><rect x="22" y="0" width="16" height="16" rx="2"/><rect x="110" y="0" width="16" height="16" rx="2"/><rect x="154" y="22" width="16" height="16" rx="2"/><rect x="198" y="44" width="16" height="16" rx="2"/><rect x="44" y="66" width="16" height="16" rx="2"/></g>
+    <g fill="#4e8b61"><rect x="44" y="0" width="16" height="16" rx="2"/><rect x="176" y="0" width="16" height="16" rx="2"/><rect x="22" y="22" width="16" height="16" rx="2"/><rect x="88" y="44" width="16" height="16" rx="2"/><rect x="220" y="66" width="16" height="16" rx="2"/></g>
+    <g fill="#70bd83"><rect x="88" y="0" width="16" height="16" rx="2"/><rect x="198" y="22" width="16" height="16" rx="2"/><rect x="154" y="44" width="16" height="16" rx="2"/><rect x="66" y="66" width="16" height="16" rx="2"/></g>
+    <g fill="#83d9a1"><rect x="132" y="0" width="16" height="16" rx="2"/><rect x="242" y="22" width="16" height="16" rx="2"/><rect x="110" y="44" width="16" height="16" rx="2"/></g>
+  </g>
+  <text x="1090" y="579" class="sans quiet tiny">少</text><rect x="1112" y="571" width="8" height="8" rx="2" fill="#26342c"/><rect x="1126" y="571" width="8" height="8" rx="2" fill="#4e8b61"/><rect x="1140" y="571" width="8" height="8" rx="2" fill="#70bd83"/><rect x="1154" y="571" width="8" height="8" rx="2" fill="#83d9a1"/><text x="1170" y="579" class="sans quiet tiny">多</text>
+
+  <rect x="1068" y="615" width="340" height="134" rx="9" fill="#151d19" stroke="#2b3a33"/>
+  <path d="M1069 667h338" stroke="#2b3a33"/>
+  <text x="1090" y="648" class="sans primary title">下一步</text>
+  <rect x="1090" y="684" width="34" height="34" rx="6" fill="#49351f"/>
+  <text x="1099" y="706" class="mono amber small">02</text>
+  <text x="1137" y="696" class="sans primary small">完成今天的训练清单</text><text x="1137" y="716" class="sans muted small">还剩 2 道题，预计 45 分钟</text>
+  <rect x="1090" y="729" width="296" height="1" fill="#3d5948"/>
+
+  <text x="268" y="789" class="sans quiet small">快捷操作</text>
+  <rect x="344" y="775" width="62" height="22" rx="4" fill="#151d19" stroke="#3c5147"/><text x="352" y="790" class="mono muted tiny">Ctrl + F</text><text x="414" y="790" class="sans quiet small">查找题目</text>
+  <rect x="485" y="775" width="62" height="22" rx="4" fill="#151d19" stroke="#3c5147"/><text x="493" y="790" class="mono muted tiny">Ctrl + R</text><text x="555" y="790" class="sans quiet small">刷新账号</text>
+  <rect x="626" y="775" width="68" height="22" rx="4" fill="#151d19" stroke="#3c5147"/><text x="634" y="790" class="mono muted tiny">Ctrl + ,</text><text x="702" y="790" class="sans quiet small">打开设置</text>
+
+  <rect x="250" y="858" width="1190" height="42" fill="#111815"/>
+  <text x="270" y="884" class="mono quiet tiny">预览稿 · v1</text>
+  <text x="1408" y="884" class="mono quiet tiny" text-anchor="end">1440 × 900</text>
+</svg>

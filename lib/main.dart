@@ -121,7 +121,7 @@ Future<void> main(List<String> arguments) async {
       title: AppLabels.appTitle,
       titleBarStyle: TitleBarStyle.normal,
       backgroundColor: appPaletteFor(
-        initialConfig?.colorTheme ?? AppColorTheme.classic,
+        initialConfig?.colorTheme ?? AppColorTheme.workbench,
       ).surface,
     );
     await windowManager.waitUntilReadyToShow(options);

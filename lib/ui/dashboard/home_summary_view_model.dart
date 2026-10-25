@@ -4,6 +4,7 @@ import '../../core/time.dart';
 import '../../models/fetch_result.dart';
 import '../../models/oj_state.dart';
 import '../../models/refresh_log_entry.dart';
+import '../../models/training.dart';
 import '../../services/sync_service.dart';
 
 class HomeSummaryViewModel {
@@ -19,6 +20,8 @@ class HomeSummaryViewModel {
     required this.syncLabel,
     required this.hasAttentionItems,
     required this.emptyMessage,
+    required this.trainingCompleted,
+    required this.trainingTotal,
   });
 
   factory HomeSummaryViewModel.fromState(
@@ -62,6 +65,14 @@ class HomeSummaryViewModel {
             : state.todaySummary.totalDelta > 0
                 ? '+${state.todaySummary.totalDelta}'
                 : '${state.todaySummary.totalDelta}';
+    final todayTasks = state.training.tasks
+        .where((item) => item.trainingDate == trainingDateFor(DateTime.now()))
+        .toList();
+    final trainingCompleted = todayTasks
+        .where((item) =>
+            item.status == DailyTaskStatus.done ||
+            item.status == DailyTaskStatus.skipped)
+        .length;
 
     return HomeSummaryViewModel(
       totalSolved: totalSolvedFromLatest(state.latest),
@@ -160,6 +171,8 @@ class HomeSummaryViewModel {
       emptyMessage: enabledAccounts == 0
           ? '先在设置里启用至少一个 OJ 账号，首页就会显示总通过、今日进度和刷新状态。'
           : null,
+      trainingCompleted: trainingCompleted,
+      trainingTotal: todayTasks.length,
     );
   }
 
@@ -174,6 +187,8 @@ class HomeSummaryViewModel {
   final String syncLabel;
   final bool hasAttentionItems;
   final String? emptyMessage;
+  final int trainingCompleted;
+  final int trainingTotal;
 
   static String _syncLabel(
     OjState state, {

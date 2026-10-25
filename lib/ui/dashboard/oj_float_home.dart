@@ -413,6 +413,11 @@ class _OjFloatHomeState extends State<OjFloatHome>
                                                 DashboardModule.problems)
                                         ? () => unawaited(_openQuickEntry())
                                         : null,
+                                    onSearch: _controller.state.config
+                                            .moduleEnabled(
+                                                DashboardModule.problems)
+                                        ? () => unawaited(_focusProblemSearch())
+                                        : null,
                                     onSettings: () => unawaited(
                                       _selectSection(DashboardSection.settings),
                                     ),
@@ -751,7 +756,7 @@ class _OjFloatHomeState extends State<OjFloatHome>
     };
     return [
       const DashboardSectionTitle(
-          section: DashboardSection.summary, subtitle: '先看今天是否有进步，再继续训练与复盘。'),
+          section: DashboardSection.summary, subtitle: '看一眼进度，继续训练，留下可复盘的记录。'),
       const SizedBox(height: 14),
       if (widget.autoInitializeController &&
           !config.onboardingComplete &&

@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OJ Float · UI redesign preview v1</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1210;
+      --sidebar: #111815;
+      --panel: #151d19;
+      --panel-2: #19231f;
+      --panel-3: #202c26;
+      --line: #2b3a33;
+      --line-strong: #3c5147;
+      --text: #edf5ef;
+      --muted: #9eada5;
+      --quiet: #718078;
+      --green: #83d9a1;
+      --green-dim: #1e3b2b;
+      --amber: #efbb6b;
+      --amber-dim: #49351f;
+      --red: #ed8178;
+      --sans: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+      --mono: "Cascadia Code", "Fira Code", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    button, input { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, input:focus-visible {
+      outline: 2px solid var(--green);
+      outline-offset: 3px;
+    }
+
+    .app {
+      width: min(1440px, 100vw);
+      min-height: 900px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 232px minmax(0, 1fr);
+      grid-template-rows: 60px minmax(0, 1fr);
+      background: var(--bg);
+    }
+
+    .sidebar {
+      grid-row: 1 / 3;
+      border-right: 1px solid var(--line);
+      background: var(--sidebar);
+      padding: 20px 14px 16px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 0 10px 26px;
+    }
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--green);
+      border-radius: 8px;
+      color: var(--green);
+      background: #14271d;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: -1px;
+    }
+    .brand-name { font-size: 16px; font-weight: 650; letter-spacing: .01em; }
+    .brand-version { color: var(--quiet); font-family: var(--mono); font-size: 10px; margin-left: auto; }
+
+    .nav-heading {
+      padding: 0 12px 8px;
+      color: var(--quiet);
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .11em;
+      text-transform: uppercase;
+    }
+    .nav { display: grid; gap: 3px; }
+    .nav button {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      width: 100%;
+      padding: 0 12px;
+      border: 1px solid transparent;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      text-align: left;
+      transition: background .16s ease, border-color .16s ease, color .16s ease;
+    }
+    .nav button:hover { background: #18221e; color: var(--text); }
+    .nav button.active {
+      border-color: #335241;
+      background: var(--green-dim);
+      color: var(--text);
+    }
+    .nav button.active .nav-icon { color: var(--green); }
+    .nav-icon { width: 18px; height: 18px; color: var(--quiet); flex: none; }
+    .nav-label { flex: 1; }
+    .nav-count { color: var(--quiet); font-family: var(--mono); font-size: 11px; }
+
+    .sidebar-bottom { margin-top: auto; border-top: 1px solid var(--line); padding-top: 12px; }
+    .sidebar-note { padding: 12px; color: var(--quiet); font-size: 12px; }
+    .sidebar-note strong { display: block; color: var(--muted); font-weight: 550; margin-bottom: 3px; }
+
+    .topbar {
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 0 28px;
+      background: #101713;
+    }
+    .crumb { color: var(--muted); }
+    .crumb strong { color: var(--text); font-weight: 550; }
+    .crumb-sep { color: var(--quiet); margin: 0 8px; }
+    .top-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+    .search {
+      width: 230px;
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--muted);
+      background: #0d1210;
+      padding: 0 11px;
+    }
+    .search::placeholder { color: var(--quiet); }
+    .top-btn {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .top-btn:hover { border-color: var(--line-strong); color: var(--text); background: var(--panel-2); }
+    .top-btn svg { width: 16px; height: 16px; }
+
+    main { min-width: 0; padding: 34px 36px 48px; overflow: hidden; }
+    .page-head {
+      display: flex;
+      align-items: end;
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+    .page-head h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.2;
+      letter-spacing: -.025em;
+      font-weight: 620;
+    }
+    .page-head p { margin: 0 0 2px; color: var(--muted); }
+    .head-status { margin-left: auto; color: var(--quiet); font-family: var(--mono); font-size: 11px; }
+    .status-dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px #1e3b2b; }
+
+    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 18px; align-items: start; }
+    .stack { display: grid; gap: 18px; min-width: 0; }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+    .panel-header {
+      min-height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+      padding: 0 20px;
+    }
+    .panel-title { font-size: 15px; font-weight: 600; }
+    .panel-meta { color: var(--quiet); font-family: var(--mono); font-size: 11px; margin-left: auto; }
+    .panel-body { padding: 21px 20px; }
+
+    .progress-panel { background: var(--panel-2); }
+    .progress-body { padding: 27px 26px 22px; }
+    .progress-top { display: flex; align-items: start; gap: 12px; }
+    .progress-label { color: var(--muted); }
+    .sync-badge { margin-left: auto; padding: 4px 8px; border: 1px solid #3d5948; border-radius: 5px; color: var(--green); background: #17281e; font-family: var(--mono); font-size: 10px; }
+    .progress-number-row { display: flex; align-items: baseline; gap: 17px; margin-top: 12px; }
+    .progress-number { color: var(--text); font-family: var(--mono); font-size: 62px; line-height: .95; letter-spacing: -.09em; }
+    .delta { padding: 5px 9px; border-radius: 5px; color: var(--amber); background: var(--amber-dim); font-family: var(--mono); font-size: 12px; }
+    .progress-copy { margin: 17px 0 20px; color: var(--muted); }
+    .progress-bar { height: 7px; border-radius: 99px; background: #27342d; overflow: hidden; }
+    .progress-fill { width: 62%; height: 100%; border-radius: inherit; background: var(--green); }
+    .progress-foot { display: flex; align-items: center; gap: 14px; padding-top: 12px; color: var(--quiet); font-size: 12px; }
+    .progress-foot strong { color: var(--muted); font-family: var(--mono); font-weight: 500; }
+    .progress-foot .refresh { margin-left: auto; border: 0; background: transparent; color: var(--green); cursor: pointer; padding: 4px 0; }
+
+    .metric-row { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); }
+    .metric { min-height: 91px; padding: 17px 20px; border-right: 1px solid var(--line); }
+    .metric:last-child { border-right: 0; }
+    .metric-label { color: var(--quiet); font-size: 12px; }
+    .metric-value { margin-top: 5px; color: var(--text); font-family: var(--mono); font-size: 22px; }
+    .metric-sub { color: var(--muted); font-size: 12px; }
+
+    .queue-list { display: grid; }
+    .queue-item { min-height: 66px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); padding: 0 20px; }
+    .queue-item:last-child { border-bottom: 0; }
+    .check { width: 18px; height: 18px; border: 1px solid var(--line-strong); border-radius: 50%; flex: none; }
+    .queue-main { min-width: 0; flex: 1; }
+    .queue-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+    .queue-sub { color: var(--quiet); font-size: 12px; }
+    .queue-action { border: 0; background: transparent; color: var(--green); cursor: pointer; font-size: 12px; }
+
+    .side-panel .panel-body { padding: 18px; }
+    .signal-row { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--line); }
+    .signal-row:last-child { border-bottom: 0; padding-bottom: 0; }
+    .signal-label { color: var(--muted); font-size: 12px; }
+    .signal-value { color: var(--text); font-family: var(--mono); font-size: 13px; }
+    .signal-value.ok { color: var(--green); }
+    .signal-value.warn { color: var(--amber); }
+    .heatmap-head { display: flex; align-items: baseline; margin-bottom: 13px; }
+    .heatmap-head strong { font-size: 14px; font-weight: 600; }
+    .heatmap-head span { margin-left: auto; color: var(--quiet); font-family: var(--mono); font-size: 10px; }
+    .heatmap { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; }
+    .heatmap i { aspect-ratio: 1; border-radius: 2px; background: #26342c; }
+    .heatmap i.l1 { background: #31563f; }
+    .heatmap i.l2 { background: #4e8b61; }
+    .heatmap i.l3 { background: #70bd83; }
+    .heatmap i.l4 { background: var(--green); }
+    .legend { display: flex; align-items: center; gap: 5px; margin-top: 12px; color: var(--quiet); font-size: 10px; }
+    .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: #26342c; }
+    .legend i.l2 { background: #4e8b61; }
+    .legend i.l3 { background: #70bd83; }
+    .legend i.l4 { background: var(--green); }
+
+    .session { display: flex; gap: 12px; align-items: start; }
+    .session-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 6px; background: var(--amber-dim); color: var(--amber); font-family: var(--mono); font-size: 12px; }
+    .session strong { display: block; font-size: 13px; font-weight: 550; }
+    .session span { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .session button { margin-top: 13px; width: 100%; height: 34px; border: 1px solid #3d5948; border-radius: 6px; background: var(--green-dim); color: var(--green); cursor: pointer; }
+    .session button:hover { background: #274b36; }
+
+    .shortcut-bar { display: flex; align-items: center; gap: 8px; margin-top: 22px; color: var(--quiet); font-size: 12px; }
+    kbd { padding: 2px 6px; border: 1px solid var(--line-strong); border-bottom-color: #1f2a24; border-radius: 4px; background: var(--panel); color: var(--muted); font-family: var(--mono); font-size: 10px; }
+
+    @media (max-width: 1040px) {
+      .workspace { grid-template-columns: 1fr; }
+      .side-stack { grid-template-columns: repeat(2, minmax(0, 1fr)); display: grid; gap: 18px; }
+    }
+    @media (max-width: 760px) {
+      .app { display: block; min-height: 100vh; }
+      .sidebar { display: none; }
+      .topbar { height: 58px; padding: 0 18px; }
+      .search { width: 150px; }
+      main { padding: 24px 18px 36px; }
+      .page-head { display: block; }
+      .page-head p { margin-top: 8px; }
+      .head-status { display: block; margin-top: 14px; }
+      .metric-row { grid-template-columns: 1fr; }
+      .metric { border-right: 0; border-bottom: 1px solid var(--line); }
+      .metric:last-child { border-bottom: 0; }
+      .side-stack { display: grid; grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
+    <symbol id="i-grid" viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 5h3M4 19h3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19V5M4 19h16" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="m7 15 3-4 3 2 4-6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 4h12v16l-6-3-6 3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19 8a7 7 0 1 0 1 5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M19 4v4h-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M8 5h8v4a4 4 0 0 1-8 0zM5 6h3v2a3 3 0 0 1-3-2ZM19 6h-3v2a3 3 0 0 0 3-2ZM12 13v4M8 20h8M9 17h6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 19c.5-3 2.2-4.5 5.5-4.5s5 1.5 5.5 4.5M16 7a3 3 0 0 1 0 5.8M16 15c2.6.2 4.1 1.5 4.5 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="8" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="m15 15 4 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M9 15 15 9M7 18H6a4 4 0 0 1 0-8h3M17 6h1a4 4 0 0 1 0 8h-3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </svg>
+
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">OJ</div>
+        <div class="brand-name">OJ Float</div>
+        <div class="brand-version">0.3</div>
+      </div>
+      <div class="nav-heading">工作台</div>
+      <nav class="nav" aria-label="主导航">
+        <button class="active"><svg class="nav-icon"><use href="#i-grid"/></svg><span class="nav-label">总览</span></button>
+        <button><svg class="nav-icon"><use href="#i-clock"/></svg><span class="nav-label">训练</span></button>
+        <button><svg class="nav-icon"><use href="#i-check"/></svg><span class="nav-label">待办事项</span><span class="nav-count">3</span></button>
+        <button><svg class="nav-icon"><use href="#i-chart"/></svg><span class="nav-label">热力图</span></button>
+        <button><svg class="nav-icon"><use href="#i-bookmark"/></svg><span class="nav-label">补题</span></button>
+        <button><svg class="nav-icon"><use href="#i-refresh"/></svg><span class="nav-label">刷新日志</span></button>
+        <button><svg class="nav-icon"><use href="#i-trophy"/></svg><span class="nav-label">训练赛</span></button>
+        <button><svg class="nav-icon"><use href="#i-users"/></svg><span class="nav-label">队友</span></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <button class="nav"><svg class="nav-icon"><use href="#i-settings"/></svg><span class="nav-label">设置</span></button>
+        <div class="sidebar-note"><strong>本地数据</strong>所有记录保存在此设备</div>
+      </div>
+    </aside>
+
+    <header class="topbar">
+      <div class="crumb"><strong>总览</strong><span class="crumb-sep">/</span>今天</div>
+      <div class="top-actions">
+        <input class="search" aria-label="查找题目" placeholder="查找题目  Ctrl + F" />
+        <button class="top-btn" aria-label="快速录入"><svg><use href="#i-link"/></svg></button>
+        <button class="top-btn" aria-label="刷新数据" id="refresh"><svg><use href="#i-refresh"/></svg></button>
+        <button class="top-btn" aria-label="设置"><svg><use href="#i-settings"/></svg></button>
+      </div>
+    </header>
+
+    <main>
+      <div class="page-head">
+        <div>
+          <h1>今天，先把下一题做完。</h1>
+          <p>看一眼进度，继续训练，留下可复盘的记录。</p>
+        </div>
+        <div class="head-status"><span class="status-dot"></span>数据已同步 · 刚刚</div>
+      </div>
+
+      <div class="workspace">
+        <div class="stack">
+          <section class="panel progress-panel">
+            <div class="progress-body">
+              <div class="progress-top"><span class="progress-label">累计通过</span><span class="sync-badge">仅保存在本地</span></div>
+              <div class="progress-number-row"><span class="progress-number">0</span><span class="delta">今日 +7</span></div>
+              <p class="progress-copy">2 个账号 · 2 个平台，积累每一天的进步。</p>
+              <div class="progress-bar" aria-label="今日训练进度"><div class="progress-fill"></div></div>
+              <div class="progress-foot"><span>今日训练进度</span><strong>2 / 3 项</strong><button class="refresh" id="refreshText">刷新数据 ↗</button></div>
+            </div>
+            <div class="metric-row">
+              <div class="metric"><div class="metric-label">今日进度</div><div class="metric-value">+7</div><div class="metric-sub">今天已经有新的通过记录</div></div>
+              <div class="metric"><div class="metric-label">账号状态</div><div class="metric-value">2</div><div class="metric-sub">2 个平台正在跟踪</div></div>
+              <div class="metric"><div class="metric-label">刷新状态</div><div class="metric-value">待刷新</div><div class="metric-sub">上次成功 · 昨天 21:18</div></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header"><svg class="nav-icon" style="color:var(--green)"><use href="#i-check"/></svg><span class="panel-title">今天训练</span><span class="panel-meta">1 / 3 已处理</span></div>
+            <div class="queue-list">
+              <div class="queue-item"><span class="check"></span><div class="queue-main"><div class="queue-title">C. Knapsack</div><div class="queue-sub">Codeforces · 待开始</div></div><button class="queue-action">开始</button></div>
+              <div class="queue-item"><span class="check"></span><div class="queue-main"><div class="queue-title">两数之和</div><div class="queue-sub">LeetCode · 待开始</div></div><button class="queue-action">开始</button></div>
+              <div class="queue-item"><span class="check" style="border-color:var(--green);background:var(--green-dim)"></span><div class="queue-main"><div class="queue-title" style="color:var(--muted)">A. Watermelon</div><div class="queue-sub">Codeforces · 已完成</div></div><span style="color:var(--green);font-family:var(--mono);font-size:12px">完成</span></div>
+            </div>
+          </section>
+
+          <div class="shortcut-bar"><span>快捷操作</span><kbd>Ctrl + F</kbd><span>查找题目</span><kbd>Ctrl + R</kbd><span>刷新账号</span><kbd>Ctrl + ,</kbd><span>打开设置</span></div>
+        </div>
+
+        <div class="side-stack">
+          <section class="panel side-panel">
+            <div class="panel-header"><span class="panel-title">刷新概况</span><span class="panel-meta">最近一次</span></div>
+            <div class="panel-body">
+              <div class="signal-row"><span class="signal-label">Codeforces</span><span class="signal-value ok">正常</span></div>
+              <div class="signal-row"><span class="signal-label">LeetCode</span><span class="signal-value ok">正常</span></div>
+              <div class="signal-row"><span class="signal-label">下次自动刷新</span><span class="signal-value warn">未开启</span></div>
+              <div class="signal-row"><span class="signal-label">同步</span><span class="signal-value">未开启</span></div>
+            </div>
+          </section>
+          <section class="panel side-panel">
+            <div class="panel-body">
+              <div class="heatmap-head"><strong>最近 12 周</strong><span>刷题热力</span></div>
+              <div class="heatmap" aria-label="最近十二周刷题热力图">
+                <i></i><i class="l1"></i><i class="l2"></i><i></i><i class="l3"></i><i class="l1"></i><i class="l4"></i><i></i><i class="l2"></i><i class="l3"></i><i></i><i class="l1"></i>
+                <i class="l1"></i><i class="l2"></i><i></i><i class="l3"></i><i class="l4"></i><i class="l2"></i><i></i><i class="l1"></i><i class="l3"></i><i></i><i class="l2"></i><i class="l4"></i>
+                <i></i><i class="l3"></i><i class="l2"></i><i class="l1"></i><i></i><i class="l4"></i><i class="l3"></i><i></i><i class="l1"></i><i class="l2"></i><i class="l3"></i><i></i>
+                <i class="l2"></i><i></i><i class="l1"></i><i class="l3"></i><i class="l4"></i><i></i><i class="l2"></i><i class="l1"></i><i></i><i class="l3"></i><i class="l2"></i><i class="l1"></i>
+              </div>
+              <div class="legend"><i></i><span>少</span><i class="l2"></i><i class="l3"></i><i class="l4"></i><span>多</span></div>
+            </div>
+          </section>
+          <section class="panel side-panel">
+            <div class="panel-header"><span class="panel-title">下一步</span></div>
+            <div class="panel-body">
+              <div class="session"><div class="session-mark">02</div><div><strong>完成今天的训练清单</strong><span>还剩 2 道题，预计 45 分钟</span></div></div>
+              <button id="openTraining">打开训练 ↗</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const refresh = () => {
+      const status = document.querySelector('.head-status');
+      status.innerHTML = '<span class="status-dot"></span>刷新完成 · 刚刚';
+      document.querySelector('#refresh').style.color = 'var(--green)';
+      document.querySelector('#refreshText').textContent = '已刷新 ↗';
+    };
+    document.querySelector('#refresh').addEventListener('click', refresh);
+    document.querySelector('#refreshText').addEventListener('click', refresh);
+    document.querySelector('#openTraining').addEventListener('click', () => {
+      document.querySelector('.page-head h1').textContent = '继续今天的训练。';
+      document.querySelector('.page-head p').textContent = '从待处理的题目开始，完成后留下复盘记录。';
+    });
+    document.querySelectorAll('.nav button').forEach(button => button.addEventListener('click', () => {
+      document.querySelectorAll('.nav button').forEach(item => item.classList.remove('active'));
+      button.classList.add('active');
+    }));
+  </script>
+</body>
+</html>

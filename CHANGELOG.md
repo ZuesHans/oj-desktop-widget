@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v0.4.0 - 2026-10-25
+
+- Ship the approved Workbench dashboard redesign with a quieter dark green palette, tighter card geometry, stronger text hierarchy, and a more deliberate desktop navigation rail.
+- Make Workbench the default appearance while keeping the existing themes, settings, navigation callbacks, data model, and platform integrations compatible.
+- Add project-local `ui-ux-pro-max` and `impeccable` skills plus the v1 UI preview and design notes so future UI work can follow the same visual system.
+
 ## v0.3.0 - 2026-10-24
 
 - Remember main-window bounds, maximized state, and the last Dashboard page in machine-local window preferences, with display work-area recovery after monitor changes.

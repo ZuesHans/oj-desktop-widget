@@ -48,3 +48,4 @@ app.*.map.json
 
 # Local agent tooling
 .pi/
+.agents/**/__pycache__/

@@ -30,7 +30,8 @@ class OjFloatApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: AppLabels.appTitle,
-      theme: buildAppTheme(initialConfig?.colorTheme ?? AppColorTheme.classic),
+      theme:
+          buildAppTheme(initialConfig?.colorTheme ?? AppColorTheme.workbench),
       home: OjFloatHome(
         initialConfig: initialConfig,
         startHidden: startHidden,

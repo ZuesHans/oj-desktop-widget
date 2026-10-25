@@ -25,10 +25,11 @@ class AppearanceSettings extends StatelessWidget {
       switch (appearanceMode) {
         AppAppearanceMode.light => Brightness.light,
         AppAppearanceMode.dark => Brightness.dark,
-        AppAppearanceMode.system =>
-          theme == AppColorTheme.dark || theme == AppColorTheme.terminalDark
-              ? Brightness.dark
-              : MediaQuery.platformBrightnessOf(context),
+        AppAppearanceMode.system => theme == AppColorTheme.workbench ||
+                theme == AppColorTheme.dark ||
+                theme == AppColorTheme.terminalDark
+            ? Brightness.dark
+            : MediaQuery.platformBrightnessOf(context),
       };
 
   @override
@@ -105,6 +106,7 @@ class AppearanceSettings extends StatelessWidget {
 }
 
 String _themeLabel(AppColorTheme theme) => switch (theme) {
+      AppColorTheme.workbench => 'Workbench · 深色工作台',
       AppColorTheme.githubLight => 'GitHub Light · 开发者浅色',
       AppColorTheme.terminalDark => 'Terminal Dark · 竞赛终端',
       AppColorTheme.classic => 'Classic · 经典蓝',
